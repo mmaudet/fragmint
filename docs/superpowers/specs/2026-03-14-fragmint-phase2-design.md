@@ -18,7 +18,7 @@ Phase 2 implements the MCP server for Fragmint — a standalone package (`@fragm
 | MCP SDK | `@modelcontextprotocol/sdk` | Official TypeScript SDK, stdio transport |
 | HTTP client | Native `fetch` (Node 24) | Same pattern as CLI package |
 | Transport | stdio | Standard for Claude Desktop / Claude Code / OpenCode |
-| Package | `@fragmint/mcp` | Standalone npm package per PRD |
+| Package | `@fragmint/mcp` | Standalone npm package (PRD uses `@linagora/mcp-fragmint` — we use `@fragmint` scope for monorepo consistency; rename to `@linagora` at publish time) |
 
 ## 1. File Structure
 
@@ -82,7 +82,7 @@ Extracts `data` from the `{ data, meta, error }` response envelope. Throws on er
 
 **API call:** `POST /v1/fragments/inventory`
 
-**Returns:** `{ total, by_type, by_quality, by_lang, gaps }`
+**Returns:** `{ total, by_type, by_quality, by_lang, gaps, last_updated }` (`last_updated` = most recent `updated_at` across all matching fragments)
 
 ### 4.2 `fragment_search`
 
@@ -95,7 +95,7 @@ Extracts `data` from the `{ data, meta, error }` response envelope. Throws on er
 
 **API call:** `POST /v1/fragments/search`
 
-The `type` parameter is passed as `filters.type: [type]` (array) to match the API schema.
+Parameter mapping to API search body: `type` → `filters.type: [type]` (array), `lang` → `filters.lang`, `quality_min` → `filters.quality_min`.
 
 **Returns:** `[ { id, title, body_excerpt, score, type, domain, lang, quality } ]`
 
@@ -123,6 +123,8 @@ The `type` parameter is passed as `filters.type: [type]` (array) to match the AP
 
 **API call:** `POST /v1/fragments`
 
+Fields not exposed in the MCP tool are defaulted by the API: `translation_of: null`, `generation: 0`, `origin: "manual"`, `access: { read: ["*"], write: ["contributor", "admin"], approve: ["expert", "admin"] }`.
+
 **Returns:** `{ id, commit_hash, quality: "draft" }`
 
 ### 4.5 `fragment_update`
@@ -131,12 +133,16 @@ The `type` parameter is passed as `filters.type: [type]` (array) to match the AP
 
 **Parameters:**
 ```typescript
-{ id: string, body?: string, tags?: string[], domain?: string, quality?: string }
+{ id: string, body?: string, tags?: string[], domain?: string, quality?: string, commit_message?: string }
 ```
+
+`commit_message` is optional — if provided, it overrides the auto-generated commit message. The `tags` field is flat (not wrapped in `metadata` as in the PRD) to match the actual `updateFragmentSchema`.
 
 **API call:** `PUT /v1/fragments/:id`
 
-**Returns:** `{ id, commit_hash }`
+**Returns:** `{ id, commit_hash, diff_summary }` (`diff_summary` = short description of what changed)
+
+**Note:** `commit_message` and `diff_summary` support requires adding these fields to the `PUT /v1/fragments/:id` API route and `updateFragmentSchema` during Phase 2 implementation.
 
 ### 4.6 `fragment_lineage`
 
@@ -151,7 +157,7 @@ The `type` parameter is passed as `filters.type: [type]` (array) to match the AP
 
 By default `include_translations` is true (most useful for agents).
 
-**Returns:** `{ root, children, translations }`
+**Returns:** `{ root, children, translations, community_cluster }` (`community_cluster` = null until Leiden clustering is implemented in Phase 6)
 
 ## 5. MCP Server Entry Point
 
@@ -176,7 +182,9 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 ```
 
-Each `register*` function calls `server.setRequestHandler` for `tools/list` and `tools/call`.
+Tools are registered using the MCP SDK's `server.setRequestHandler(ListToolsRequestSchema, ...)` (single handler returning all 6 tool definitions) and `server.setRequestHandler(CallToolRequestSchema, ...)` (single handler dispatching by tool name). Each `register*` function adds its tool definition and handler to shared registries that the entry point aggregates.
+
+**Error handling:** Tool handlers must NOT throw. Errors are returned as MCP error responses: `{ isError: true, content: [{ type: "text", text: "Error message" }] }`. The HTTP client catches API errors and the tool handler wraps them in this format.
 
 ## 6. Testing
 
