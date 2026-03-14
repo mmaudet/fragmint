@@ -1,15 +1,17 @@
 # docker/docker-compose.dev.yml
 # Milvus standalone for local development
 # Start: docker compose -f docker/docker-compose.dev.yml up -d
-# Then: FRAGMINT_MILVUS_ENABLED=true fragmint serve --dev
+# Then: FRAGMINT_MILVUS_ENABLED=true FRAGMINT_EMBEDDING_MODEL=nomic-embed-text-v2-moe npx tsx packages/server/src/index.ts
 services:
   milvus:
     image: milvusdb/milvus:v2.4.17
+    command: ["milvus", "run", "standalone"]
     ports:
       - "19530:19530"
       - "9091:9091"
     environment:
       ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
       COMMON_STORAGETYPE: local
     volumes:
       - milvus-data:/var/lib/milvus
@@ -17,7 +19,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
   milvus-data:
