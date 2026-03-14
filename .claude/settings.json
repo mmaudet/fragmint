@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "fragmint": {
+      "command": "npx",
+      "args": ["tsx", "/Users/mmaudet/work/fragmint/packages/mcp/src/index.ts"],
+      "env": {
+        "FRAGMINT_URL": "http://localhost:3210",
+        "FRAGMINT_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtbWF1ZGV0Iiwicm9sZSI6ImFkbWluIiwiZGlzcGxheV9uYW1lIjoiTWljaGVsLU1hcmllIE1hdWRldCIsImlhdCI6MTc3MzQ5NTE5NiwiZXhwIjoxNzczNTIzOTk2fQ.QbzB_uGRdZCpsEQ5MOXapTJhcjKdb17f8LdsSuaQZQU"
+      }
+    }
+  }
+}
