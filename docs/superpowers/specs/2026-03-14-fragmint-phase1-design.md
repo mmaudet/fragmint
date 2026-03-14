@@ -64,6 +64,8 @@ Environment variables: `FRAGMINT_EMBEDDING_ENDPOINT`, `FRAGMINT_EMBEDDING_MODEL`
 
 **`milvus_enabled` defaults to `false`** — Phase 0 continues to work unchanged. When enabled, search switches to hybrid mode. If Milvus goes down at runtime, automatic fallback to SQLite.
 
+**Note on `embedding.provider`:** The PRD config schema includes a `provider` field (`local | openai | custom`). This is intentionally omitted in Phase 1 — the OpenAI-compatible endpoint URL is sufficient to target Ollama, OpenRouter, or any compatible API. A provider discriminator can be added later if non-OpenAI-compatible APIs are needed.
+
 ## 3. Embedding Client
 
 `packages/server/src/search/embedding-client.ts`
@@ -150,6 +152,40 @@ class SearchService {
 }
 ```
 
+### Type definitions
+
+```typescript
+interface FragmentMetadata {
+  type: string; domain: string; lang: string; quality: string;
+  author: string; tags: string[]; access_read: string[];
+  created_at: string; updated_at: string;
+}
+
+interface SearchFilters {
+  type?: string[]; domain?: string[]; lang?: string;
+  quality_min?: string; tags?: string[];
+}
+
+interface SearchResult {
+  id: string; score: number; title: string; body_excerpt: string;
+  type: string; domain: string; lang: string; quality: string;
+  author: string; uses: number;
+}
+
+// MilvusFilters: same as SearchFilters but translated to Milvus boolean expressions
+// MilvusFragment: { id, vector, ...FragmentMetadata fields as scalars }
+// MilvusSearchResult: { id, score, ...scalar fields }
+```
+
+### `quality_min` semantics
+
+`quality_min` maps to an inclusion set based on the quality ordering `draft < reviewed < approved`:
+- `quality_min: "draft"` → all qualities (no filter)
+- `quality_min: "reviewed"` → Milvus expr: `quality in ["reviewed", "approved"]`
+- `quality_min: "approved"` → Milvus expr: `quality == "approved"`
+
+`deprecated` is always excluded from search results unless explicitly requested.
+
 ### Search flow
 
 1. If Milvus available → embed query → Milvus vector search with scalar filters → enrich results from SQLite (body, full frontmatter)
@@ -168,7 +204,9 @@ class SearchService {
 - `create()`, `update()`, `approve()`, `deprecate()`: after Git commit and SQLite upsert, call `searchService.indexFragment()` (or `removeFromIndex()` for deprecate)
 - `search()`: delegates to `searchService.search()` instead of direct SQLite LIKE
 - `reindex()`: after SQLite scan, calls `searchService.indexBatch()` for all fragments
-- The existing SQLite search code in `FragmentService` is removed — `SearchService` owns all search logic (including the SQLite fallback path)
+- The existing SQLite search code in `FragmentService` is moved to `SearchService` — `SearchService` owns all search logic (including the SQLite fallback path)
+- The SQLite fallback path must honor all filters (type, domain, lang, quality_min, tags) for feature parity with Milvus. Tags are filtered via `LIKE` on the JSON-serialized `tags` column.
+- The existing `POST /v1/index/trigger` admin route already calls `fragmentService.reindex()` — no route changes needed, the reindex now includes vector indexation automatically
 
 ## 6. Inventory with Gap Detection
 
@@ -247,7 +285,7 @@ const fragmentService = new FragmentService(db, storePath, auditService, searchS
 # docker/docker-compose.dev.yml
 services:
   milvus:
-    image: milvusdb/milvus:v2.4-latest
+    image: milvusdb/milvus:v2.4.17
     ports:
       - "19530:19530"
       - "9091:9091"
@@ -256,6 +294,10 @@ services:
 volumes:
   milvus-data:
 ```
+
+## 9. CLI Updates
+
+The PRD lists `inventory` and `gaps` as Phase 1 CLI commands. These already exist from Phase 0 (`fragmint inventory`, `fragmint gaps`). No CLI changes needed — the enhanced inventory response (with gaps) flows through the existing API endpoint automatically.
 
 ## Out of Scope (Phase 1)
 
