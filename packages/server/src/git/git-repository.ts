@@ -26,6 +26,24 @@ export class GitRepository {
     return match ? match[1] : '';
   }
 
+  async commitFiles(filePaths: string[], message: string): Promise<string> {
+    for (const fp of filePaths) {
+      await this.exec('add', fp);
+    }
+    const { stdout } = await this.exec('commit', '-m', message);
+    const match = stdout.match(/\[[\w/.()\- ]+ ([a-f0-9]+)\]/);
+    return match ? match[1] : '';
+  }
+
+  async rmFiles(filePaths: string[], message: string): Promise<string> {
+    for (const fp of filePaths) {
+      await this.exec('rm', '-f', fp);
+    }
+    const { stdout } = await this.exec('commit', '-m', message);
+    const match = stdout.match(/\[[\w/.()\- ]+ ([a-f0-9]+)\]/);
+    return match ? match[1] : '';
+  }
+
   async log(filePath?: string, limit = 20): Promise<GitLogEntry[]> {
     // Use NUL byte as record separator to avoid delimiter collisions
     const SEP = '%x00';

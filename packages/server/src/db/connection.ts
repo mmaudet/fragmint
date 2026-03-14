@@ -38,6 +38,13 @@ export function createDb(path: string | ':memory:') {
       created_at TEXT NOT NULL, last_used TEXT,
       active INTEGER NOT NULL DEFAULT 1
     );
+    CREATE TABLE IF NOT EXISTS templates (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+      output_format TEXT NOT NULL, version TEXT NOT NULL,
+      template_path TEXT NOT NULL, yaml_path TEXT NOT NULL,
+      author TEXT NOT NULL, created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL, git_hash TEXT
+    );
   `);
 
   const db = drizzle(sqlite, { schema });
