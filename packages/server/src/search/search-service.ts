@@ -40,19 +40,44 @@ export interface SearchResult {
 
 const QUALITY_ORDER = ['draft', 'reviewed', 'approved'];
 
+export interface EmbeddingPrefixes {
+  document: string;
+  query: string;
+  cluster: string;
+}
+
+/**
+ * Truncate text to fit within embedding model's context window.
+ * Rough estimate: 1 token ≈ 4 chars for French/English.
+ */
+function truncateForEmbedding(text: string, maxTokens: number): string {
+  const maxChars = maxTokens * 4;
+  return text.length > maxChars ? text.slice(0, maxChars) : text;
+}
+
 export class SearchService {
+  private prefixes: EmbeddingPrefixes;
+  private maxTokens: number;
+
   constructor(
     private db: FragmintDb,
     private embeddingClient: EmbeddingClient,
     private milvusClient: FragmintMilvusClient | null,
-  ) {}
+    options?: { prefixes?: EmbeddingPrefixes; maxTokens?: number },
+  ) {
+    this.prefixes = options?.prefixes ?? { document: 'search_document: ', query: 'search_query: ', cluster: 'clustering: ' };
+    this.maxTokens = options?.maxTokens ?? 480;
+  }
 
   async indexFragment(id: string, body: string, metadata: FragmentMetadata): Promise<void> {
     if (!this.milvusClient) return;
 
     try {
       const title = body.match(/^#\s+(.+)$/m)?.[1] ?? '';
-      const vector = await this.embeddingClient.embed(`${title}\n\n${body}`);
+      const rawText = `${title}\n\n${body}`;
+      const vector = await this.embeddingClient.embed(
+        this.prefixes.document + truncateForEmbedding(rawText, this.maxTokens)
+      );
 
       await this.milvusClient.upsert([{
         id,
@@ -80,7 +105,8 @@ export class SearchService {
     try {
       const texts = items.map(item => {
         const title = item.body.match(/^#\s+(.+)$/m)?.[1] ?? '';
-        return `${title}\n\n${item.body}`;
+        const rawText = `${title}\n\n${item.body}`;
+        return this.prefixes.document + truncateForEmbedding(rawText, this.maxTokens);
       });
 
       const vectors = await this.embeddingClient.embedBatch(texts);
@@ -115,7 +141,9 @@ export class SearchService {
     // Try Milvus path
     if (this.milvusClient) {
       try {
-        const vector = await this.embeddingClient.embed(query);
+        const vector = await this.embeddingClient.embed(
+          this.prefixes.query + truncateForEmbedding(query, this.maxTokens)
+        );
         const milvusFilters: MilvusFilters = {
           type: filters?.type,
           domain: filters?.domain,

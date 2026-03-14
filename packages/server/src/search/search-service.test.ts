@@ -44,7 +44,7 @@ describe('SearchService', () => {
     const service = new SearchService(db, embedding as any, milvus as any);
 
     const results = await service.search('sovereignty');
-    expect(embedding.embed).toHaveBeenCalledWith('sovereignty');
+    expect(embedding.embed).toHaveBeenCalledWith('search_query: sovereignty');
     expect(milvus.search).toHaveBeenCalled();
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].id).toBe('frag-test-1');

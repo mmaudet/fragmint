@@ -64,7 +64,14 @@ export async function createServer(options?: {
     }
   }
 
-  const searchService = new SearchService(db, embeddingClient, milvusClient);
+  const searchService = new SearchService(db, embeddingClient, milvusClient, {
+    prefixes: {
+      document: config.embedding_prefix_document,
+      query: config.embedding_prefix_query,
+      cluster: config.embedding_prefix_cluster,
+    },
+    maxTokens: config.embedding_max_tokens,
+  });
 
   // Services
   const auditService = new AuditService(db);
