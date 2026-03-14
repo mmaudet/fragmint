@@ -1,10 +1,13 @@
-// packages/server/src/services/composer-service.ts
+/**
+ * Composition engine: resolves fragment slots, builds template data,
+ * and renders documents via the unified render engine.
+ */
 import { join } from 'node:path';
 import { existsSync, readdirSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { FragmentService } from './fragment-service.js';
 import type { TemplateYaml, ComposeRequest, ComposeResponse, FragmentSlot } from '../schema/template.js';
+import { renderDocument, type SupportedFormat } from './render-engine.js';
 
 /** Result shape returned by TemplateService.getById(). */
 export interface TemplateRow {
@@ -33,6 +36,7 @@ interface ResolvedFragment {
   body: string;
   quality: string;
   score: number;
+  tags?: string[];
 }
 
 const OUTPUT_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -74,7 +78,6 @@ export class ComposerService {
     schema: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }>,
   ): void {
     for (const [field, def] of Object.entries(schema)) {
-      // Apply defaults when field is missing
       if (context[field] === undefined || context[field] === null) {
         if (def.default !== undefined) {
           let defaultVal = def.default;
@@ -87,7 +90,6 @@ export class ComposerService {
         }
       }
 
-      // Validate enum constraints
       if (def.enum && context[field] !== undefined) {
         if (!def.enum.includes(String(context[field]))) {
           throw new Error(
@@ -99,27 +101,53 @@ export class ComposerService {
   }
 
   /**
-   * Build the JSON payload that Carbone will use to render the template.
+   * Parse structured key:value tags from a fragment's tags array.
+   * E.g. ["produit:Twake Workplace", "pu:4.50"] → { produit: "Twake Workplace", pu: "4.50" }
    */
-  static buildCarboneJson(
+  static parseStructuredTags(tags: string[]): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const tag of tags) {
+      const colonIdx = tag.indexOf(':');
+      if (colonIdx > 0) {
+        result[tag.slice(0, colonIdx)] = tag.slice(colonIdx + 1);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Build the data object for the rendering engine.
+   * docx-templates uses flat data access: {fieldName} or +++FOR row IN rows+++
+   */
+  static buildTemplateData(
     resolved: Map<string, ResolvedFragment[]>,
     context: Record<string, any>,
     structuredData?: Record<string, any>,
   ): Record<string, any> {
-    const fragmentsObj: Record<string, any> = {};
+    const fragments: Record<string, any> = {};
 
     for (const [key, items] of resolved) {
       if (items.length === 1) {
         const f = items[0];
-        fragmentsObj[key] = { body: f.body, id: f.id, quality: f.quality };
+        fragments[key] = {
+          body: f.body,
+          id: f.id,
+          quality: f.quality,
+          ...ComposerService.parseStructuredTags(f.tags ?? []),
+        };
       } else {
-        fragmentsObj[key] = items.map(f => ({ body: f.body, id: f.id, quality: f.quality }));
+        fragments[key] = items.map(f => ({
+          body: f.body,
+          id: f.id,
+          quality: f.quality,
+          ...ComposerService.parseStructuredTags(f.tags ?? []),
+        }));
       }
     }
 
     return {
       ...(structuredData ?? {}),
-      fragments: fragmentsObj,
+      fragments,
       metadata: {
         ...context,
         generated_at: new Date().toISOString(),
@@ -132,7 +160,7 @@ export class ComposerService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Full composition flow: resolve fragments, build JSON, render with Carbone.
+   * Full composition flow: resolve fragments, build data, render document.
    */
   async compose(
     templateId: string,
@@ -203,27 +231,27 @@ export class ComposerService {
       }
     }
 
-    // 5. Build Carbone JSON
-    const carboneData = ComposerService.buildCarboneJson(
+    // 5. Build template data
+    const templateData = ComposerService.buildTemplateData(
       resolved,
       context,
       request.structured_data,
     );
 
-    // 6. Render with Carbone
+    // 6. Render with unified engine
     const templatePath = this.templateService.getTemplatePath(row);
-    const carboneModule = await import('carbone');
-    const carbone = carboneModule.default ?? carboneModule;
-    const render = promisify(carbone.render);
-
-    const resultBuffer = await render(templatePath, carboneData);
+    const { buffer } = await renderDocument(
+      templatePath,
+      templateData,
+      requestedFormat as SupportedFormat,
+    );
 
     // 7. Save output
     const outputFilename = request.output?.filename
       ? `${randomUUID()}-${request.output.filename}`
-      : `${randomUUID()}.docx`;
+      : `${randomUUID()}.${requestedFormat}`;
     const outputPath = join(this.outputsDir, outputFilename);
-    writeFileSync(outputPath, resultBuffer);
+    writeFileSync(outputPath, buffer);
 
     const renderMs = Date.now() - startMs;
     const expiresAt = new Date(Date.now() + OUTPUT_TTL_MS).toISOString();
@@ -243,45 +271,31 @@ export class ComposerService {
     };
   }
 
-  /**
-   * Purge output files older than TTL. Returns number of files removed.
-   */
+  /** Purge output files older than TTL. */
   cleanupOutputs(): number {
     let removed = 0;
     const now = Date.now();
-
     try {
-      const files = readdirSync(this.outputsDir);
-      for (const file of files) {
+      for (const file of readdirSync(this.outputsDir)) {
         const filePath = join(this.outputsDir, file);
         try {
-          const stat = statSync(filePath);
-          if (now - stat.mtimeMs > OUTPUT_TTL_MS) {
+          if (now - statSync(filePath).mtimeMs > OUTPUT_TTL_MS) {
             unlinkSync(filePath);
             removed++;
           }
-        } catch {
-          // skip files that can't be stat'd
-        }
+        } catch { /* skip */ }
       }
-    } catch {
-      // outputs dir doesn't exist yet
-    }
-
+    } catch { /* dir missing */ }
     return removed;
   }
 
-  /**
-   * Return the full path if file exists in outputs, null otherwise.
-   */
+  /** Return full path if file exists in outputs, null otherwise. */
   getOutputPath(filename: string): string | null {
     const fullPath = join(this.outputsDir, filename);
     return existsSync(fullPath) ? fullPath : null;
   }
 
-  /**
-   * Start periodic cleanup of expired output files.
-   */
+  /** Start periodic cleanup of expired output files. */
   startCleanupTimer(): NodeJS.Timeout {
     return setInterval(() => this.cleanupOutputs(), CLEANUP_INTERVAL_MS);
   }
@@ -295,7 +309,6 @@ export class ComposerService {
     context: Record<string, any>,
     overrides?: Record<string, string>,
   ): Promise<ResolvedFragment[]> {
-    // Check for override
     if (overrides && overrides[slot.key]) {
       const frag = await this.fragmentService.getById(overrides[slot.key]);
       if (!frag) {
@@ -306,28 +319,21 @@ export class ComposerService {
         body: frag.body,
         quality: frag.quality,
         score: 1.0,
+        tags: frag.frontmatter?.tags ?? [],
       }];
     }
 
-    // Resolve context vars in lang and domain
     const lang = ComposerService.resolveContextVars(slot.lang, context);
     const domain = ComposerService.resolveContextVars(slot.domain, context);
 
-    // Search for fragments
     const results = await this.fragmentService.search(
       slot.type,
-      {
-        type: [slot.type],
-        domain: [domain],
-        lang,
-        quality_min: slot.quality_min,
-      },
+      { type: [slot.type], domain: [domain], lang, quality_min: slot.quality_min },
       slot.count,
     );
 
     const items: ResolvedFragment[] = [];
     for (const result of results) {
-      // Load full fragment to get body
       const full = await this.fragmentService.getById(result.id);
       if (full) {
         items.push({
@@ -335,6 +341,7 @@ export class ComposerService {
           body: full.body,
           quality: full.quality,
           score: result.score,
+          tags: full.frontmatter?.tags ?? [],
         });
       }
     }

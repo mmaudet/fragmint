@@ -1,0 +1,41 @@
+id: tpl-devis-produits-001
+name: Devis produits souverains
+description: "Devis avec tableau de lignes produits, quantités et calcul de totaux"
+output_format: docx
+carbone_template: devis-produits.docx
+version: "1.0"
+
+fragments:
+  - key: introduction
+    type: introduction
+    domain: souveraineté
+    lang: "{{context.lang}}"
+    quality_min: approved
+    required: true
+    fallback: error
+    count: 1
+
+structured_data:
+  - key: lignes
+    source: context
+    schema:
+      produit: string
+      description: string
+      qte: number
+      pu: number
+      total: number
+
+context_schema:
+  lang:
+    type: string
+    enum: [fr, en]
+    required: true
+  client:
+    type: string
+    required: true
+  ref:
+    type: string
+    required: true
+  date:
+    type: date
+    default: today
