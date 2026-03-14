@@ -5,3 +5,7 @@ dist/
 .env
 .DS_Store
 data/
+example-vault/outputs/
+packages/web/tsconfig.tsbuildinfo
+.superpowers/
+*.~lock.*
