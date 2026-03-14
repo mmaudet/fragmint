@@ -12,9 +12,9 @@ Phase 0 initializes the Fragmint monorepo and delivers a functional content frag
 
 | Component | Choice | Rationale |
 |---|---|---|
-| Runtime | Node.js 24.x | Latest version, user preference |
+| Runtime | Node.js 24.x | Latest version, user preference (PRD says 22, overridden) |
 | Monorepo | pnpm workspaces | Lightweight, no extra tooling overhead |
-| Core API | Fastify 5 + TypeScript | Fast, schema-first, PRD alignment |
+| Core API | Fastify 5 + TypeScript | Fast, schema-first (PRD says Fastify 4, upgraded) |
 | Database | Drizzle ORM + better-sqlite3 | Type-safe, migrations, zero-dep DB |
 | Password/token hashing | scrypt (node:crypto) | Zero native deps, air-gap friendly |
 | Validation | Zod + JSON Schema export | Type inference + interoperability |
@@ -60,7 +60,7 @@ fragmint/
 └── vitest.workspace.ts
 ```
 
-Placeholder packages (mcp, obsidian, frontend, scripts/indexer) contain only a README reserving their place in the tree.
+Placeholder packages (mcp, obsidian, frontend, scripts/indexer) contain a minimal `package.json` and a README reserving their place in the tree.
 
 ## 2. Data Model
 
@@ -108,7 +108,34 @@ Types inferred via `z.infer<>`, no duplication.
 
 Four tables per PRD section 12: `fragments`, `audit_log`, `users`, `api_tokens`.
 
-Quality transition rules (`draft → reviewed → approved → deprecated`, unidirectional except deprecated) are enforced in the service layer, not the schema.
+### Quality Transition State Machine
+
+Enforced in the service layer, not the schema:
+
+```
+draft → reviewed → approved → deprecated
+                        ↓
+                   deprecated
+```
+
+- `draft → reviewed` — any contributor+ can trigger (via `PUT /v1/fragments/:id` setting quality to `reviewed`, or via `POST /v1/fragments/:id/review`)
+- `reviewed → approved` — expert+ only (via `POST /v1/fragments/:id/approve`)
+- `approved → deprecated` — admin only (via `POST /v1/fragments/:id/deprecate`)
+- `approved → reviewed` — automatic when a source fragment is modified and this is a translation (PRD section 9, desynchronization). Not a user action.
+- All other transitions are rejected.
+- `deprecated` is a terminal state — no transition out.
+
+### Fragment `title`
+
+The frontmatter schema has no `title` field. During indexation, `title` is derived from the first line of the Markdown body (first `# heading` or first non-empty line). Stored in the `fragments` SQLite table for search and display. Not written back to the frontmatter.
+
+### Wildcard in `access`
+
+The value `"*"` in `access.read`, `access.write`, or `access.approve` is a reserved wildcard meaning "all authenticated users." It is not a role name.
+
+### Drizzle SQLite Tables
+
+Four tables per PRD section 12: `fragments`, `audit_log`, `users`, `api_tokens`. The `fragments` table also includes `origin`, `origin_source`, `origin_page`, and `harvest_confidence` columns (defined from Phase 0 per PRD to avoid future migration, defaulting to `manual`/null).
 
 ## 3. Git Operations
 
@@ -137,8 +164,8 @@ Generates normalized commit messages per PRD section 10:
 ```
 <action>(<type>/<domain>): <description>
 
-Fragment-Id: <frag-id>
 Author: <user_id>
+Fragment-Id: <frag-id>
 Quality-Transition: <transition>
 ```
 
@@ -146,6 +173,21 @@ Quality-Transition: <transition>
 
 - Store path via `FRAGMINT_STORE_PATH` environment variable
 - Frontmatter parsing via `gray-matter` (npm)
+
+### Server Configuration (`fragmint.yaml`)
+
+Minimal Phase 0 config:
+
+```yaml
+port: 3210
+store_path: ./example-vault        # path to Git-backed fragment store
+jwt_secret: <generated>            # auto-generated on first run if absent
+jwt_ttl: 8h
+log_level: info                    # debug | info | warn | error
+trust_proxy: false                 # set true behind reverse proxy
+```
+
+All values are overridable via environment variables (`FRAGMINT_PORT`, `FRAGMINT_STORE_PATH`, `FRAGMINT_JWT_SECRET`, etc.).
 
 ## 4. Core API
 
@@ -159,11 +201,13 @@ Quality-Transition: <transition>
 
 Two modes, unified middleware:
 
-**API token** — `Authorization: Bearer frag_tok_xxx`. Token hashed (scrypt) in `api_tokens` table. Lookup by iterating hashes (small table in MVP).
+**API token** — `Authorization: Bearer frag_tok_xxx`. Token stored with two hashes in `api_tokens` table: a SHA-256 fast hash for lookup, and a scrypt hash for verification. On each request, SHA-256 of the token is computed for O(1) lookup, then scrypt verifies the match. This avoids O(N) scrypt evaluations per request.
 
-**JWT** — `POST /v1/auth/login` (username + password) → JWT 8h. Claims: `sub`, `role`, `display_name`.
+**JWT** — `POST /v1/auth/login` (username + password) → JWT 8h. Claims: `sub` (user login, maps to PRD's `user_id`), `role`, `display_name`.
 
 The `authenticate` middleware detects token type (prefix `frag_tok_` = API token, else = JWT), resolves user and role, injects `request.user`.
+
+**IP tracking** — `request.ip` (with `trustProxy` configured for reverse proxy setups) is captured for audit log `ip_source`.
 
 ### Routes
 
@@ -175,17 +219,23 @@ The `authenticate` middleware detects token type (prefix `frag_tok_` = API token
 | GET | `/v1/fragments/:id/history` | Git history | reader |
 | GET | `/v1/fragments/:id/diff/:c1/:c2` | Diff between commits | reader |
 | POST | `/v1/fragments/search` | Fulltext search + filters | reader |
-| POST | `/v1/fragments/inventory` | Thematic cartography | reader |
+| POST | `/v1/fragments/inventory` | Basic counts by type/domain/lang/quality (Phase 0 simplified — full semantic inventory in Phase 1) | reader |
 | POST | `/v1/fragments` | Create fragment | contributor |
-| PUT | `/v1/fragments/:id` | Update fragment | contributor |
-| POST | `/v1/fragments/:id/approve` | Approve | expert |
+| PUT | `/v1/fragments/:id` | Update fragment (can set quality to `reviewed`) | contributor |
+| POST | `/v1/fragments/:id/review` | Explicit draft → reviewed transition | contributor |
+| POST | `/v1/fragments/:id/approve` | Approve (reviewed → approved) | expert |
 | POST | `/v1/fragments/:id/deprecate` | Deprecate | admin |
+| GET | `/v1/fragments/:id/lineage` | Derivation tree (parent, children, translations) | reader |
+| GET | `/v1/fragments/:id/version/:commit` | Fragment content at a specific commit | reader |
+| POST | `/v1/fragments/:id/restore/:commit` | Restore a previous version | admin |
 | POST | `/v1/index/trigger` | Trigger reindexation | admin |
+| GET | `/v1/index/status` | Indexation status (last run, errors) | admin |
 | GET | `/v1/audit` | Audit log | admin |
 | GET | `/v1/users` | List users | admin |
 | POST | `/v1/users` | Create user | admin |
 | POST | `/v1/tokens` | Create API token | admin |
 | GET | `/v1/tokens` | List tokens | admin |
+| DELETE | `/v1/tokens/:id` | Revoke API token | admin |
 
 ### Service Layer
 
@@ -232,8 +282,10 @@ fragmint inventory "topic" [--lang LANG] [--json]
 fragmint gaps [--domain DOMAIN]
 fragmint token create --name NAME --role ROLE
 fragmint token list
+fragmint token revoke <token-id>
 fragmint users list
 fragmint audit [--from DATE] [--to DATE]
+fragmint index status
 ```
 
 ### Output
