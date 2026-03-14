@@ -1,0 +1,17 @@
+{
+  "name": "fragmint",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/cli/tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  },
+  "license": "AGPL-3.0-only"
+}
