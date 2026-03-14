@@ -15,6 +15,7 @@ import { getDefinition, getHandler } from './tools/fragment-get.js';
 import { createDefinition, createHandler } from './tools/fragment-create.js';
 import { updateDefinition, updateHandler } from './tools/fragment-update.js';
 import { lineageDefinition, lineageHandler } from './tools/fragment-lineage.js';
+import { composeDefinition, composeHandler } from './tools/document-compose.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -35,6 +36,7 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: createDefinition, handler: createHandler(client) },
   { definition: updateDefinition, handler: updateHandler(client) },
   { definition: lineageDefinition, handler: lineageHandler(client) },
+  { definition: composeDefinition, handler: composeHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(
