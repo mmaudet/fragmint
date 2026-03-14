@@ -104,10 +104,6 @@ const fragmentFrontmatterSchema = z.object({
 
 Types inferred via `z.infer<>`, no duplication.
 
-### Drizzle SQLite Tables
-
-Four tables per PRD section 12: `fragments`, `audit_log`, `users`, `api_tokens`.
-
 ### Quality Transition State Machine
 
 Enforced in the service layer, not the schema:
@@ -135,7 +131,7 @@ The value `"*"` in `access.read`, `access.write`, or `access.approve` is a reser
 
 ### Drizzle SQLite Tables
 
-Four tables per PRD section 12: `fragments`, `audit_log`, `users`, `api_tokens`. The `fragments` table also includes `origin`, `origin_source`, `origin_page`, and `harvest_confidence` columns (defined from Phase 0 per PRD to avoid future migration, defaulting to `manual`/null).
+Four tables per PRD section 12: `fragments`, `audit_log`, `users`, `api_tokens`. The `fragments` table also includes `origin`, `origin_source`, `origin_page`, and `harvest_confidence` columns (defined from Phase 0 per PRD to avoid future migration, defaulting to `manual`/null). The `title` column stores the derived title (see above).
 
 ## 3. Git Operations
 
