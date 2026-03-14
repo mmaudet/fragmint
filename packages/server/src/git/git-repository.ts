@@ -73,6 +73,6 @@ export class GitRepository {
   }
 
   private async exec(...args: string[]) {
-    return execFileAsync('git', args, { cwd: this.repoPath });
+    return execFileAsync('git', args, { cwd: this.repoPath, env: process.env });
   }
 }
