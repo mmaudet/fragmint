@@ -1,7 +1,7 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, like, and, or, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { join, relative } from 'node:path';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
@@ -14,6 +14,7 @@ import {
 } from '../schema/fragment.js';
 import { AuditService } from './audit-service.js';
 import { hasRole } from '../auth/index.js';
+import { SearchService, type SearchFilters } from '../search/index.js';
 
 export class FragmentService {
   private git: GitRepository;
@@ -22,6 +23,7 @@ export class FragmentService {
     private db: FragmintDb,
     private storePath: string,
     private audit: AuditService,
+    private searchService: SearchService,
   ) {
     this.git = new GitRepository(storePath);
   }
@@ -95,6 +97,14 @@ export class FragmentService {
       fragment_id: id, ip_source: ip,
     });
 
+    // Index in vector store
+    await this.searchService.indexFragment(id, input.body, {
+      type: input.type, domain: input.domain, lang: input.lang,
+      quality: 'draft', author, tags: input.tags,
+      access_read: input.access.read,
+      created_at: now, updated_at: now,
+    });
+
     return { id, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
   }
 
@@ -135,27 +145,8 @@ export class FragmentService {
     return rows;
   }
 
-  async search(query: string, filters?: {
-    type?: string[];
-    domain?: string[];
-    lang?: string;
-    quality_min?: string;
-  }, limit = 20) {
-    const conditions = [];
-    const q = `%${query}%`;
-    conditions.push(or(like(fragments.title, q), like(fragments.body_excerpt, q)));
-
-    if (filters?.type?.length) {
-      conditions.push(sql`${fragments.type} IN (${sql.join(filters.type.map(t => sql`${t}`), sql`, `)})`);
-    }
-    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
-
-    const rows = await this.db.select().from(fragments)
-      .where(and(...conditions))
-      .orderBy(desc(fragments.uses))
-      .limit(limit);
-
-    return rows;
+  async search(query: string, filters?: SearchFilters, limit = 20) {
+    return this.searchService.search(query, filters, limit);
   }
 
   async update(id: string, input: UpdateFragmentInput, userId: string, userRole: string, ip?: string) {
@@ -219,6 +210,15 @@ export class FragmentService {
       fragment_id: id, ip_source: ip,
     });
 
+    // Re-index in vector store
+    await this.searchService.indexFragment(id, newBody, {
+      type: updatedFrontmatter.type, domain: updatedFrontmatter.domain,
+      lang: updatedFrontmatter.lang, quality: updatedFrontmatter.quality,
+      author: updatedFrontmatter.author, tags: updatedFrontmatter.tags,
+      access_read: updatedFrontmatter.access.read,
+      created_at: updatedFrontmatter.created_at, updated_at: updatedFrontmatter.updated_at,
+    });
+
     return { id, commit_hash: commitHash };
   }
 
@@ -255,6 +255,15 @@ export class FragmentService {
     await this.audit.log({
       user_id: userId, role: 'expert', action: 'approve',
       fragment_id: id, ip_source: ip,
+    });
+
+    // Re-index in vector store with updated quality
+    await this.searchService.indexFragment(id, body, {
+      type: frontmatter.type, domain: frontmatter.domain,
+      lang: frontmatter.lang, quality: 'approved',
+      author: frontmatter.author, tags: frontmatter.tags,
+      access_read: frontmatter.access.read,
+      created_at: frontmatter.created_at, updated_at: frontmatter.updated_at,
     });
 
     return { id, commit_hash: commitHash, quality: 'approved' };
@@ -296,6 +305,8 @@ export class FragmentService {
       fragment_id: id, ip_source: ip,
     });
 
+    await this.searchService.removeFromIndex(id);
+
     return { id, commit_hash: commitHash, quality: 'deprecated' };
   }
 
@@ -308,10 +319,12 @@ export class FragmentService {
 
   async inventory(topic?: string, lang?: string) {
     const allFragments = await this.db.select({
+      id: fragments.id,
       type: fragments.type,
       domain: fragments.domain,
       lang: fragments.lang,
       quality: fragments.quality,
+      translation_of: fragments.translation_of,
     }).from(fragments);
 
     const filtered = topic
@@ -325,17 +338,50 @@ export class FragmentService {
     for (const f of filtered) {
       byType[f.type] = (byType[f.type] || 0) + 1;
       byQuality[f.quality] = (byQuality[f.quality] || 0) + 1;
-
       if (!byLang[f.lang]) byLang[f.lang] = {};
       byLang[f.lang][f.quality] = (byLang[f.lang][f.quality] || 0) + 1;
     }
 
-    return {
-      total: filtered.length,
-      by_type: byType,
-      by_quality: byQuality,
-      by_lang: byLang,
-    };
+    // Gap detection
+    const gaps: Array<{
+      type: string; domain: string; lang: string;
+      status: 'no_approved' | 'missing_translation';
+      draft_count?: number; source_id?: string;
+    }> = [];
+
+    // 1. Find type/domain pairs with no approved fragment
+    const typeDomainPairs = new Map<string, { drafts: number; hasApproved: boolean }>();
+    for (const f of filtered) {
+      const key = `${f.type}|${f.domain}`;
+      const entry = typeDomainPairs.get(key) ?? { drafts: 0, hasApproved: false };
+      if (f.quality === 'approved') entry.hasApproved = true;
+      if (f.quality === 'draft') entry.drafts++;
+      typeDomainPairs.set(key, entry);
+    }
+    for (const [key, val] of typeDomainPairs) {
+      if (!val.hasApproved) {
+        const [type, domain] = key.split('|');
+        gaps.push({ type, domain, lang: '*', status: 'no_approved', draft_count: val.drafts });
+      }
+    }
+
+    // 2. Find fragments with missing translations
+    const allLangs = [...new Set(allFragments.map(f => f.lang))];
+    const originals = allFragments.filter(f => !f.translation_of);
+    for (const orig of originals) {
+      const translations = allFragments.filter(f => f.translation_of === orig.id);
+      const translatedLangs = new Set([orig.lang, ...translations.map(t => t.lang)]);
+      for (const l of allLangs) {
+        if (!translatedLangs.has(l)) {
+          gaps.push({
+            type: orig.type, domain: orig.domain, lang: l,
+            status: 'missing_translation', source_id: orig.id,
+          });
+        }
+      }
+    }
+
+    return { total: filtered.length, by_type: byType, by_quality: byQuality, by_lang: byLang, gaps };
   }
 
   async lineage(id: string) {
@@ -391,6 +437,29 @@ export class FragmentService {
       } catch (err) {
         console.error(`Failed to index ${absPath}:`, err);
       }
+    }
+
+    // Batch index into vector store
+    const batchItems = [];
+    for (const absPath of files) {
+      try {
+        const { frontmatter, body } = readFragment(absPath);
+        batchItems.push({
+          id: frontmatter.id,
+          body,
+          metadata: {
+            type: frontmatter.type, domain: frontmatter.domain,
+            lang: frontmatter.lang, quality: frontmatter.quality,
+            author: frontmatter.author, tags: frontmatter.tags,
+            access_read: frontmatter.access.read,
+            created_at: frontmatter.created_at, updated_at: frontmatter.updated_at,
+          },
+        });
+      } catch { /* already logged above */ }
+    }
+    if (batchItems.length > 0) {
+      const vectorResult = await this.searchService.indexBatch(batchItems);
+      console.log(`Vector-indexed ${vectorResult.indexed} fragments`);
     }
 
     return { indexed, total: files.length };
