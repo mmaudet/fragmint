@@ -45,6 +45,20 @@ export const users = sqliteTable('users', {
   active: integer('active').notNull().default(1),
 });
 
+export const templates = sqliteTable('templates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  output_format: text('output_format').notNull(),
+  version: text('version').notNull(),
+  template_path: text('template_path').notNull(),
+  yaml_path: text('yaml_path').notNull(),
+  author: text('author').notNull(),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+  git_hash: text('git_hash'),
+});
+
 export const apiTokens = sqliteTable('api_tokens', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
