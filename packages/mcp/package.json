@@ -1,6 +1,13 @@
 {
   "name": "@fragmint/mcp",
   "version": "0.1.0",
-  "private": true,
+  "type": "module",
+  "bin": { "fragmint-mcp": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
   "license": "AGPL-3.0-only"
 }
