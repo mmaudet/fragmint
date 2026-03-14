@@ -528,6 +528,7 @@ export const fragments = sqliteTable('fragments', {
   uses: integer('uses').notNull().default(0),
   parent_id: text('parent_id'),
   translation_of: text('translation_of'),
+  tags: text('tags'),  // JSON-serialized array of strings
   file_path: text('file_path').notNull(),
   git_hash: text('git_hash'),
   origin: text('origin').notNull().default('manual'),
@@ -609,6 +610,7 @@ function initTables(sqlite: Database.Database) {
       uses INTEGER NOT NULL DEFAULT 0,
       parent_id TEXT,
       translation_of TEXT,
+      tags TEXT,
       file_path TEXT NOT NULL,
       git_hash TEXT,
       origin TEXT NOT NULL DEFAULT 'manual',
@@ -1471,7 +1473,10 @@ export class TokenService {
   }
 
   async revoke(id: string): Promise<boolean> {
-    const result = await this.db.update(apiTokens)
+    const existing = await this.db.select({ id: apiTokens.id })
+      .from(apiTokens).where(eq(apiTokens.id, id)).limit(1);
+    if (existing.length === 0) return false;
+    await this.db.update(apiTokens)
       .set({ active: 0 })
       .where(eq(apiTokens.id, id));
     return true;
@@ -1583,7 +1588,7 @@ export class FragmentService {
     return this.git;
   }
 
-  async create(input: CreateFragmentInput, author: string, ip?: string) {
+  async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string) {
     const id = generateId();
     const now = new Date().toISOString();
     const fragmentsDir = join(this.storePath, 'fragments', input.domain);
@@ -1644,7 +1649,7 @@ export class FragmentService {
     });
 
     await this.audit.log({
-      user_id: author, role: 'contributor', action: 'create',
+      user_id: author, role: authorRole, action: 'create',
       fragment_id: id, ip_source: ip,
     });
 
@@ -1739,7 +1744,10 @@ export class FragmentService {
 
     if (input.tags) updatedFrontmatter.tags = input.tags;
     if (input.domain) updatedFrontmatter.domain = input.domain;
-    if (input.quality) updatedFrontmatter.quality = input.quality;
+    if (input.quality) {
+      updatedFrontmatter.quality = input.quality;
+      if (input.quality === 'reviewed') updatedFrontmatter.reviewed_by = userId;
+    }
     if (input.access) updatedFrontmatter.access = input.access;
     updatedFrontmatter.updated_at = new Date().toISOString();
 
@@ -1813,8 +1821,9 @@ export class FragmentService {
   async deprecate(id: string, userId: string, ip?: string) {
     const existing = await this.getById(id);
     if (!existing) throw new Error('Fragment not found');
-    if (existing.quality === 'deprecated') {
-      throw new Error('Fragment is already deprecated');
+    const allowed = QUALITY_TRANSITIONS[existing.quality] || [];
+    if (!allowed.includes('deprecated')) {
+      throw new Error(`Cannot deprecate: current quality '${existing.quality}' does not allow transition to deprecated`);
     }
 
     const filePath = join(this.storePath, existing.file_path);
@@ -2088,7 +2097,7 @@ export function fragmentRoutes(
   app.post('/v1/fragments', { preHandler: [authenticate, requireRole('contributor')] }, async (request, reply) => {
     const parsed = createFragmentSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    const result = await fragmentService.create(parsed.data, request.user.login, request.ip);
+    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip);
     return reply.status(201).send({ data: result, meta: null, error: null });
   });
 
