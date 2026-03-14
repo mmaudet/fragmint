@@ -18,7 +18,10 @@ import { authRoutes } from './routes/auth-routes.js';
 import { fragmentRoutes } from './routes/fragment-routes.js';
 import { adminRoutes } from './routes/admin-routes.js';
 import { templateRoutes } from './routes/template-routes.js';
+import { harvestRoutes } from './routes/harvest-routes.js';
 import { GitRepository } from './git/git-repository.js';
+import { LlmClient } from './services/llm-client.js';
+import { HarvesterService } from './services/harvester-service.js';
 
 export interface FragmintServer {
   app: ReturnType<typeof Fastify>;
@@ -105,11 +108,21 @@ export async function createServer(options?: {
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
 
+  // Harvester
+  const llmClient = new LlmClient({
+    endpoint: config.llm_endpoint,
+    model: config.llm_model,
+    temperature: config.llm_temperature,
+    timeout: config.llm_timeout,
+  });
+  const harvesterService = new HarvesterService(db, llmClient, searchService, fragmentService, storePath);
+
   // Routes
   authRoutes(app, userService);
   fragmentRoutes(app, fragmentService, authenticate);
   adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate);
   templateRoutes(app, templateService, composerService, authenticate);
+  harvestRoutes(app, harvesterService, authenticate);
 
   // Serve frontend static files
   const __dirname = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
