@@ -1,0 +1,36 @@
+services:
+  fragmint:
+    build: .
+    ports:
+      - "3210:3210"
+    volumes:
+      - ./data/vault:/data/vault
+    environment:
+      NODE_ENV: production
+      FRAGMINT_STORE_PATH: /data/vault
+      FRAGMINT_JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
+      FRAGMINT_MILVUS_ENABLED: "true"
+      FRAGMINT_MILVUS_ADDRESS: milvus:19530
+      FRAGMINT_EMBEDDING_ENDPOINT: http://ollama:11434
+      FRAGMINT_CORS_ORIGIN: http://localhost:3210
+    depends_on:
+      - milvus
+      - ollama
+
+  milvus:
+    image: milvusdb/milvus:v2.4-latest
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus-data:/var/lib/milvus
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+volumes:
+  milvus-data:
+  ollama-data:
