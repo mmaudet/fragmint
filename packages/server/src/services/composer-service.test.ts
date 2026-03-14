@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ComposerService } from './composer-service.js';
+import { ComposerService, formatFrenchNumber } from './composer-service.js';
 
 describe('ComposerService.resolveContextVars', () => {
   it('replaces {{context.lang}} with context value', () => {
@@ -127,6 +127,138 @@ describe('ComposerService.buildTemplateData', () => {
     expect(result.fragments.produits[0].pu).toBe('4.50');
     expect(result.fragments.produits[1].produit).toBe('OpenRAG');
     expect(result.fragments.produits[1].pu).toBe('15000');
+  });
+});
+
+describe('formatFrenchNumber', () => {
+  it('formats 1234.5 with space separator and comma decimal', () => {
+    // Node.js fr-FR uses narrow no-break space (U+202F) as thousands separator
+    const result = formatFrenchNumber(1234.5);
+    // Normalize any whitespace-like character to a regular space for comparison
+    const normalized = result.replace(/\s/g, ' ');
+    expect(normalized).toBe('1 234,50');
+  });
+
+  it('formats 15000 as 15 000,00', () => {
+    const result = formatFrenchNumber(15000);
+    const normalized = result.replace(/\s/g, ' ');
+    expect(normalized).toBe('15 000,00');
+  });
+
+  it('formats 0 as 0,00', () => {
+    expect(formatFrenchNumber(0)).toBe('0,00');
+  });
+
+  it('formats 4.5 as 4,50', () => {
+    expect(formatFrenchNumber(4.5)).toBe('4,50');
+  });
+
+  it('formats 1000000 with spaces', () => {
+    const result = formatFrenchNumber(1000000);
+    const normalized = result.replace(/\s/g, ' ');
+    expect(normalized).toBe('1 000 000,00');
+  });
+});
+
+describe('ComposerService.buildTemplateData with quantities', () => {
+  it('computes qte, total, and formats pu for pricing fragments', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('produits', [
+      { id: 'frag-001', body: 'Twake Workplace', quality: 'approved', score: 0.9, tags: ['produit:Twake Workplace', 'pu:4.50', 'unite:utilisateur/mois'] },
+      { id: 'frag-002', body: 'OpenRAG', quality: 'approved', score: 0.8, tags: ['produit:OpenRAG', 'pu:15000', 'unite:instance/an'] },
+    ]);
+
+    const structuredData = {
+      quantities: {
+        'frag-001': 500,
+        'frag-002': 1,
+      },
+    };
+
+    const result = ComposerService.buildTemplateData(resolved, {}, structuredData);
+
+    // Fragment frag-001: pu=4.50, qte=500, total=2250
+    const p0 = result.fragments.produits[0];
+    expect(p0.produit).toBe('Twake Workplace');
+    expect(p0.qte).toBe(500);
+    expect(p0.pu.replace(/\s/g, ' ')).toBe('4,50');
+    expect(p0.total.replace(/\s/g, ' ')).toBe('2 250,00');
+    expect(p0.unite).toBe('utilisateur/mois');
+
+    // Fragment frag-002: pu=15000, qte=1, total=15000
+    const p1 = result.fragments.produits[1];
+    expect(p1.produit).toBe('OpenRAG');
+    expect(p1.qte).toBe(1);
+    expect(p1.pu.replace(/\s/g, ' ')).toBe('15 000,00');
+    expect(p1.total.replace(/\s/g, ' ')).toBe('15 000,00');
+  });
+
+  it('leaves pu as raw string when no quantities are provided', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('produits', [
+      { id: 'frag-001', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:4.50'] },
+    ]);
+
+    const result = ComposerService.buildTemplateData(resolved, {});
+
+    // No quantities → pu stays as the raw tag string
+    expect(result.fragments.produits.pu).toBe('4.50');
+    expect(result.fragments.produits.qte).toBeUndefined();
+    expect(result.fragments.produits.total).toBeUndefined();
+  });
+
+  it('leaves pu as raw string when fragment id is not in quantities map', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('produits', [
+      { id: 'frag-001', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:4.50'] },
+    ]);
+
+    const structuredData = {
+      quantities: {
+        'frag-999': 100, // different fragment
+      },
+    };
+
+    const result = ComposerService.buildTemplateData(resolved, {}, structuredData);
+
+    // frag-001 not in quantities → pu stays raw
+    expect(result.fragments.produits.pu).toBe('4.50');
+    expect(result.fragments.produits.qte).toBeUndefined();
+  });
+
+  it('does not add pricing fields to fragments without pu tag', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('intro', [
+      { id: 'frag-010', body: 'Intro text', quality: 'approved', score: 0.95, tags: ['domain:commercial'] },
+    ]);
+
+    const structuredData = {
+      quantities: {
+        'frag-010': 5,
+      },
+    };
+
+    const result = ComposerService.buildTemplateData(resolved, {}, structuredData);
+
+    expect(result.fragments.intro.qte).toBeUndefined();
+    expect(result.fragments.intro.total).toBeUndefined();
+  });
+
+  it('quantities map is also available as top-level structured_data', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('intro', [
+      { id: 'frag-001', body: 'Text', quality: 'draft', score: 1.0 },
+    ]);
+
+    const structuredData = {
+      quantities: { 'frag-001': 10 },
+      extra: 'value',
+    };
+
+    const result = ComposerService.buildTemplateData(resolved, {}, structuredData);
+
+    expect(result.quantities).toEqual({ 'frag-001': 10 });
+    expect(result.extra).toBe('value');
   });
 });
 

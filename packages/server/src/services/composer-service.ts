@@ -42,6 +42,18 @@ interface ResolvedFragment {
 const OUTPUT_TTL_MS = 60 * 60 * 1000; // 1 hour
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
+/**
+ * Format a number using French locale conventions:
+ * space as thousands separator, comma as decimal, always 2 decimals.
+ * E.g. 1234.5 → "1 234,50", 15000 → "15 000,00"
+ */
+export function formatFrenchNumber(n: number): string {
+  return n.toLocaleString('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export class ComposerService {
   private outputsDir: string;
 
@@ -124,24 +136,36 @@ export class ComposerService {
     context: Record<string, any>,
     structuredData?: Record<string, any>,
   ): Record<string, any> {
+    const quantities: Record<string, number> | undefined = structuredData?.quantities;
     const fragments: Record<string, any> = {};
+
+    const enrichFragment = (f: ResolvedFragment) => {
+      const parsed = ComposerService.parseStructuredTags(f.tags ?? []);
+      const obj: Record<string, any> = {
+        body: f.body,
+        id: f.id,
+        quality: f.quality,
+        ...parsed,
+      };
+
+      // If the fragment has a unit price tag and a quantity is provided, compute pricing fields
+      if (parsed.pu && quantities && quantities[f.id] !== undefined) {
+        const pu = parseFloat(parsed.pu);
+        const qte = quantities[f.id];
+        const total = qte * pu;
+        obj.pu = formatFrenchNumber(pu);
+        obj.qte = qte;
+        obj.total = formatFrenchNumber(total);
+      }
+
+      return obj;
+    };
 
     for (const [key, items] of resolved) {
       if (items.length === 1) {
-        const f = items[0];
-        fragments[key] = {
-          body: f.body,
-          id: f.id,
-          quality: f.quality,
-          ...ComposerService.parseStructuredTags(f.tags ?? []),
-        };
+        fragments[key] = enrichFragment(items[0]);
       } else {
-        fragments[key] = items.map(f => ({
-          body: f.body,
-          id: f.id,
-          quality: f.quality,
-          ...ComposerService.parseStructuredTags(f.tags ?? []),
-        }));
+        fragments[key] = items.map(enrichFragment);
       }
     }
 
