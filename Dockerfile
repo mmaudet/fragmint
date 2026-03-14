@@ -1,6 +1,6 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
@@ -18,7 +18,7 @@ RUN pnpm --filter @fragmint/web build
 
 FROM node:20-alpine
 WORKDIR /app
-RUN apk add --no-cache python3 make g++ git
+RUN apk add --no-cache python3 make g++ git pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./

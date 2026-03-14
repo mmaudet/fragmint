@@ -12,6 +12,8 @@ services:
       FRAGMINT_MILVUS_ENABLED: ${FRAGMINT_MILVUS_ENABLED:-false}
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
       FRAGMINT_EMBEDDING_ENDPOINT: http://ollama:11434
+      FRAGMINT_LLM_ENDPOINT: http://ollama:11434/v1
+      FRAGMINT_LLM_MODEL: mistral-nemo:12b
       FRAGMINT_CORS_ORIGIN: http://localhost:3210
 
   milvus:
