@@ -17,7 +17,7 @@ Phase 1 adds semantic search to Fragmint by integrating Milvus for vector storag
 | Vector DB (dev/staging) | Milvus Standalone via Docker | Closer to prod |
 | Vector DB SDK | `@zilliz/milvus2-sdk-node` | Official Node.js SDK |
 | Embedding | Ollama API (OpenAI-compatible `/v1/embeddings`) | Sovereign, air-gap, configurable endpoint |
-| Default model | `nomic-embed-text-v1` (768d) | PRD specification |
+| Default model | `nomic-embed-text-v2-moe` (768d) | MoE architecture, better quality than v1 |
 
 ## 1. File Structure
 
@@ -52,6 +52,10 @@ interface FragmintConfig {
   embedding_model: string;       // default: "nomic-embed-text-v1"
   embedding_dimensions: number;  // default: 768
   embedding_batch_size: number;  // default: 32
+  embedding_max_tokens: number;  // default: 480 (model context max is 512)
+  embedding_prefix_document: string; // default: "search_document: "
+  embedding_prefix_query: string;    // default: "search_query: "
+  embedding_prefix_cluster: string;  // default: "clustering: "
 
   // Milvus
   milvus_address: string;        // default: "localhost:19530"
@@ -60,7 +64,7 @@ interface FragmintConfig {
 }
 ```
 
-Environment variables: `FRAGMINT_EMBEDDING_ENDPOINT`, `FRAGMINT_EMBEDDING_MODEL`, `FRAGMINT_EMBEDDING_DIMENSIONS`, `FRAGMINT_EMBEDDING_BATCH_SIZE`, `FRAGMINT_MILVUS_ADDRESS`, `FRAGMINT_MILVUS_COLLECTION`, `FRAGMINT_MILVUS_ENABLED`.
+Environment variables: `FRAGMINT_EMBEDDING_ENDPOINT`, `FRAGMINT_EMBEDDING_MODEL`, `FRAGMINT_EMBEDDING_DIMENSIONS`, `FRAGMINT_EMBEDDING_BATCH_SIZE`, `FRAGMINT_EMBEDDING_MAX_TOKENS`, `FRAGMINT_EMBEDDING_PREFIX_DOCUMENT`, `FRAGMINT_EMBEDDING_PREFIX_QUERY`, `FRAGMINT_EMBEDDING_PREFIX_CLUSTER`, `FRAGMINT_MILVUS_ADDRESS`, `FRAGMINT_MILVUS_COLLECTION`, `FRAGMINT_MILVUS_ENABLED`.
 
 **`milvus_enabled` defaults to `false`** — Phase 0 continues to work unchanged. When enabled, search switches to hybrid mode. If Milvus goes down at runtime, automatic fallback to SQLite.
 
@@ -85,13 +89,35 @@ class EmbeddingClient {
 POST {endpoint}/embeddings
 Content-Type: application/json
 
-{ "model": "nomic-embed-text-v1", "input": ["text to embed"] }
+{ "model": "nomic-embed-text-v2-moe", "input": ["search_document: text to embed"] }
 → { "data": [{ "embedding": [0.1, 0.2, ...] }] }
 ```
 
-The text sent for embedding is the concatenation of `title + "\n\n" + body` (no YAML frontmatter). Batch calls group by `batchSize` (default 32) to avoid overloading Ollama.
+The `EmbeddingClient` is agnostic — it sends text as-is. The `SearchService` is responsible for applying task prefixes and truncation before calling the client.
 
 On HTTP error or timeout, the client throws — the `SearchService` handles fallback.
+
+### Task Prefixes (nomic-embed-text-v2-moe)
+
+The default model `nomic-embed-text-v2-moe` uses a Mixture-of-Experts architecture that **requires mandatory task-specific prefixes** for optimal embedding quality. Without them, the MoE routing produces lower-quality embeddings.
+
+| Operation | Prefix | Applied by |
+|---|---|---|
+| Indexing a fragment | `search_document: ` | `SearchService.indexFragment()` / `indexBatch()` |
+| Searching (user/agent query) | `search_query: ` | `SearchService.search()` |
+| Clustering (Phase 6 Leiden) | `clustering: ` | Future use |
+
+Prefixes are configurable via `embedding_prefix_document`, `embedding_prefix_query`, `embedding_prefix_cluster` — set to empty strings for models that don't need them.
+
+### Truncation
+
+The model's context window is **512 tokens maximum** (~350-400 words). Text is truncated to `embedding_max_tokens` (default 480, leaving margin) before sending to the API. Rough estimate: 1 token ≈ 4 characters for French/English.
+
+The text sent for embedding is: `{prefix}{title}\n\n{body}` (truncated, no YAML frontmatter).
+
+### Batch calls
+
+Batch calls group by `batchSize` (default 32) to avoid overloading Ollama.
 
 ## 4. Milvus Client
 
@@ -142,6 +168,10 @@ class SearchService {
     db: FragmintDb,
     embeddingClient: EmbeddingClient,
     milvusClient: MilvusClient | null,  // null if milvus_enabled=false
+    options?: {
+      prefixes?: { document: string; query: string; cluster: string };
+      maxTokens?: number;
+    }
   )
 
   async indexFragment(id: string, body: string, metadata: FragmentMetadata): Promise<void>
@@ -249,7 +279,14 @@ if (config.milvus_enabled) {
   await milvusClient.ensureCollection();
 }
 
-const searchService = new SearchService(db, embeddingClient, milvusClient);
+const searchService = new SearchService(db, embeddingClient, milvusClient, {
+  prefixes: {
+    document: config.embedding_prefix_document,
+    query: config.embedding_prefix_query,
+    cluster: config.embedding_prefix_cluster,
+  },
+  maxTokens: config.embedding_max_tokens,
+});
 
 // FragmentService now receives searchService
 const fragmentService = new FragmentService(db, storePath, auditService, searchService);
@@ -286,14 +323,30 @@ const fragmentService = new FragmentService(db, storePath, auditService, searchS
 services:
   milvus:
     image: milvusdb/milvus:v2.4.17
+    command: ["milvus", "run", "standalone"]
     ports:
       - "19530:19530"
       - "9091:9091"
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      COMMON_STORAGETYPE: local
     volumes:
       - milvus-data:/var/lib/milvus
 volumes:
   milvus-data:
 ```
+
+**Starting the full stack for development:**
+```bash
+# Start Milvus
+docker compose -f docker/docker-compose.dev.yml up -d
+
+# Start Fragmint with Milvus + Ollama embedding
+FRAGMINT_MILVUS_ENABLED=true npx tsx packages/server/src/index.ts
+```
+
+Requires Ollama running locally with `nomic-embed-text-v2-moe` model installed (`ollama pull nomic-embed-text-v2-moe`).
 
 ## 9. CLI Updates
 
