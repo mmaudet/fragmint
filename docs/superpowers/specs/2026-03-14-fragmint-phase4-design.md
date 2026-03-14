@@ -26,7 +26,9 @@ Build a React SPA served by the Core API on `/ui` for managing fragments, invent
 - Vue Administration / Config LLM (Phase 6+)
 - E2E tests Playwright/Cypress (Phase 6 — Hardening)
 - Mode sombre (backlog)
-- Notifications Twake (backlog)
+- Notifications Twake à l'approbation (PRD requirement, deferred to backlog)
+- i18n (MVP hardcoded in French, i18n layer deferred)
+- Responsive/mobile layout (desktop-first for MVP)
 
 ## Architecture
 
@@ -82,10 +84,10 @@ packages/web/
 | React | 19 | UI framework |
 | TypeScript | ^5 | Type safety |
 | Vite | ^6 | Build tool + dev server |
-| React Router | ^7 | Client-side routing |
+| React Router | ^7 | Client-side routing (library mode, not framework mode) |
 | TanStack Query | ^5 | Data fetching, caching, mutations |
 | shadcn/ui | latest | Component library (Radix + Tailwind) |
-| Tailwind CSS | ^4 | Utility-first styling |
+| Tailwind CSS | ^3.4 | Utility-first styling (v3 for shadcn/ui compatibility; tailwind.config.ts) |
 | Lucide React | latest | Icons |
 | @fastify/static | latest | Serve built frontend from API server |
 
@@ -95,14 +97,14 @@ packages/web/
 
 Simple centered form: username + password + submit button. On success, stores JWT in AuthContext (session memory only, not localStorage per PRD). Redirects to `/fragments`.
 
-On 401 from any API call, redirect to `/login`.
+**Token expiration handling:** The fetch wrapper in `client.ts` intercepts all API responses. On 401, it clears the AuthContext and redirects to `/login`. The JWT has an 8h TTL set server-side. No refresh endpoint exists — when the token expires, the user re-authenticates. This is acceptable for an internal tool with 8h sessions.
 
 ### 2. FragmentsPage (`/fragments`) — Bibliothèque
 
 **Main area:**
 - Filter bar: type, domain, language, quality (shadcn Select components)
 - Search input with debounce (semantic search via `POST /v1/fragments/search`)
-- Paginated fragment list as cards (FragmentCard components)
+- Fragment list as cards with offset/limit pagination (FragmentCard components). Default: 20 per page. Backend `GET /v1/fragments` already supports `limit` and `offset` query params. Navigation via "Précédent / Suivant" buttons + page indicator.
 - Button "+ Nouveau" opens creation dialog
 
 **FragmentCard:**
@@ -149,7 +151,7 @@ On 401 from any API call, redirect to `/login`.
 **Step 3 — Slot preview (real-time):**
 - For each fragment slot in the template:
   - Resolve `{{context.*}}` in lang/domain filters
-  - Call `POST /v1/fragments/search` with resolved filters
+  - Call `POST /v1/fragments/search` with the slot's `key` as semantic query and `{type, domain, lang, quality_min}` as filters. The search endpoint uses the query for embedding similarity and filters for metadata matching.
   - Display result: SlotPreview component
     - Green: fragment found — show title, quality, score
     - Red: no match — show "Aucun fragment trouvé" with fallback indication (skip/error)
@@ -161,7 +163,7 @@ On 401 from any API call, redirect to `/login`.
 - Calls `POST /v1/templates/:id/compose` with context + overrides + structured_data
 - Shows loading spinner during render
 - On success: composition report (resolved fragments, skipped, warnings, render time)
-- Download button for the generated .docx
+- Download button: the compose response contains `document_url` (e.g. `/v1/outputs/xxx.docx`). The frontend fetches this URL as a blob and triggers a browser download via `URL.createObjectURL()`. The file expires after 1h server-side.
 
 ### 5. ValidationPage (`/validation`)
 
@@ -172,9 +174,10 @@ On 401 from any API call, redirect to `/login`.
 
 **Review panel (on click → drawer):**
 - Full fragment content
-- Diff with previous version if available (`GET /fragments/:id/diff`)
+- Diff with previous version: first call `GET /v1/fragments/:id/history` to get the two most recent commit SHAs, then call `GET /v1/fragments/:id/diff/:c1/:c2` to display the diff. If only one commit exists, show full content without diff.
 - Actions:
-  - "Approuver" → `POST /fragments/:id/approve` → moves to approved, removes from queue
+  - "Lire" → navigates to FragmentsPage with the fragment drawer open
+  - "Approuver" → `POST /v1/fragments/:id/approve` → moves to approved, removes from queue
   - "Demander modification" → toast notification (no API action, manual workflow for MVP)
 
 ## State Management
@@ -217,6 +220,7 @@ JWT stored in memory only. All API calls inject `Authorization: Bearer` header v
 | `useUpdateFragment()` | `PUT /v1/fragments/:id` | `['fragments'], ['fragment', id]` |
 | `useReviewFragment()` | `POST /v1/fragments/:id/review` | `['fragments'], ['fragment', id]` |
 | `useApproveFragment()` | `POST /v1/fragments/:id/approve` | `['fragments'], ['fragment', id]` |
+| `useLogin()` | `POST /v1/auth/login` | none (sets AuthContext) |
 | `useCompose()` | `POST /v1/templates/:id/compose` | none |
 
 ### Compositeur Preview Flow
