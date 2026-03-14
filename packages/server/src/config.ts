@@ -22,6 +22,9 @@ export interface FragmintConfig {
   embedding_prefix_query: string;
   embedding_prefix_cluster: string;
 
+  // CORS
+  cors_origin: string[];
+
   // Milvus
   milvus_address: string;
   milvus_collection: string;
@@ -52,6 +55,9 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     embedding_prefix_document: process.env.FRAGMINT_EMBEDDING_PREFIX_DOCUMENT ?? fileConfig.embedding_prefix_document ?? 'search_document: ',
     embedding_prefix_query: process.env.FRAGMINT_EMBEDDING_PREFIX_QUERY ?? fileConfig.embedding_prefix_query ?? 'search_query: ',
     embedding_prefix_cluster: process.env.FRAGMINT_EMBEDDING_PREFIX_CLUSTER ?? fileConfig.embedding_prefix_cluster ?? 'clustering: ',
+    cors_origin: process.env.FRAGMINT_CORS_ORIGIN
+      ? process.env.FRAGMINT_CORS_ORIGIN.split(',').map(s => s.trim())
+      : (fileConfig.cors_origin ?? ['http://localhost:3210', 'http://localhost:5173']),
     milvus_address: process.env.FRAGMINT_MILVUS_ADDRESS ?? fileConfig.milvus_address ?? 'localhost:19530',
     milvus_collection: process.env.FRAGMINT_MILVUS_COLLECTION ?? fileConfig.milvus_collection ?? 'fragmint_fragments',
     milvus_enabled: process.env.FRAGMINT_MILVUS_ENABLED === 'true' || fileConfig.milvus_enabled === true,

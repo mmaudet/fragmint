@@ -2,6 +2,8 @@
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import multipart from '@fastify/multipart';
 import { existsSync, readFileSync } from 'node:fs';
@@ -47,7 +49,21 @@ export async function createServer(options?: {
   const app = Fastify({ logger: { level: config.log_level }, trustProxy: config.trust_proxy });
 
   await app.register(fastifyJwt, { secret: config.jwt_secret, sign: { expiresIn: config.jwt_ttl } });
-  await app.register(fastifyCors);
+  await app.register(fastifyCors, {
+    origin: config.cors_origin,
+    credentials: true,
+  });
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+      },
+    },
+  });
+  await app.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' });
   await app.register(multipart);
 
   // Search infrastructure

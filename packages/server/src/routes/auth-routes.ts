@@ -4,7 +4,7 @@ import { loginSchema } from '../schema/api.js';
 import { UserService } from '../services/user-service.js';
 
 export function authRoutes(app: FastifyInstance, userService: UserService) {
-  app.post('/v1/auth/login', async (request, reply) => {
+  app.post('/v1/auth/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
