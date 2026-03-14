@@ -262,6 +262,35 @@ describe('ComposerService.buildTemplateData with quantities', () => {
   });
 });
 
+describe('ComposerService.buildTemplateData auto-totals', () => {
+  it('computes total_ht, tva, total_ttc from pricing fragments', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('produits', [
+      { id: 'frag-1', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:100'] },
+      { id: 'frag-2', body: 'OpenRAG', quality: 'draft', score: 0.8, tags: ['produit:OpenRAG', 'pu:200'] },
+    ]);
+
+    const structuredData = { quantities: { 'frag-1': 10, 'frag-2': 5 } };
+    const result = ComposerService.buildTemplateData(resolved, {}, structuredData);
+
+    // frag-1: 10 * 100 = 1000, frag-2: 5 * 200 = 1000 → total_ht = 2000
+    expect(result.metadata.total_ht.replace(/\s/g, ' ')).toBe('2 000,00');
+    expect(result.metadata.tva.replace(/\s/g, ' ')).toBe('400,00');
+    expect(result.metadata.total_ttc.replace(/\s/g, ' ')).toBe('2 400,00');
+  });
+
+  it('does NOT add totals when no pricing fragments', () => {
+    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    resolved.set('intro', [
+      { id: 'frag-1', body: 'Intro', quality: 'approved', score: 1, tags: [] },
+    ]);
+    const result = ComposerService.buildTemplateData(resolved, {});
+    expect(result.metadata.total_ht).toBeUndefined();
+    expect(result.metadata.tva).toBeUndefined();
+    expect(result.metadata.total_ttc).toBeUndefined();
+  });
+});
+
 describe('ComposerService.validateContext', () => {
   it('passes with valid required fields', () => {
     const context: Record<string, any> = { client_name: 'LINAGORA', lang: 'fr' };

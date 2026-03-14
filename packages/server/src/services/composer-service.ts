@@ -169,13 +169,39 @@ export class ComposerService {
       }
     }
 
+    // Auto-compute pricing totals from enriched fragments
+    let totalHt = 0;
+    let hasPricing = false;
+
+    for (const value of Object.values(fragments)) {
+      const arr = Array.isArray(value) ? value : [value];
+      for (const item of arr) {
+        if (item.total && typeof item.total === 'string') {
+          // Parse French-formatted number back to float (e.g. "2 250,00" → 2250)
+          const num = parseFloat(item.total.replace(/\s/g, '').replace(',', '.'));
+          if (!isNaN(num)) {
+            totalHt += num;
+            hasPricing = true;
+          }
+        }
+      }
+    }
+
+    const metadata: Record<string, any> = {
+      ...context,
+      generated_at: new Date().toISOString(),
+    };
+
+    if (hasPricing) {
+      metadata.total_ht = formatFrenchNumber(totalHt);
+      metadata.tva = formatFrenchNumber(totalHt * 0.2);
+      metadata.total_ttc = formatFrenchNumber(totalHt * 1.2);
+    }
+
     return {
       ...(structuredData ?? {}),
       fragments,
-      metadata: {
-        ...context,
-        generated_at: new Date().toISOString(),
-      },
+      metadata,
     };
   }
 

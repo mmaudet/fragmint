@@ -15,15 +15,14 @@ fragments:
     fallback: error
     count: 1
 
-structured_data:
-  - key: lignes
-    source: context
-    schema:
-      produit: string
-      description: string
-      qte: number
-      pu: number
-      total: number
+  - key: produits
+    type: pricing
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: false
+    fallback: skip
+    count: 10
 
 context_schema:
   lang:
@@ -39,4 +38,5 @@ context_schema:
   date:
     type: date
     default: today
+ 
  
