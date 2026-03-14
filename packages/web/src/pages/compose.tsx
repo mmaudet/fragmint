@@ -77,16 +77,17 @@ async function handleDownload(url: string, filename: string) {
 }
 
 export default function ComposePage() {
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [context, setContext] = useState<Record<string, string>>({});
   const [resolvedSlots, setResolvedSlots] = useState<Record<string, Fragment[]>>({});
 
   const { data: templates, isLoading: templatesLoading } = useTemplates();
-  const { data: template } = useTemplate(selectedTemplateId);
+  const { data: template } = useTemplate(selectedTemplateId || null);
   const compose = useCompose();
 
-  const contextSchema = template?.context_schema ?? {};
-  const slots = template?.fragments ?? [];
+  const yaml = (template as any)?.yaml as Template | undefined;
+  const contextSchema: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }> = yaml?.context_schema ?? template?.context_schema ?? {};
+  const slots: NonNullable<Template['fragments']> = yaml?.fragments ?? template?.fragments ?? [];
 
   // Check if all required context fields are filled
   const requiredContextFilled = useMemo(() => {
@@ -125,7 +126,18 @@ export default function ComposePage() {
 
   const handleCompose = () => {
     if (!selectedTemplateId) return;
-    compose.mutate({ templateId: selectedTemplateId, context });
+    // Filter out empty context values
+    const cleanContext: Record<string, string> = {};
+    for (const [k, v] of Object.entries(context)) {
+      if (v) cleanContext[k] = v;
+    }
+    // Apply defaults from schema
+    for (const [k, schema] of Object.entries(contextSchema)) {
+      if (!cleanContext[k] && schema.default) {
+        cleanContext[k] = String(schema.default);
+      }
+    }
+    compose.mutate({ templateId: selectedTemplateId, context: cleanContext });
   };
 
   return (
@@ -142,7 +154,7 @@ export default function ComposePage() {
         </CardHeader>
         <CardContent>
           <Select
-            value={selectedTemplateId ?? undefined}
+            value={selectedTemplateId}
             onValueChange={handleTemplateSelect}
           >
             <SelectTrigger className="w-full max-w-md">
@@ -193,7 +205,7 @@ export default function ComposePage() {
                 </label>
                 {schema.enum ? (
                   <Select
-                    value={context[key] ?? schema.default ?? ''}
+                    value={context[key] || schema.default?.toString() || ''}
                     onValueChange={(v) => handleContextChange(key, v)}
                   >
                     <SelectTrigger id={`ctx-${key}`} className="w-full max-w-md">
@@ -211,7 +223,7 @@ export default function ComposePage() {
                   <Input
                     id={`ctx-${key}`}
                     className="max-w-md"
-                    value={context[key] ?? schema.default ?? ''}
+                    value={context[key] || schema.default?.toString() || ''}
                     onChange={(e) => handleContextChange(key, e.target.value)}
                     placeholder={key}
                   />
@@ -361,7 +373,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
             onClick={() =>
               handleDownload(
                 result.document_url,
-                `${result.template.name}-${result.template.version}.pdf`,
+                `${result.template.name}-${result.template.version}.docx`,
               )
             }
           >

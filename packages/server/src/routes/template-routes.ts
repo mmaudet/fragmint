@@ -117,8 +117,14 @@ export function templateRoutes(
     if (!parsed.success) {
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     }
-    const result = await composerService.compose(id, parsed.data, request.user.role);
-    return { data: result, meta: null, error: null };
+    try {
+      const result = await composerService.compose(id, parsed.data, request.user.role);
+      return { data: result, meta: null, error: null };
+    } catch (err: any) {
+      const msg = err.message ?? 'Composition failed';
+      const status = msg.includes('not found') ? 404 : 400;
+      return reply.status(status).send({ data: null, meta: null, error: msg });
+    }
   });
 
   // Download generated output file

@@ -12,6 +12,7 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/jwt": "^9.0.0",
     "@fastify/multipart": "^9.4.0",
+    "@fastify/static": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
     "@zilliz/milvus2-sdk-node": "^2.5.0",

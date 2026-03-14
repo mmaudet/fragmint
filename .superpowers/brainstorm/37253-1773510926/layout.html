@@ -1,0 +1,107 @@
+<h2>Layout principal de l'application</h2>
+<p class="subtitle">Quelle structure de navigation pour Fragmint ?</p>
+
+<div class="cards">
+  <div class="card" data-choice="sidebar" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex; height:300px; font-family:system-ui; font-size:12px;">
+        <!-- Sidebar -->
+        <div style="width:220px; background:#1e1e2e; color:#cdd6f4; padding:16px; display:flex; flex-direction:column; gap:4px;">
+          <div style="font-size:16px; font-weight:bold; color:#89b4fa; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid #313244;">⬡ Fragmint</div>
+          <div style="padding:8px 12px; background:#313244; border-radius:6px; color:#cdd6f4; font-weight:500;">📚 Bibliothèque</div>
+          <div style="padding:8px 12px; border-radius:6px; color:#9399b2;">📊 Inventaire</div>
+          <div style="padding:8px 12px; border-radius:6px; color:#9399b2;">📄 Compositeur</div>
+          <div style="padding:8px 12px; border-radius:6px; color:#9399b2;">✅ Validation</div>
+          <div style="flex:1;"></div>
+          <div style="padding:8px 12px; color:#9399b2; font-size:11px; border-top:1px solid #313244; padding-top:12px;">mmaudet · admin</div>
+        </div>
+        <!-- Main content -->
+        <div style="flex:1; background:#f8f9fa; padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="font-size:18px; font-weight:600; color:#1a1a2e;">Bibliothèque</div>
+            <div style="display:flex; gap:8px;">
+              <div style="padding:6px 16px; background:#e9ecef; border-radius:6px; font-size:11px; color:#6c757d;">🔍 Rechercher...</div>
+              <div style="padding:6px 12px; background:#2b579a; color:white; border-radius:6px; font-size:11px;">+ Nouveau</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Type ▾</span>
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Domaine ▾</span>
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Qualité ▾</span>
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Langue ▾</span>
+          </div>
+          <div style="background:white; border-radius:8px; border:1px solid #dee2e6;">
+            <div style="padding:12px 16px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Introduction souveraineté numérique</span><br><span style="font-size:10px; color:#6c757d;">introduction · souveraineté · fr</span></div>
+              <div><span style="padding:3px 8px; background:#d4edda; color:#155724; border-radius:4px; font-size:10px;">approved</span></div>
+            </div>
+            <div style="padding:12px 16px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Open RAG vs solutions propriétaires</span><br><span style="font-size:10px; color:#6c757d;">argument · open-source · fr</span></div>
+              <div><span style="padding:3px 8px; background:#fff3cd; color:#856404; border-radius:4px; font-size:10px;">reviewed</span></div>
+            </div>
+            <div style="padding:12px 16px; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Tarification Twake — Secteur public</span><br><span style="font-size:10px; color:#6c757d;">pricing · twake · fr</span></div>
+              <div><span style="padding:3px 8px; background:#d4edda; color:#155724; border-radius:4px; font-size:10px;">approved</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Sidebar fixe</h3>
+      <p>Navigation verticale à gauche, toujours visible. Contenu principal à droite. Pattern classique type dashboard. Cohérent avec la maquette du PRD.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="topnav" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:300px; font-family:system-ui; font-size:12px; display:flex; flex-direction:column;">
+        <!-- Top nav -->
+        <div style="background:#1e1e2e; color:#cdd6f4; padding:12px 20px; display:flex; align-items:center; gap:24px;">
+          <div style="font-size:16px; font-weight:bold; color:#89b4fa;">⬡ Fragmint</div>
+          <div style="display:flex; gap:4px;">
+            <div style="padding:6px 14px; background:#313244; border-radius:6px; color:#cdd6f4; font-size:12px; font-weight:500;">📚 Bibliothèque</div>
+            <div style="padding:6px 14px; border-radius:6px; color:#9399b2; font-size:12px;">📊 Inventaire</div>
+            <div style="padding:6px 14px; border-radius:6px; color:#9399b2; font-size:12px;">📄 Compositeur</div>
+            <div style="padding:6px 14px; border-radius:6px; color:#9399b2; font-size:12px;">✅ Validation</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="color:#9399b2; font-size:11px;">mmaudet</div>
+        </div>
+        <!-- Content -->
+        <div style="flex:1; background:#f8f9fa; padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="font-size:18px; font-weight:600; color:#1a1a2e;">Bibliothèque</div>
+            <div style="display:flex; gap:8px;">
+              <div style="padding:6px 16px; background:#e9ecef; border-radius:6px; font-size:11px; color:#6c757d;">🔍 Rechercher...</div>
+              <div style="padding:6px 12px; background:#2b579a; color:white; border-radius:6px; font-size:11px;">+ Nouveau</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Type ▾</span>
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Domaine ▾</span>
+            <span style="padding:4px 10px; background:#e9ecef; border-radius:12px; font-size:10px;">Qualité ▾</span>
+          </div>
+          <div style="background:white; border-radius:8px; border:1px solid #dee2e6;">
+            <div style="padding:12px 16px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Introduction souveraineté numérique</span><br><span style="font-size:10px; color:#6c757d;">introduction · souveraineté · fr</span></div>
+              <div><span style="padding:3px 8px; background:#d4edda; color:#155724; border-radius:4px; font-size:10px;">approved</span></div>
+            </div>
+            <div style="padding:12px 16px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Open RAG vs solutions propriétaires</span><br><span style="font-size:10px; color:#6c757d;">argument · open-source · fr</span></div>
+              <div><span style="padding:3px 8px; background:#fff3cd; color:#856404; border-radius:4px; font-size:10px;">reviewed</span></div>
+            </div>
+            <div style="padding:12px 16px; display:flex; justify-content:space-between;">
+              <div><span style="font-weight:600; font-size:13px;">Tarification Twake — Secteur public</span><br><span style="font-size:10px; color:#6c757d;">pricing · twake · fr</span></div>
+              <div><span style="padding:3px 8px; background:#d4edda; color:#155724; border-radius:4px; font-size:10px;">approved</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Barre de navigation horizontale</h3>
+      <p>Navigation en haut, contenu en dessous sur toute la largeur. Plus d'espace horizontal pour le contenu. Style plus moderne/aéré.</p>
+    </div>
+  </div>
+</div>

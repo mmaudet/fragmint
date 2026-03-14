@@ -16,13 +16,16 @@ export async function apiRequest<T>(
   body?: unknown,
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body) headers['Content-Type'] = 'application/json';
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+  // Always send Content-Type + body for POST/PUT/PATCH to avoid Fastify empty body errors
+  const hasBody = method !== 'GET' && method !== 'DELETE';
+  if (hasBody) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(path, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: hasBody ? JSON.stringify(body ?? {}) : undefined,
   });
 
   if (res.status === 401) {

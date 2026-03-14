@@ -55,16 +55,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   })),
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
   const { name, arguments: args } = request.params;
   const handler = handlerMap.get(name);
   if (!handler) {
     return {
       isError: true,
       content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
-    };
+    } as Record<string, unknown>;
   }
-  return handler(args ?? {});
+  return handler(args ?? {}) as unknown as Record<string, unknown>;
 });
 
 // Start

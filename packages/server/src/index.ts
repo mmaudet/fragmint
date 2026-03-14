@@ -2,9 +2,11 @@
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import multipart from '@fastify/multipart';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
@@ -92,6 +94,27 @@ export async function createServer(options?: {
   fragmentRoutes(app, fragmentService, authenticate);
   adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate);
   templateRoutes(app, templateService, composerService, authenticate);
+
+  // Serve frontend static files
+  const __dirname = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
+  const frontendPath = resolve(__dirname, '../../web/dist');
+  if (existsSync(frontendPath)) {
+    await app.register(fastifyStatic, {
+      root: frontendPath,
+      prefix: '/ui/',
+      decorateReply: false,
+    });
+  }
+
+  // SPA fallback + 404 handler
+  const indexHtmlPath = resolve(frontendPath, 'index.html');
+  app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/ui') && existsSync(indexHtmlPath)) {
+      const html = readFileSync(indexHtmlPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    }
+    reply.status(404).send({ data: null, meta: null, error: 'Not found' });
+  });
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
