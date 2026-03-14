@@ -9,22 +9,25 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "fastify": "^5.3.0",
-    "@fastify/jwt": "^9.0.0",
     "@fastify/cors": "^11.0.0",
+    "@fastify/jwt": "^9.0.0",
+    "@fastify/multipart": "^9.4.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
-    "drizzle-orm": "^0.39.0",
+    "@zilliz/milvus2-sdk-node": "^2.5.0",
     "better-sqlite3": "^11.8.0",
-    "zod": "^3.24.0",
-    "zod-to-json-schema": "^3.24.0",
+    "carbone": "^3.5.6",
+    "drizzle-orm": "^0.39.0",
+    "fastify": "^5.3.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
     "uuid": "^11.1.0",
-    "@zilliz/milvus2-sdk-node": "^2.5.0"
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.24.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
+    "@types/carbone": "^3.2.5",
     "@types/js-yaml": "^4.0.0",
     "@types/uuid": "^10.0.0",
     "drizzle-kit": "^0.30.0",
