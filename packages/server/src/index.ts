@@ -2,16 +2,18 @@
 import Fastify from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
-import { UserService, TokenService, AuditService, FragmentService } from './services/index.js';
+import { UserService, TokenService, AuditService, FragmentService, TemplateService, ComposerService } from './services/index.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
 import { fragmentRoutes } from './routes/fragment-routes.js';
 import { adminRoutes } from './routes/admin-routes.js';
+import { templateRoutes } from './routes/template-routes.js';
 import { GitRepository } from './git/git-repository.js';
 
 export interface FragmintServer {
@@ -44,6 +46,7 @@ export async function createServer(options?: {
 
   await app.register(fastifyJwt, { secret: config.jwt_secret, sign: { expiresIn: config.jwt_ttl } });
   await app.register(fastifyCors);
+  await app.register(multipart);
 
   // Search infrastructure
   const embeddingClient = new EmbeddingClient(
@@ -78,6 +81,8 @@ export async function createServer(options?: {
   const userService = new UserService(db);
   const tokenService = new TokenService(db);
   const fragmentService = new FragmentService(db, storePath, auditService, searchService);
+  const templateService = new TemplateService(db, storePath, auditService);
+  const composerService = new ComposerService(fragmentService, templateService as any, storePath);
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
@@ -86,6 +91,7 @@ export async function createServer(options?: {
   authRoutes(app, userService);
   fragmentRoutes(app, fragmentService, authenticate);
   adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate);
+  templateRoutes(app, templateService, composerService, authenticate);
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
@@ -111,6 +117,11 @@ export async function createServer(options?: {
   if (result.indexed > 0) {
     console.log(`Indexed ${result.indexed} fragments on startup`);
   }
+
+  // Start periodic cleanup of expired composed outputs
+  app.addHook('onReady', () => {
+    composerService.startCleanupTimer();
+  });
 
   return { app, config, db };
 }
