@@ -8,6 +8,7 @@ import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import { UserService, TokenService, AuditService, FragmentService } from './services/index.js';
+import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
 import { fragmentRoutes } from './routes/fragment-routes.js';
 import { adminRoutes } from './routes/admin-routes.js';
@@ -44,11 +45,32 @@ export async function createServer(options?: {
   await app.register(fastifyJwt, { secret: config.jwt_secret, sign: { expiresIn: config.jwt_ttl } });
   await app.register(fastifyCors);
 
+  // Search infrastructure
+  const embeddingClient = new EmbeddingClient(
+    config.embedding_endpoint, config.embedding_model, config.embedding_dimensions
+  );
+
+  let milvusClient: FragmintMilvusClient | null = null;
+  if (config.milvus_enabled) {
+    try {
+      milvusClient = new FragmintMilvusClient(
+        config.milvus_address, config.milvus_collection, config.embedding_dimensions
+      );
+      await milvusClient.ensureCollection();
+      console.log('Milvus connected and collection ready');
+    } catch (err) {
+      console.warn('Milvus connection failed, using SQLite fallback:', err);
+      milvusClient = null;
+    }
+  }
+
+  const searchService = new SearchService(db, embeddingClient, milvusClient);
+
   // Services
   const auditService = new AuditService(db);
   const userService = new UserService(db);
   const tokenService = new TokenService(db);
-  const fragmentService = new FragmentService(db, storePath, auditService);
+  const fragmentService = new FragmentService(db, storePath, auditService, searchService);
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
@@ -99,3 +121,12 @@ export async function startServer(options?: {
 // Re-export for CLI and tests
 export { loadConfig } from './config.js';
 export type { FragmintConfig } from './config.js';
+
+// Auto-start when run directly (not imported as a module)
+const isMain = process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js');
+if (isMain) {
+  startServer({ dev: process.env.NODE_ENV !== 'production' }).catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}
