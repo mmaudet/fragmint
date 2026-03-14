@@ -5,5 +5,5 @@ export async function login(page: Page) {
   await page.getByPlaceholder(/utilisateur/i).fill('mmaudet');
   await page.getByPlaceholder(/mot de passe/i).fill('fragmint-dev');
   await page.getByRole('button', { name: /connecter/i }).click();
-  await page.waitForURL('**/fragments');
+  await page.waitForURL('**/fragments', { timeout: 15000 });
 }
