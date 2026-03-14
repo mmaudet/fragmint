@@ -23,4 +23,11 @@ export default defineWorkspace([
       include: ['src/**/*.test.ts'],
     },
   },
+  {
+    test: {
+      name: 'mcp',
+      root: './packages/mcp',
+      include: ['src/**/*.test.ts'],
+    },
+  },
 ]);
