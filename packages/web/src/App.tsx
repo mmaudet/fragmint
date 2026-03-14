@@ -10,6 +10,7 @@ import FragmentsPage from '@/pages/fragments';
 import InventoryPage from '@/pages/inventory';
 import ComposePage from '@/pages/compose';
 import ValidationPage from '@/pages/validation';
+import HarvestPage from '@/pages/harvest';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,7 @@ export default function App() {
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/compose" element={<ComposePage />} />
                 <Route path="/validation" element={<ValidationPage />} />
+                <Route path="/harvest" element={<HarvestPage />} />
               </Route>
             </Routes>
           </BrowserRouter>

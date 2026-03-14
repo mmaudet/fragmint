@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
-import { BookOpen, BarChart3, FileText, CheckCircle, LogOut, ChevronDown } from 'lucide-react';
+import { BookOpen, BarChart3, FileText, CheckCircle, Upload, LogOut, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -16,6 +16,7 @@ export default function AppLayout() {
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
     { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
     { to: '/compose', label: t('nav', 'composer'), icon: FileText },
+    { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
     { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
   ];
 

@@ -84,3 +84,39 @@ export interface GitLogEntry {
   date: string;
   message: string;
 }
+
+export interface HarvestJob {
+  id: string;
+  status: 'processing' | 'done' | 'error';
+  files: string[];
+  stats: { total: number; duplicates: number; low_confidence: number; valid: number } | null;
+  error: string | null;
+  created_at: string;
+}
+
+export interface HarvestCandidate {
+  id: string;
+  job_id: string;
+  title: string;
+  body: string;
+  type: string;
+  domain: string;
+  lang: string;
+  tags: string[];
+  confidence: number;
+  origin_source: string;
+  origin_page: number | null;
+  duplicate_of: string | null;
+  duplicate_score: number | null;
+  status: 'pending' | 'accepted' | 'rejected' | 'merged';
+}
+
+export interface HarvestJobWithCandidates extends HarvestJob {
+  candidates: HarvestCandidate[];
+}
+
+export interface ValidateResult {
+  committed: number;
+  merged: number;
+  rejected: number;
+}
