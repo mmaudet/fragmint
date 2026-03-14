@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
+import { useI18n } from '@/lib/i18n';
 import { FragmentCard } from '@/components/fragment-card';
 import { FragmentDetail } from '@/components/fragment-detail';
 import { SearchInput } from '@/components/search-input';
@@ -26,6 +27,7 @@ export default function FragmentsPage() {
   const [quality, setQuality] = useState('');
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { t } = useI18n();
 
   const filters = {
     ...(type && { type }),
@@ -61,9 +63,9 @@ export default function FragmentsPage() {
     <div className="p-6 space-y-6">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">Bibliothèque</h2>
+        <h2 className="text-2xl font-bold">{t('fragments', 'title')}</h2>
         <div className="w-72">
-          <SearchInput value={search} onChange={handleSearch} placeholder="Rechercher un fragment..." />
+          <SearchInput value={search} onChange={handleSearch} placeholder={t('fragments', 'searchPlaceholder')} />
         </div>
       </div>
 
@@ -71,22 +73,22 @@ export default function FragmentsPage() {
       <div className="flex flex-wrap gap-3">
         <Select value={type || '__all__'} onValueChange={handleFilterChange(setType)}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Type" />
+            <SelectValue placeholder={t('fragments', 'typePlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Tous les types</SelectItem>
-            {FRAGMENT_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
+            <SelectItem value="__all__">{t('fragments', 'allTypes')}</SelectItem>
+            {FRAGMENT_TYPES.map((ft) => (
+              <SelectItem key={ft} value={ft}>{ft}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={quality || '__all__'} onValueChange={handleFilterChange(setQuality)}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Qualité" />
+            <SelectValue placeholder={t('fragments', 'qualityPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Toutes qualités</SelectItem>
+            <SelectItem value="__all__">{t('fragments', 'allQualities')}</SelectItem>
             {QUALITY_VALUES.map((q) => (
               <SelectItem key={q} value={q}>{q}</SelectItem>
             ))}
@@ -95,10 +97,10 @@ export default function FragmentsPage() {
 
         <Select value={lang || '__all__'} onValueChange={handleFilterChange(setLang)}>
           <SelectTrigger className="w-32">
-            <SelectValue placeholder="Langue" />
+            <SelectValue placeholder={t('fragments', 'languagePlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Toutes langues</SelectItem>
+            <SelectItem value="__all__">{t('fragments', 'allLanguages')}</SelectItem>
             {LANG_VALUES.map((l) => (
               <SelectItem key={l} value={l}>{l}</SelectItem>
             ))}
@@ -107,10 +109,10 @@ export default function FragmentsPage() {
 
         <Select value={domain || '__all__'} onValueChange={handleFilterChange(setDomain)}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Domaine" />
+            <SelectValue placeholder={t('fragments', 'domainPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Tous domaines</SelectItem>
+            <SelectItem value="__all__">{t('fragments', 'allDomains')}</SelectItem>
             <SelectItem value="openrag">openrag</SelectItem>
             <SelectItem value="saas">saas</SelectItem>
             <SelectItem value="consulting">consulting</SelectItem>
@@ -139,7 +141,7 @@ export default function FragmentsPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-muted-foreground">
-          Aucun fragment trouvé
+          {t('fragments', 'noFragments')}
         </div>
       )}
 
@@ -151,16 +153,16 @@ export default function FragmentsPage() {
           disabled={offset === 0}
           onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
         >
-          Précédent
+          {t('common', 'previous')}
         </Button>
-        <span className="text-sm text-muted-foreground">Page {page}</span>
+        <span className="text-sm text-muted-foreground">{t('common', 'page')} {page}</span>
         <Button
           variant="outline"
           size="sm"
           disabled={!data || data.length < PAGE_SIZE}
           onClick={() => setOffset((o) => o + PAGE_SIZE)}
         >
-          Suivant
+          {t('common', 'next')}
         </Button>
       </div>
 

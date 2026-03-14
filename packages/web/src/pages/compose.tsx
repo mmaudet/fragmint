@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useTemplates, useTemplate } from '@/api/hooks/use-templates';
 import { useCompose } from '@/api/hooks/use-compose';
 import { useSearchFragments } from '@/api/hooks/use-fragments';
+import { useI18n } from '@/lib/i18n';
 import { downloadBlob } from '@/api/client';
 import type { Template, ComposeResponse, Fragment } from '@/api/types';
 
@@ -80,6 +81,7 @@ export default function ComposePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [context, setContext] = useState<Record<string, string>>({});
   const [resolvedSlots, setResolvedSlots] = useState<Record<string, Fragment[]>>({});
+  const { t } = useI18n();
 
   const { data: templates, isLoading: templatesLoading } = useTemplates();
   const { data: template } = useTemplate(selectedTemplateId || null);
@@ -142,14 +144,14 @@ export default function ComposePage() {
 
   return (
     <div className="space-y-6 p-6">
-      <h2 className="text-2xl font-bold">Compositeur</h2>
+      <h2 className="text-2xl font-bold">{t('compose', 'title')}</h2>
 
       {/* Section 1 - Template selection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Choix du template
+            {t('compose', 'templateChoice')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -158,17 +160,17 @@ export default function ComposePage() {
             onValueChange={handleTemplateSelect}
           >
             <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Choisir un template..." />
+              <SelectValue placeholder={t('compose', 'templatePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
               {templatesLoading && (
                 <SelectItem value="__loading" disabled>
-                  Chargement...
+                  {t('common', 'loading')}
                 </SelectItem>
               )}
-              {templates?.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
+              {templates?.map((tmpl) => (
+                <SelectItem key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -191,9 +193,9 @@ export default function ComposePage() {
       {template && Object.keys(contextSchema).length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Contexte</CardTitle>
+            <CardTitle>{t('compose', 'context')}</CardTitle>
             <CardDescription>
-              Renseignez les variables de contexte pour la composition
+              {t('compose', 'contextDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -209,7 +211,7 @@ export default function ComposePage() {
                     onValueChange={(v) => handleContextChange(key, v)}
                   >
                     <SelectTrigger id={`ctx-${key}`} className="w-full max-w-md">
-                      <SelectValue placeholder={`Choisir ${key}...`} />
+                      <SelectValue placeholder={`${t('compose', 'choosePlaceholder')} ${key}...`} />
                     </SelectTrigger>
                     <SelectContent>
                       {schema.enum.map((opt) => (
@@ -238,9 +240,9 @@ export default function ComposePage() {
       {template && requiredContextFilled && slots.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Slots du template</CardTitle>
+            <CardTitle>{t('compose', 'templateSlots')}</CardTitle>
             <CardDescription>
-              Fragments resolus pour chaque slot
+              {t('compose', 'resolvedFragments')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -268,15 +270,15 @@ export default function ComposePage() {
               {compose.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Composition en cours...
+                  {t('compose', 'composing')}
                 </>
               ) : (
-                'Composer le document'
+                t('compose', 'composeDocument')
               )}
             </Button>
             {!allRequiredSlotsFilled && (
               <p className="text-sm text-muted-foreground">
-                Tous les slots requis doivent avoir au moins un fragment.
+                {t('compose', 'allSlotsRequired')}
               </p>
             )}
           </div>
@@ -285,7 +287,7 @@ export default function ComposePage() {
             <Card className="border-red-200 bg-red-50">
               <CardContent className="pt-6">
                 <p className="text-sm text-red-600">
-                  Erreur: {(compose.error as Error).message}
+                  {t('common', 'error')}: {(compose.error as Error).message}
                 </p>
               </CardContent>
             </Card>
@@ -301,12 +303,14 @@ export default function ComposePage() {
 }
 
 function ComposeReport({ result }: { result: ComposeResponse }) {
+  const { t } = useI18n();
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 text-green-600" />
-          Composition terminee
+          {t('compose', 'compositionComplete')}
         </CardTitle>
         <CardDescription>
           {result.template.name} v{result.template.version}
@@ -316,7 +320,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
         {/* Resolved fragments */}
         {result.resolved.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium mb-2">Fragments resolus</h4>
+            <h4 className="text-sm font-medium mb-2">{t('compose', 'resolvedFragmentsLabel')}</h4>
             <div className="space-y-1">
               {result.resolved.map((r) => (
                 <div key={r.key} className="flex items-center gap-2 text-sm">
@@ -335,7 +339,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
         {/* Skipped slots */}
         {result.skipped.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium mb-2">Slots ignores</h4>
+            <h4 className="text-sm font-medium mb-2">{t('compose', 'skippedSlots')}</h4>
             <div className="flex flex-wrap gap-1">
               {result.skipped.map((s) => (
                 <Badge key={s} variant="outline" className="text-xs">
@@ -351,7 +355,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
           <div>
             <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
               <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-              Avertissements
+              {t('compose', 'warnings')}
             </h4>
             <ul className="space-y-1 text-sm text-amber-700">
               {result.warnings.map((w, i) => (
@@ -378,7 +382,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
             }
           >
             <Download className="mr-2 h-4 w-4" />
-            Telecharger
+            {t('common', 'download')}
           </Button>
         </div>
       </CardContent>

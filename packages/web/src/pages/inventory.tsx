@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useInventory } from '@/api/hooks/use-inventory';
+import { useI18n } from '@/lib/i18n';
 import { QualityBadge } from '@/components/quality-badge';
 import { CoverageBar } from '@/components/coverage-bar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,13 +38,14 @@ function TableSkeleton() {
 export default function InventoryPage() {
   const navigate = useNavigate();
   const { data: inventory, isLoading, error } = useInventory();
+  const { t } = useI18n();
 
   if (error) {
     return (
       <div className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Inventaire</h2>
+        <h2 className="text-2xl font-bold mb-4">{t('inventory', 'title')}</h2>
         <div className="rounded-md bg-destructive/10 p-4 text-destructive">
-          Erreur lors du chargement de l&apos;inventaire : {error.message}
+          {t('inventory', 'loadError')} : {error.message}
         </div>
       </div>
     );
@@ -63,7 +65,7 @@ export default function InventoryPage() {
 
   return (
     <div className="p-6 space-y-8">
-      <h2 className="text-2xl font-bold">Inventaire</h2>
+      <h2 className="text-2xl font-bold">{t('inventory', 'title')}</h2>
 
       {/* Top metrics row */}
       {isLoading ? (
@@ -72,7 +74,7 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total fragments</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('inventory', 'totalFragments')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{total}</div>
@@ -116,30 +118,30 @@ export default function InventoryPage() {
 
       {/* Coverage section */}
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold">Couverture par domaine</h3>
+        <h3 className="text-lg font-semibold">{t('inventory', 'coverageByDomain')}</h3>
         {isLoading ? (
           <Skeleton className="h-16 w-full" />
         ) : (
-          <CoverageBar fr={frTotal} en={enTotal} label="Toutes langues" />
+          <CoverageBar fr={frTotal} en={enTotal} label={t('inventory', 'allLanguages')} />
         )}
       </section>
 
       {/* Gaps table */}
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold">Lacunes d&eacute;tect&eacute;es</h3>
+        <h3 className="text-lg font-semibold">{t('inventory', 'detectedGaps')}</h3>
         {isLoading ? (
           <TableSkeleton />
         ) : gaps.length === 0 ? (
-          <p className="text-muted-foreground">Aucune lacune d&eacute;tect&eacute;e.</p>
+          <p className="text-muted-foreground">{t('inventory', 'noGaps')}</p>
         ) : (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Domaine</TableHead>
-                  <TableHead>Langue</TableHead>
-                  <TableHead>Statut</TableHead>
+                  <TableHead>{t('common', 'type')}</TableHead>
+                  <TableHead>{t('common', 'domain')}</TableHead>
+                  <TableHead>{t('common', 'language')}</TableHead>
+                  <TableHead>{t('inventory', 'status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -1,4 +1,5 @@
 import { useFragment, useFragmentHistory, useReviewFragment, useApproveFragment } from '@/api/hooks/use-fragments';
+import { useI18n } from '@/lib/i18n';
 import { QualityBadge } from '@/components/quality-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,20 +26,21 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const { data: history } = useFragmentHistory(fragmentId);
   const reviewMutation = useReviewFragment();
   const approveMutation = useApproveFragment();
+  const { t } = useI18n();
 
   const handleReview = () => {
     if (!fragmentId) return;
     reviewMutation.mutate(fragmentId, {
-      onSuccess: () => toast.success('Fragment marqué comme reviewed'),
-      onError: () => toast.error('Erreur lors du review'),
+      onSuccess: () => toast.success(t('fragments', 'reviewSuccess')),
+      onError: () => toast.error(t('fragments', 'reviewError')),
     });
   };
 
   const handleApprove = () => {
     if (!fragmentId) return;
     approveMutation.mutate(fragmentId, {
-      onSuccess: () => toast.success('Fragment approuvé'),
-      onError: () => toast.error("Erreur lors de l'approbation"),
+      onSuccess: () => toast.success(t('fragments', 'approveSuccess')),
+      onError: () => toast.error(t('fragments', 'approveError')),
     });
   };
 
@@ -56,7 +58,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
           <>
             <SheetHeader>
               <div className="flex items-center gap-2">
-                <SheetTitle className="flex-1">{fragment.title || 'Sans titre'}</SheetTitle>
+                <SheetTitle className="flex-1">{fragment.title || t('common', 'noTitle')}</SheetTitle>
                 <QualityBadge quality={fragment.quality} />
               </div>
               <SheetDescription>
@@ -67,9 +69,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
             <div className="mt-6 space-y-6">
               {/* Body */}
               <div>
-                <h4 className="text-sm font-medium mb-2">Contenu</h4>
+                <h4 className="text-sm font-medium mb-2">{t('common', 'content')}</h4>
                 <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
-                  {fragment.body || fragment.body_excerpt || '—'}
+                  {fragment.body || fragment.body_excerpt || '\u2014'}
                 </pre>
               </div>
 
@@ -77,18 +79,18 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
 
               {/* Metadata */}
               <div>
-                <h4 className="text-sm font-medium mb-2">Métadonnées</h4>
+                <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                 <table className="text-sm w-full">
                   <tbody>
                     {([
-                      ['Domaine', fragment.domain],
-                      ['Type', fragment.type],
-                      ['Langue', fragment.lang],
-                      ['Auteur', fragment.author],
-                      ['Créé le', new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                      ['Mis à jour', new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
-                      ['Utilisations', String(fragment.uses)],
-                      ['Fichier', fragment.file_path],
+                      [t('common', 'domain'), fragment.domain],
+                      [t('common', 'type'), fragment.type],
+                      [t('common', 'language'), fragment.lang],
+                      [t('common', 'author'), fragment.author],
+                      [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
+                      [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
+                      [t('common', 'uses'), String(fragment.uses)],
+                      [t('common', 'file'), fragment.file_path],
                     ] as const).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
                         <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
@@ -104,7 +106,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 <>
                   <Separator />
                   <div>
-                    <h4 className="text-sm font-medium mb-2">Tags</h4>
+                    <h4 className="text-sm font-medium mb-2">{t('common', 'tags')}</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {fragment.tags.map((tag) => (
                         <Badge key={tag} variant="secondary">{tag}</Badge>
@@ -119,7 +121,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 <>
                   <Separator />
                   <div>
-                    <h4 className="text-sm font-medium mb-2">Historique</h4>
+                    <h4 className="text-sm font-medium mb-2">{t('common', 'history')}</h4>
                     <ul className="space-y-2">
                       {history.map((entry) => (
                         <li key={entry.commit} className="text-sm">
@@ -144,7 +146,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     onClick={handleReview}
                     disabled={reviewMutation.isPending}
                   >
-                    {reviewMutation.isPending ? 'En cours...' : 'Marquer reviewed'}
+                    {reviewMutation.isPending ? t('common', 'inProgress') : t('fragments', 'markReviewed')}
                   </Button>
                 )}
                 {fragment.quality === 'reviewed' && (
@@ -152,14 +154,14 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     onClick={handleApprove}
                     disabled={approveMutation.isPending}
                   >
-                    {approveMutation.isPending ? 'En cours...' : 'Approuver'}
+                    {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
                   </Button>
                 )}
               </SheetFooter>
             )}
           </>
         ) : (
-          <div className="pt-6 text-sm text-muted-foreground">Fragment introuvable.</div>
+          <div className="pt-6 text-sm text-muted-foreground">{t('common', 'notFound')}</div>
         )}
       </SheetContent>
     </Sheet>

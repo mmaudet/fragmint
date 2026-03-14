@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFragments, useFragment, useFragmentHistory, useApproveFragment } from '@/api/hooks/use-fragments';
+import { useI18n } from '@/lib/i18n';
 import { FragmentCard } from '@/components/fragment-card';
 import { QualityBadge } from '@/components/quality-badge';
 import {
@@ -21,6 +22,7 @@ import { CheckCircle, Eye, MessageSquare } from 'lucide-react';
 export default function ValidationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const { data: fragments, isLoading } = useFragments({ quality: 'reviewed' });
   const { data: fragment, isLoading: isLoadingDetail } = useFragment(selectedId);
@@ -31,15 +33,15 @@ export default function ValidationPage() {
     if (!selectedId) return;
     approveMutation.mutate(selectedId, {
       onSuccess: () => {
-        toast.success('Fragment approuvé');
+        toast.success(t('validation', 'approveSuccess'));
         setSelectedId(null);
       },
-      onError: () => toast.error("Erreur lors de l'approbation"),
+      onError: () => toast.error(t('validation', 'approveError')),
     });
   };
 
   const handleRequestChange = () => {
-    toast.info('Demande de modification envoyée');
+    toast.info(t('validation', 'changeRequested'));
     setSelectedId(null);
   };
 
@@ -53,9 +55,9 @@ export default function ValidationPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold">Validation</h2>
+        <h2 className="text-2xl font-bold">{t('validation', 'title')}</h2>
         <p className="text-muted-foreground mt-1">
-          Fragments en attente d&apos;approbation{' '}
+          {t('validation', 'pendingApproval')}{' '}
           {fragments && (
             <Badge variant="secondary" className="ml-1">
               {fragments.length}
@@ -84,7 +86,7 @@ export default function ValidationPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-muted-foreground">
-          Aucun fragment en attente de validation
+          {t('validation', 'noFragmentsPending')}
         </div>
       )}
 
@@ -102,7 +104,7 @@ export default function ValidationPage() {
             <>
               <SheetHeader>
                 <div className="flex items-center gap-2">
-                  <SheetTitle className="flex-1">{fragment.title || 'Sans titre'}</SheetTitle>
+                  <SheetTitle className="flex-1">{fragment.title || t('common', 'noTitle')}</SheetTitle>
                   <QualityBadge quality={fragment.quality} />
                 </div>
                 <SheetDescription>
@@ -113,7 +115,7 @@ export default function ValidationPage() {
               <div className="mt-6 space-y-6">
                 {/* Body */}
                 <div>
-                  <h4 className="text-sm font-medium mb-2">Contenu</h4>
+                  <h4 className="text-sm font-medium mb-2">{t('common', 'content')}</h4>
                   <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
                     {fragment.body || fragment.body_excerpt || '\u2014'}
                   </pre>
@@ -123,16 +125,16 @@ export default function ValidationPage() {
 
                 {/* Metadata */}
                 <div>
-                  <h4 className="text-sm font-medium mb-2">Métadonnées</h4>
+                  <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                   <table className="text-sm w-full">
                     <tbody>
                       {([
-                        ['Auteur', fragment.author],
-                        ['Domaine', fragment.domain],
-                        ['Type', fragment.type],
-                        ['Langue', fragment.lang],
-                        ['Créé le', new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                        ['Mis à jour', new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
+                        [t('common', 'author'), fragment.author],
+                        [t('common', 'domain'), fragment.domain],
+                        [t('common', 'type'), fragment.type],
+                        [t('common', 'language'), fragment.lang],
+                        [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
+                        [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
                       ] as const).map(([label, value]) => (
                         <tr key={label} className="border-b last:border-0">
                           <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
@@ -148,7 +150,7 @@ export default function ValidationPage() {
                   <>
                     <Separator />
                     <div>
-                      <h4 className="text-sm font-medium mb-2">Historique Git</h4>
+                      <h4 className="text-sm font-medium mb-2">{t('validation', 'gitHistory')}</h4>
                       <ul className="space-y-2">
                         {history.map((entry) => (
                           <li key={entry.commit} className="text-sm">
@@ -169,20 +171,20 @@ export default function ValidationPage() {
               <SheetFooter className="mt-6 flex gap-2">
                 <Button variant="outline" onClick={handleRead}>
                   <Eye className="mr-2 h-4 w-4" />
-                  Lire
+                  {t('validation', 'read')}
                 </Button>
                 <Button variant="outline" onClick={handleRequestChange}>
                   <MessageSquare className="mr-2 h-4 w-4" />
-                  Demander modification
+                  {t('validation', 'requestChange')}
                 </Button>
                 <Button onClick={handleApprove} disabled={approveMutation.isPending}>
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  {approveMutation.isPending ? 'En cours...' : 'Approuver'}
+                  {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
                 </Button>
               </SheetFooter>
             </>
           ) : (
-            <div className="pt-6 text-sm text-muted-foreground">Fragment introuvable.</div>
+            <div className="pt-6 text-sm text-muted-foreground">{t('common', 'notFound')}</div>
           )}
         </SheetContent>
       </Sheet>
