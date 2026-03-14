@@ -10,6 +10,7 @@ import { registerFragmentCommands } from './commands/fragments.js';
 import { registerAdminCommands } from './commands/admin.js';
 import { registerTemplateCommands } from './commands/templates.js';
 import { registerComposeCommand } from './commands/compose.js';
+import { registerHarvestCommand } from './commands/harvest.js';
 
 const program = new Command();
 program.name('fragmint').version('0.1.0').description('Fragmint CLI');
@@ -37,5 +38,6 @@ registerFragmentCommands(program, getClient);
 registerAdminCommands(program, getClient);
 registerTemplateCommands(program, getClient);
 registerComposeCommand(program, getClient);
+registerHarvestCommand(program, getClient);
 
 program.parse();

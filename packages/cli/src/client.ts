@@ -39,6 +39,22 @@ export class FragmintClient {
     return Buffer.from(await res.arrayBuffer());
   }
 
+  async uploadHarvest(filePath: string, minConfidence: number): Promise<{ job_id: string; status: string }> {
+    const { readFileSync } = await import('node:fs');
+    const { basename } = await import('node:path');
+    const form = new FormData();
+    form.append('files', new Blob([readFileSync(filePath)]), basename(filePath));
+    form.append('options', JSON.stringify({ min_confidence: minConfidence }));
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+    const res = await fetch(`${this.baseUrl}/v1/harvest`, { method: 'POST', headers, body: form });
+    const json = await res.json() as { data: any; error: string | null };
+    if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.data;
+  }
+
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
