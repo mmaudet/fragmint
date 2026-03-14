@@ -6,10 +6,26 @@ import { randomUUID } from 'node:crypto';
 import type { FragmentService } from './fragment-service.js';
 import type { TemplateYaml, ComposeRequest, ComposeResponse, FragmentSlot } from '../schema/template.js';
 
-/** Minimal interface for TemplateService (not yet implemented). */
+/** Result shape returned by TemplateService.getById(). */
+export interface TemplateRow {
+  id: string;
+  name: string;
+  description: string | null;
+  output_format: string;
+  version: string;
+  template_path: string;
+  yaml_path: string;
+  author: string;
+  created_at: string;
+  updated_at: string;
+  git_hash: string | null;
+  yaml: TemplateYaml | null;
+}
+
+/** Minimal interface matching TemplateService. */
 export interface TemplateServiceLike {
-  getById(id: string): Promise<TemplateYaml | null>;
-  getTemplatePath(template: TemplateYaml): string;
+  getById(id: string): Promise<TemplateRow | null>;
+  getTemplatePath(row: { template_path: string }): string;
 }
 
 interface ResolvedFragment {
@@ -126,23 +142,27 @@ export class ComposerService {
     const startMs = Date.now();
 
     // 1. Load template
-    const template = await this.templateService.getById(templateId);
-    if (!template) {
+    const row = await this.templateService.getById(templateId);
+    if (!row) {
       throw new Error(`Template not found: ${templateId}`);
     }
+    if (!row.yaml) {
+      throw new Error(`Template YAML not found for: ${templateId}`);
+    }
+    const yaml = row.yaml;
 
     // 2. Validate output format
     const requestedFormat = request.output?.format ?? 'docx';
-    if (requestedFormat !== template.output_format) {
+    if (requestedFormat !== yaml.output_format) {
       throw new Error(
-        `Output format mismatch: requested '${requestedFormat}' but template requires '${template.output_format}'`,
+        `Output format mismatch: requested '${requestedFormat}' but template requires '${yaml.output_format}'`,
       );
     }
 
     // 3. Validate context
     const context = { ...request.context };
-    if (template.context_schema) {
-      ComposerService.validateContext(context, template.context_schema);
+    if (yaml.context_schema) {
+      ComposerService.validateContext(context, yaml.context_schema);
     }
 
     // 4. Resolve fragment slots
@@ -151,7 +171,7 @@ export class ComposerService {
     const skipped: string[] = [];
     const warnings: string[] = [];
 
-    for (const slot of template.fragments) {
+    for (const slot of yaml.fragments) {
       try {
         const items = await this.resolveSlot(slot, context, request.overrides);
         if (items.length === 0) {
@@ -191,7 +211,7 @@ export class ComposerService {
     );
 
     // 6. Render with Carbone
-    const templatePath = this.templateService.getTemplatePath(template);
+    const templatePath = this.templateService.getTemplatePath(row);
     const carboneModule = await import('carbone');
     const carbone = carboneModule.default ?? carboneModule;
     const render = promisify(carbone.render);
@@ -210,9 +230,9 @@ export class ComposerService {
 
     // 8. Return response
     return {
-      document_url: `/api/v1/compose/outputs/${outputFilename}`,
+      document_url: `/v1/outputs/${outputFilename}`,
       expires_at: expiresAt,
-      template: { id: template.id, name: template.name, version: template.version },
+      template: { id: yaml.id, name: yaml.name, version: yaml.version },
       context,
       resolved: resolvedList,
       skipped,

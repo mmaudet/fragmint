@@ -82,7 +82,7 @@ export async function createServer(options?: {
   const tokenService = new TokenService(db);
   const fragmentService = new FragmentService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
-  const composerService = new ComposerService(fragmentService, templateService as any, storePath);
+  const composerService = new ComposerService(fragmentService, templateService, storePath);
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
@@ -120,7 +120,8 @@ export async function createServer(options?: {
 
   // Start periodic cleanup of expired composed outputs
   app.addHook('onReady', () => {
-    composerService.startCleanupTimer();
+    const timer = composerService.startCleanupTimer();
+    app.addHook('onClose', () => clearInterval(timer));
   });
 
   return { app, config, db };

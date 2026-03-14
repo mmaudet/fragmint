@@ -2,16 +2,11 @@
 import { eq, desc } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
 import type { FragmintDb } from '../db/connection.js';
 import { templates } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { TemplateYamlSchema, type TemplateYaml } from '../schema/template.js';
 import { AuditService } from './audit-service.js';
-
-function generateTemplateId(): string {
-  return `tpl-${randomUUID().slice(0, 8)}`;
-}
 
 export class TemplateService {
   private git: GitRepository;
@@ -28,6 +23,10 @@ export class TemplateService {
     return this.git;
   }
 
+  getTemplatePath(row: { template_path: string }): string {
+    return join(this.storePath, row.template_path);
+  }
+
   async create(
     docxBuffer: Buffer,
     yamlContent: string,
@@ -36,6 +35,11 @@ export class TemplateService {
     authorRole: string,
     ip?: string,
   ) {
+    // Sanitize filename to prevent path traversal
+    if (docxFilename.includes('..') || docxFilename.includes('/')) {
+      throw new Error('Invalid filename: must not contain ".." or "/"');
+    }
+
     // Parse and validate YAML
     const yaml = await import('js-yaml');
     const parsed = yaml.load(yamlContent);
