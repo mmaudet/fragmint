@@ -22,6 +22,12 @@ export interface FragmintConfig {
   embedding_prefix_query: string;
   embedding_prefix_cluster: string;
 
+  // LLM
+  llm_endpoint: string;
+  llm_model: string;
+  llm_temperature: number;
+  llm_timeout: number;
+
   // CORS
   cors_origin: string[];
 
@@ -55,6 +61,10 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     embedding_prefix_document: process.env.FRAGMINT_EMBEDDING_PREFIX_DOCUMENT ?? fileConfig.embedding_prefix_document ?? 'search_document: ',
     embedding_prefix_query: process.env.FRAGMINT_EMBEDDING_PREFIX_QUERY ?? fileConfig.embedding_prefix_query ?? 'search_query: ',
     embedding_prefix_cluster: process.env.FRAGMINT_EMBEDDING_PREFIX_CLUSTER ?? fileConfig.embedding_prefix_cluster ?? 'clustering: ',
+    llm_endpoint: process.env.FRAGMINT_LLM_ENDPOINT ?? fileConfig.llm_endpoint ?? 'http://localhost:11434/v1',
+    llm_model: process.env.FRAGMINT_LLM_MODEL ?? fileConfig.llm_model ?? 'mistral-nemo:12b',
+    llm_temperature: toFloat(process.env.FRAGMINT_LLM_TEMPERATURE) ?? fileConfig.llm_temperature ?? 0.2,
+    llm_timeout: toNumber(process.env.FRAGMINT_LLM_TIMEOUT) ?? fileConfig.llm_timeout ?? 60000,
     cors_origin: process.env.FRAGMINT_CORS_ORIGIN
       ? process.env.FRAGMINT_CORS_ORIGIN.split(',').map(s => s.trim())
       : (fileConfig.cors_origin ?? ['http://localhost:3210', 'http://localhost:5173']),
@@ -67,5 +77,11 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
 function toNumber(val?: string): number | undefined {
   if (!val) return undefined;
   const n = parseInt(val, 10);
+  return isNaN(n) ? undefined : n;
+}
+
+function toFloat(val?: string): number | undefined {
+  if (!val) return undefined;
+  const n = parseFloat(val);
   return isNaN(n) ? undefined : n;
 }

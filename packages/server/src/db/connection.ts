@@ -45,6 +45,20 @@ export function createDb(path: string | ':memory:') {
       author TEXT NOT NULL, created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL, git_hash TEXT
     );
+    CREATE TABLE IF NOT EXISTS harvest_jobs (
+      id TEXT PRIMARY KEY, status TEXT NOT NULL, files TEXT NOT NULL,
+      pipeline TEXT NOT NULL, min_confidence REAL NOT NULL,
+      stats TEXT, error TEXT, created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS harvest_candidates (
+      id TEXT PRIMARY KEY, job_id TEXT NOT NULL, title TEXT NOT NULL,
+      body TEXT NOT NULL, type TEXT NOT NULL, domain TEXT NOT NULL,
+      lang TEXT NOT NULL, tags TEXT, confidence REAL NOT NULL,
+      origin_source TEXT NOT NULL, origin_page INTEGER,
+      duplicate_of TEXT, duplicate_score REAL,
+      status TEXT NOT NULL DEFAULT 'pending', fragment_id TEXT
+    );
   `);
 
   const db = drizzle(sqlite, { schema });

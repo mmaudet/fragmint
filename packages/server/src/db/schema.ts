@@ -70,3 +70,34 @@ export const apiTokens = sqliteTable('api_tokens', {
   last_used: text('last_used'),
   active: integer('active').notNull().default(1),
 });
+
+export const harvestJobs = sqliteTable('harvest_jobs', {
+  id: text('id').primaryKey(),
+  status: text('status').notNull(),
+  files: text('files').notNull(),
+  pipeline: text('pipeline').notNull(),
+  min_confidence: real('min_confidence').notNull(),
+  stats: text('stats'),
+  error: text('error'),
+  created_by: text('created_by').notNull(),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+});
+
+export const harvestCandidates = sqliteTable('harvest_candidates', {
+  id: text('id').primaryKey(),
+  job_id: text('job_id').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  type: text('type').notNull(),
+  domain: text('domain').notNull(),
+  lang: text('lang').notNull(),
+  tags: text('tags'),
+  confidence: real('confidence').notNull(),
+  origin_source: text('origin_source').notNull(),
+  origin_page: integer('origin_page'),
+  duplicate_of: text('duplicate_of'),
+  duplicate_score: real('duplicate_score'),
+  status: text('status').notNull().default('pending'),
+  fragment_id: text('fragment_id'),
+});
