@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Separator } from '@/components/ui/separator';
 import { BookOpen, BarChart3, FileText, CheckCircle, LogOut, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -45,9 +46,12 @@ export default function AppLayout() {
         </nav>
         <Separator className="bg-slate-700" />
         <div className="p-3 space-y-2">
-          <div className="flex gap-1">
-            <Button variant={lang === 'fr' ? 'secondary' : 'ghost'} size="sm" onClick={() => setLang('fr')} className="h-7 px-2 text-xs">FR</Button>
-            <Button variant={lang === 'en' ? 'secondary' : 'ghost'} size="sm" onClick={() => setLang('en')} className="h-7 px-2 text-xs">EN</Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <div className="flex gap-1">
+              <Button variant={lang === 'fr' ? 'secondary' : 'ghost'} size="sm" onClick={() => setLang('fr')} className="h-7 px-2 text-xs">FR</Button>
+              <Button variant={lang === 'en' ? 'secondary' : 'ghost'} size="sm" onClick={() => setLang('en')} className="h-7 px-2 text-xs">EN</Button>
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
