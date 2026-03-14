@@ -149,19 +149,16 @@ export class HarvesterService {
         const blocks = await this.llmClient.segment(markdown);
 
         for (const block of blocks) {
-          const blockText = HarvesterService.extractBlockText(
-            markdown,
-            block.title,
-            block.body,
-          );
-          const text = blockText || block.body;
+          // The LLM returns the full block text in body — use it directly
+          const text = block.body;
 
           // Classify
-          const classification = await this.llmClient.classify(
-            text,
-            existingTypes,
-            existingDomains,
-          );
+          let classification;
+          try {
+            classification = await this.llmClient.classify(text, existingTypes, existingDomains);
+          } catch (classErr: any) {
+            classification = { type: block.type || 'unknown', domain: 'unknown', tags: [], confidence: 0.5 };
+          }
 
           if (classification.confidence < minConfidence) {
             lowConfidenceCount++;
