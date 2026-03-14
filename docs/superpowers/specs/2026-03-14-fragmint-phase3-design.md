@@ -26,6 +26,7 @@ Integrate Carbone v4 into the Core API to generate DOCX documents from templates
 - Automatic Carbone tag detection from .docx XML — deferred
 - XLSX / PPTX support — deferred
 - PDF conversion (requires LibreOffice) — deferred
+- MCP `document_compose` tool — deferred to Phase 3b or Phase 4
 
 ## Architecture
 
@@ -50,7 +51,7 @@ POST /templates/{id}/compose
 - **ComposerService** — resolves fragments per YAML slots, builds Carbone JSON, calls Carbone, produces composition report
 - **Carbone** — pure rendering engine, receives a .docx template + JSON data, outputs the final document
 
-ComposerService is read-only on fragments (no side effects). Generated documents are stored temporarily in `outputs/` (outside Git, cleaned periodically).
+ComposerService is read-only on fragments (no side effects). Generated documents are stored temporarily in `outputs/` (outside Git). Cleanup is handled by a `setInterval` timer (every 10 min) registered in Fastify's `onReady` hook, which purges files older than the TTL (1h default). Carbone v4 uses a callback-style API; the service wraps `carbone.render()` with `util.promisify` for async/await usage.
 
 ## Data Model
 
@@ -60,6 +61,7 @@ ComposerService is read-only on fragments (no side effects). Generated documents
 CREATE TABLE templates (
   id            TEXT PRIMARY KEY,   -- "tpl-<uuid>"
   name          TEXT NOT NULL,
+  description   TEXT,               -- human-readable description
   output_format TEXT NOT NULL,      -- "docx"
   version       TEXT NOT NULL,      -- "1.0"
   template_path TEXT NOT NULL,      -- relative path to .docx in vault
@@ -76,6 +78,7 @@ CREATE TABLE templates (
 ```yaml
 id: tpl-<uuid>
 name: Proposition commerciale
+description: "Template standard pour propositions clients"
 output_format: docx
 carbone_template: proposition-commerciale.docx
 version: "1.0"
@@ -121,6 +124,8 @@ context_schema:
 - `lang: "{{context.lang}}"` is resolved dynamically at composition time
 - `count > 1` resolves multiple fragments for a single slot (e.g., multiple arguments in a Carbone loop)
 - `fallback: generate` is accepted in the schema but returns an error at runtime ("generate fallback not yet supported")
+- `author` in the YAML is optional; if omitted, the authenticated user's username is used
+- `output.format` in the compose request is validated against the template's `output_format`; mismatches return 400
 
 ### Zod schema (TypeScript)
 
@@ -152,12 +157,48 @@ const ContextFieldSchema = z.object({
 const TemplateYamlSchema = z.object({
   id: z.string().startsWith('tpl-'),
   name: z.string(),
+  description: z.string().optional(),
   output_format: z.enum(['docx']),     // extensible later
+  author: z.string().optional(),       // may be overridden by authenticated user
   carbone_template: z.string(),
   version: z.string(),
   fragments: z.array(FragmentSlotSchema),
   structured_data: z.array(StructuredDataSchema).optional(),
   context_schema: z.record(ContextFieldSchema).optional(),
+});
+```
+
+### Zod schemas for compose request/response
+
+```typescript
+const ComposeRequestSchema = z.object({
+  context: z.record(z.any()),
+  overrides: z.record(z.string()).optional(),          // key → fragment_id
+  structured_data: z.record(z.any()).optional(),       // key → array or object
+  output: z.object({
+    format: z.enum(['docx']),                          // must match template.output_format
+    filename: z.string().optional(),
+  }).optional(),
+});
+
+const ResolvedFragmentSchema = z.object({
+  key: z.string(),
+  fragment_id: z.string(),
+  score: z.number(),
+  quality: z.string(),
+});
+
+const ComposeResponseSchema = z.object({
+  document_url: z.string(),
+  expires_at: z.string(),
+  template: z.object({ id: z.string(), name: z.string(), version: z.string() }),
+  context: z.record(z.any()),
+  resolved: z.array(ResolvedFragmentSchema),
+  skipped: z.array(z.string()),
+  generated: z.array(z.any()),                         // reserved for future fallback:generate
+  structured_data: z.record(z.any()).optional(),        // summary (counts, totals)
+  warnings: z.array(z.string()),
+  render_ms: z.number(),
 });
 ```
 
@@ -170,7 +211,7 @@ const TemplateYamlSchema = z.object({
 2. For each slot in fragments[]:
    a. Resolve {{context.*}} in filters (lang, domain...)
    b. If override provided for this key → use directly (FragmentService.getById)
-   c. Else → FragmentService.search(type, domain, lang, quality >= quality_min)
+   c. Else → FragmentService.search(type, domain, lang, quality >= quality_min, valid_at = context.date, access.read includes caller role)
    d. Select top N results (N = count) by score
    e. If no results:
       - fallback: skip → empty string
@@ -204,6 +245,11 @@ const TemplateYamlSchema = z.object({
   "overrides": {
     "pricing": "frag-specific-id"
   },
+  "structured_data": {
+    "lignes": [
+      { "label": "Licence Twake 500 users", "qte": 500, "pu": 4.50, "total": 2250 }
+    ]
+  },
   "output": {
     "format": "docx",
     "filename": "proposition-gendarmerie-2026-03.docx"
@@ -223,6 +269,8 @@ const TemplateYamlSchema = z.object({
     { "key": "introduction", "fragment_id": "frag-...", "score": 0.92, "quality": "approved" }
   ],
   "skipped": ["testimonial"],
+  "generated": [],
+  "structured_data": { "lignes": 1, "total_ht": 2250 },
   "warnings": [],
   "render_ms": 12
 }
@@ -258,8 +306,7 @@ fragmint templates add <file.docx> <file.yaml>   # create a template
 
 # Composition
 fragmint compose <template-id> \
-  --lang fr --product twake \
-  --client "Gendarmerie" \
+  --context '{"lang":"fr","product":"twake","client":"Gendarmerie"}' \
   --output ./proposition.docx                    # compose and save locally
 ```
 
