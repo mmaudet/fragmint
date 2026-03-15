@@ -1,7 +1,7 @@
 // packages/server/src/auth/middleware.ts
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
-import { apiTokens, users } from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
+import { apiTokens, users, collections, collectionMemberships } from '../db/schema.js';
 import { hashTokenSha256, verifyTokenScrypt } from './hash.js';
 import { ROLE_HIERARCHY } from '../schema/fragment.js';
 import type { FragmintDb } from '../db/connection.js';
@@ -11,12 +11,27 @@ export interface AuthUser {
   login: string;
   role: string;
   display_name: string;
+  tokenCollectionSlug?: string;
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
     user: AuthUser;
+    collection?: any;
+    collectionRole?: string;
   }
+}
+
+const COLLECTION_ROLE_HIERARCHY: Record<string, number> = {
+  reader: 0,
+  contributor: 1,
+  expert: 2,
+  manager: 3,
+  owner: 4,
+};
+
+export function hasCollectionRole(userRole: string, requiredRole: string): boolean {
+  return (COLLECTION_ROLE_HIERARCHY[userRole] ?? -1) >= (COLLECTION_ROLE_HIERARCHY[requiredRole] ?? 999);
 }
 
 export function hasRole(userRole: string, requiredRole: string): boolean {
@@ -57,6 +72,10 @@ export function buildAuthMiddleware(db: FragmintDb) {
         role: row.role,
         display_name: row.name,
       };
+
+      if (row.collection_slug) {
+        request.user.tokenCollectionSlug = row.collection_slug;
+      }
       return;
     }
 
@@ -80,5 +99,52 @@ export function requireRole(role: string) {
     if (!hasRole(request.user.role, role)) {
       return reply.status(403).send({ data: null, meta: null, error: `Role '${role}' or higher required` });
     }
+  };
+}
+
+export function buildCollectionMiddleware(db: FragmintDb) {
+  return function requireCollectionRole(minRole: string) {
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+      const { slug } = request.params as { slug?: string };
+      if (!slug) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Collection slug required' });
+      }
+
+      // Load collection
+      const collectionRows = await db.select().from(collections).where(eq(collections.slug, slug)).limit(1);
+      if (collectionRows.length === 0) {
+        return reply.status(404).send({ data: null, meta: null, error: 'Collection not found' });
+      }
+      const collection = collectionRows[0];
+
+      // Determine role
+      let role: string | null = null;
+
+      // Global admin has full access
+      if (request.user.role === 'admin') {
+        role = 'owner';
+      } else {
+        // DB lookup for membership
+        const membershipRows = await db.select()
+          .from(collectionMemberships)
+          .where(and(
+            eq(collectionMemberships.user_id, request.user.id),
+            eq(collectionMemberships.collection_id, collection.id),
+          ))
+          .limit(1);
+
+        if (membershipRows.length > 0) {
+          role = membershipRows[0].role;
+        }
+      }
+
+      if (!role || !hasCollectionRole(role, minRole)) {
+        return reply.status(403).send({ data: null, meta: null, error: 'Collection access denied' });
+      }
+
+      // Attach to request for downstream use
+      request.collection = collection;
+      request.collectionRole = role;
+    };
   };
 }
