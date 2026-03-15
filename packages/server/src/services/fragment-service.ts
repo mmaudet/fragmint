@@ -145,8 +145,8 @@ export class FragmentService {
     return rows;
   }
 
-  async search(query: string, filters?: SearchFilters, limit = 20) {
-    return this.searchService.search(query, filters, limit);
+  async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]) {
+    return this.searchService.search(query, filters, limit, partitionNames);
   }
 
   async update(id: string, input: UpdateFragmentInput, userId: string, userRole: string, ip?: string) {

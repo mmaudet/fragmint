@@ -9,6 +9,8 @@ export const FragmentSlotSchema = z.object({
   required: z.boolean().default(true),
   fallback: z.enum(['skip', 'error', 'generate']).default('error'),
   count: z.number().int().positive().default(1),
+  collection: z.string().optional(),
+  collections: z.array(z.string()).optional(),
 });
 
 export const StructuredDataDefSchema = z.object({
@@ -35,6 +37,7 @@ export const TemplateYamlSchema = z.object({
   fragments: z.array(FragmentSlotSchema),
   structured_data: z.array(StructuredDataDefSchema).optional(),
   context_schema: z.record(ContextFieldSchema).optional(),
+  collections: z.array(z.string()).optional(),
 });
 
 export type TemplateYaml = z.infer<typeof TemplateYamlSchema>;

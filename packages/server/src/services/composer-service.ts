@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { FragmentService } from './fragment-service.js';
 import type { TemplateYaml, ComposeRequest, ComposeResponse, FragmentSlot } from '../schema/template.js';
 import { renderDocument, type SupportedFormat } from './render-engine.js';
+import { toMilvusPartition } from '../db/schema.js';
 
 /** Result shape returned by TemplateService.getById(). */
 export interface TemplateRow {
@@ -216,6 +217,7 @@ export class ComposerService {
     templateId: string,
     request: ComposeRequest,
     callerRole: string,
+    accessiblePartitions?: string[],
   ): Promise<ComposeResponse> {
     const startMs = Date.now();
 
@@ -251,7 +253,7 @@ export class ComposerService {
 
     for (const slot of yaml.fragments) {
       try {
-        const items = await this.resolveSlot(slot, context, request.overrides);
+        const items = await this.resolveSlot(slot, context, request.overrides, yaml, accessiblePartitions);
         if (items.length === 0) {
           if (slot.fallback === 'skip') {
             skipped.push(slot.key);
@@ -354,10 +356,43 @@ export class ComposerService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Determine the Milvus partition names to search for a given slot.
+   * Priority: slot.collection > slot.collections > yaml.collections > accessiblePartitions.
+   * All results are intersected with accessiblePartitions when provided.
+   */
+  private static resolvePartitions(
+    slot: FragmentSlot,
+    yaml: TemplateYaml,
+    accessiblePartitions?: string[],
+  ): string[] | undefined {
+    let partitions: string[] | undefined;
+
+    if (slot.collection) {
+      partitions = [toMilvusPartition(slot.collection)];
+    } else if (slot.collections?.length) {
+      partitions = slot.collections.map(toMilvusPartition);
+    } else if (yaml.collections?.length) {
+      partitions = yaml.collections.map(toMilvusPartition);
+    } else {
+      partitions = accessiblePartitions;
+    }
+
+    // Intersect with accessible partitions when both are defined
+    if (partitions && accessiblePartitions) {
+      const accessibleSet = new Set(accessiblePartitions);
+      partitions = partitions.filter(p => accessibleSet.has(p));
+    }
+
+    return partitions;
+  }
+
   private async resolveSlot(
     slot: FragmentSlot,
     context: Record<string, any>,
     overrides?: Record<string, string>,
+    yaml?: TemplateYaml,
+    accessiblePartitions?: string[],
   ): Promise<ResolvedFragment[]> {
     if (overrides && overrides[slot.key]) {
       const frag = await this.fragmentService.getById(overrides[slot.key]);
@@ -376,10 +411,15 @@ export class ComposerService {
     const lang = ComposerService.resolveContextVars(slot.lang, context);
     const domain = ComposerService.resolveContextVars(slot.domain, context);
 
+    const partitionNames = yaml
+      ? ComposerService.resolvePartitions(slot, yaml, accessiblePartitions)
+      : accessiblePartitions;
+
     const results = await this.fragmentService.search(
       slot.type,
       { type: [slot.type], domain: [domain], lang, quality_min: slot.quality_min },
       slot.count,
+      partitionNames,
     );
 
     const items: ResolvedFragment[] = [];
