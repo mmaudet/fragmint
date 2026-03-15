@@ -3,7 +3,8 @@ import type { Command } from 'commander';
 import { FragmintClient } from '../client.js';
 
 export function registerFragmentCommands(program: Command, getClient: () => FragmintClient) {
-  const frag = program.command('fragment').description('Fragment operations');
+  const frag = program.command('fragment').description('Fragment operations')
+    .option('--collection <slug>', 'Collection slug', 'common');
 
   frag
     .command('search <query>')
@@ -13,7 +14,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (query, opts) => {
       const client = getClient();
-      const results = await client.request<unknown[]>('POST', '/v1/fragments/search', {
+      const collection = frag.opts().collection;
+      const results = await client.collectionRequest<unknown[]>('POST', '/fragments/search', collection, {
         query,
         filters: {
           type: opts.type ? [opts.type] : undefined,
@@ -39,7 +41,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (id, opts) => {
       const client = getClient();
-      const result = await client.request<Record<string, unknown>>('GET', `/v1/fragments/${id}`);
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<Record<string, unknown>>('GET', `/fragments/${id}`, collection);
       if (opts.json) {
         console.log(JSON.stringify(result, null, 2));
       } else {
@@ -65,7 +68,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const client = getClient();
-      const result = await client.request<Record<string, unknown>>('POST', '/v1/fragments', {
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<Record<string, unknown>>('POST', '/fragments', collection, {
         type: opts.type,
         domain: opts.domain,
         lang: opts.lang,
@@ -85,7 +89,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (id, opts) => {
       const client = getClient();
-      const result = await client.request<Record<string, unknown>>('POST', `/v1/fragments/${id}/approve`);
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<Record<string, unknown>>('POST', `/fragments/${id}/approve`, collection);
       if (opts.json) {
         console.log(JSON.stringify(result, null, 2));
       } else {
@@ -99,7 +104,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (id, opts) => {
       const client = getClient();
-      const result = await client.request<Record<string, unknown>>('POST', `/v1/fragments/${id}/deprecate`);
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<Record<string, unknown>>('POST', `/fragments/${id}/deprecate`, collection);
       if (opts.json) {
         console.log(JSON.stringify(result, null, 2));
       } else {
@@ -115,7 +121,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const client = getClient();
-      const result = await client.request<unknown>('POST', '/v1/fragments/inventory', {
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<unknown>('POST', '/fragments/inventory', collection, {
         topic: opts.topic,
         lang: opts.lang,
       });
@@ -133,7 +140,8 @@ export function registerFragmentCommands(program: Command, getClient: () => Frag
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const client = getClient();
-      const result = await client.request<Record<string, unknown>>('POST', '/v1/fragments/inventory', {
+      const collection = frag.opts().collection;
+      const result = await client.collectionRequest<Record<string, unknown>>('POST', '/fragments/inventory', collection, {
         lang: opts.lang,
       });
       if (opts.json) {

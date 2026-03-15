@@ -11,6 +11,7 @@ export function registerComposeCommand(program: Command, getClient: () => Fragmi
     .option('--overrides <json>', 'Fragment overrides as JSON')
     .option('--structured-data <json>', 'Structured data as JSON')
     .option('--output <path>', 'Output file path')
+    .option('--collection <slug>', 'Collection slug', 'common')
     .action(async (templateId, opts) => {
       const client = getClient();
       const body: Record<string, any> = {
@@ -19,7 +20,7 @@ export function registerComposeCommand(program: Command, getClient: () => Fragmi
       if (opts.overrides) body.overrides = JSON.parse(opts.overrides);
       if (opts.structuredData) body.structured_data = JSON.parse(opts.structuredData);
 
-      const result = await client.request<any>('POST', `/v1/templates/${templateId}/compose`, body);
+      const result = await client.collectionRequest<any>('POST', `/templates/${templateId}/compose`, opts.collection, body);
 
       console.log(`Document generated: ${result.document_url}`);
       console.log(`Resolved: ${result.resolved.length} fragments`);

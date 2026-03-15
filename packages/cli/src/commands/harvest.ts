@@ -7,19 +7,20 @@ export function registerHarvestCommand(program: Command, getClient: () => Fragmi
     .command('harvest <file>')
     .description('Harvest fragments from a DOCX file')
     .option('--min-confidence <n>', 'Minimum confidence threshold', '0.65')
+    .option('--collection <slug>', 'Collection slug', 'common')
     .option('--json', 'Output raw JSON')
     .action(async (filePath, opts) => {
       const client = getClient();
       const minConfidence = parseFloat(opts.minConfidence);
 
       console.log(`Uploading ${filePath}...`);
-      const { job_id } = await client.uploadHarvest(filePath, minConfidence);
+      const { job_id } = await client.uploadHarvest(filePath, minConfidence, opts.collection);
       console.log(`Job created: ${job_id}`);
 
       // Poll until done
       let job: any;
       while (true) {
-        job = await client.request('GET', `/v1/harvest/${job_id}`);
+        job = await client.collectionRequest('GET', `/harvest/${job_id}`, opts.collection);
         if (job.status === 'done' || job.status === 'error') break;
         process.stdout.write('.');
         await new Promise(r => setTimeout(r, 2000));

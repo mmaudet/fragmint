@@ -5,7 +5,7 @@ export class FragmintClient {
     private token?: string,
   ) {}
 
-  async uploadTemplate(docxPath: string, yamlPath: string): Promise<unknown> {
+  async uploadTemplate(docxPath: string, yamlPath: string, collectionSlug?: string): Promise<unknown> {
     const { readFileSync } = await import('node:fs');
     const { basename } = await import('node:path');
 
@@ -19,7 +19,8 @@ export class FragmintClient {
     const headers: Record<string, string> = {};
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
 
-    const res = await fetch(`${this.baseUrl}/v1/templates`, {
+    const prefix = collectionSlug ? `/v1/collections/${collectionSlug}` : '/v1';
+    const res = await fetch(`${this.baseUrl}${prefix}/templates`, {
       method: 'POST',
       headers,
       body: form,
@@ -39,7 +40,7 @@ export class FragmintClient {
     return Buffer.from(await res.arrayBuffer());
   }
 
-  async uploadHarvest(filePath: string, minConfidence: number): Promise<{ job_id: string; status: string }> {
+  async uploadHarvest(filePath: string, minConfidence: number, collectionSlug?: string): Promise<{ job_id: string; status: string }> {
     const { readFileSync } = await import('node:fs');
     const { basename } = await import('node:path');
     const form = new FormData();
@@ -49,10 +50,16 @@ export class FragmintClient {
     const headers: Record<string, string> = {};
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
 
-    const res = await fetch(`${this.baseUrl}/v1/harvest`, { method: 'POST', headers, body: form });
+    const prefix = collectionSlug ? `/v1/collections/${collectionSlug}` : '/v1';
+    const res = await fetch(`${this.baseUrl}${prefix}/harvest`, { method: 'POST', headers, body: form });
     const json = await res.json() as { data: any; error: string | null };
     if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
     return json.data;
+  }
+
+  collectionRequest<T>(method: string, path: string, collectionSlug?: string, body?: unknown): Promise<T> {
+    const prefix = collectionSlug ? `/v1/collections/${collectionSlug}` : '/v1';
+    return this.request<T>(method, `${prefix}${path}`, body);
   }
 
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
