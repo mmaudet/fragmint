@@ -69,7 +69,7 @@ export class SearchService {
     this.maxTokens = options?.maxTokens ?? 480;
   }
 
-  async indexFragment(id: string, body: string, metadata: FragmentMetadata): Promise<void> {
+  async indexFragment(id: string, body: string, metadata: FragmentMetadata, partitionName?: string): Promise<void> {
     if (!this.milvusClient) return;
 
     try {
@@ -92,7 +92,7 @@ export class SearchService {
         tags: metadata.tags,
         access_read: metadata.access_read,
         community_id: 0,
-      }]);
+      }], partitionName);
     } catch (err) {
       console.warn(`Failed to index fragment ${id} in Milvus:`, err);
     }
@@ -137,7 +137,7 @@ export class SearchService {
     return { indexed };
   }
 
-  async search(query: string, filters?: SearchFilters, limit = 20): Promise<SearchResult[]> {
+  async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]): Promise<SearchResult[]> {
     // Try Milvus path
     if (this.milvusClient) {
       try {
@@ -150,7 +150,7 @@ export class SearchService {
           lang: filters?.lang,
           quality_min: filters?.quality_min,
         };
-        const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit);
+        const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit, partitionNames);
 
         if (milvusResults.length > 0) {
           // Enrich from SQLite

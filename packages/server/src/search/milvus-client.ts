@@ -103,18 +103,20 @@ export class FragmintMilvusClient {
     await this.sdk.loadCollection({ collection_name: this.collectionName });
   }
 
-  async upsert(items: MilvusFragment[]): Promise<void> {
+  async upsert(items: MilvusFragment[], partitionName?: string): Promise<void> {
     if (items.length === 0) return;
     await this.sdk.upsert({
       collection_name: this.collectionName,
+      ...(partitionName ? { partition_name: partitionName } : {}),
       data: items,
     });
   }
 
-  async search(vector: number[], filters: MilvusFilters, limit: number): Promise<MilvusSearchResult[]> {
+  async search(vector: number[], filters: MilvusFilters, limit: number, partitionNames?: string[]): Promise<MilvusSearchResult[]> {
     const filterExpr = buildFilterExpr(filters);
     const results = await this.sdk.search({
       collection_name: this.collectionName,
+      ...(partitionNames?.length ? { partition_names: partitionNames } : {}),
       vector,
       limit,
       filter: filterExpr,
