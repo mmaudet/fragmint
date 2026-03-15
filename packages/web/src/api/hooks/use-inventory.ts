@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/api/client';
+import { apiRequest, collectionApiUrl } from '@/api/client';
 import type { InventoryResult } from '@/api/types';
 
-export function useInventory(topic?: string) {
+export function useInventory(collectionSlug: string, topic?: string) {
   return useQuery({
-    queryKey: ['inventory', topic],
-    queryFn: () => apiRequest<InventoryResult>('POST', '/v1/fragments/inventory', topic ? { topic } : {}),
+    queryKey: ['inventory', collectionSlug, topic],
+    queryFn: () => apiRequest<InventoryResult>('POST', collectionApiUrl(collectionSlug, '/fragments/inventory'), topic ? { topic } : {}),
   });
 }

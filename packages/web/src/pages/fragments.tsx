@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { FragmentCard } from '@/components/fragment-card';
 import { FragmentDetail } from '@/components/fragment-detail';
 import { SearchInput } from '@/components/search-input';
@@ -28,6 +29,7 @@ export default function FragmentsPage() {
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
 
   const filters = {
     ...(type && { type }),
@@ -38,8 +40,8 @@ export default function FragmentsPage() {
     offset,
   };
 
-  const fragmentsQuery = useFragments(search ? {} : filters);
-  const searchQuery = useSearchFragments(search, filters);
+  const fragmentsQuery = useFragments(activeCollection, search ? {} : filters);
+  const searchQuery = useSearchFragments(activeCollection, search, filters);
 
   const data = search ? searchQuery.data : fragmentsQuery.data;
   const isLoading = search ? searchQuery.isLoading : fragmentsQuery.isLoading;

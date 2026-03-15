@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFragments, useFragment, useFragmentHistory, useApproveFragment } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { FragmentCard } from '@/components/fragment-card';
 import { QualityBadge } from '@/components/quality-badge';
 import {
@@ -23,11 +24,12 @@ export default function ValidationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
 
-  const { data: fragments, isLoading } = useFragments({ quality: 'reviewed' });
-  const { data: fragment, isLoading: isLoadingDetail } = useFragment(selectedId);
-  const { data: history } = useFragmentHistory(selectedId);
-  const approveMutation = useApproveFragment();
+  const { data: fragments, isLoading } = useFragments(activeCollection, { quality: 'reviewed' });
+  const { data: fragment, isLoading: isLoadingDetail } = useFragment(activeCollection, selectedId);
+  const { data: history } = useFragmentHistory(activeCollection, selectedId);
+  const approveMutation = useApproveFragment(activeCollection);
 
   const handleApprove = () => {
     if (!selectedId) return;

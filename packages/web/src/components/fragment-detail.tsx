@@ -1,5 +1,6 @@
 import { useFragment, useFragmentHistory, useReviewFragment, useApproveFragment } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { QualityBadge } from '@/components/quality-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,11 +23,12 @@ interface FragmentDetailProps {
 }
 
 export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProps) {
-  const { data: fragment, isLoading } = useFragment(fragmentId);
-  const { data: history } = useFragmentHistory(fragmentId);
-  const reviewMutation = useReviewFragment();
-  const approveMutation = useApproveFragment();
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
+  const { data: fragment, isLoading } = useFragment(activeCollection, fragmentId);
+  const { data: history } = useFragmentHistory(activeCollection, fragmentId);
+  const reviewMutation = useReviewFragment(activeCollection);
+  const approveMutation = useApproveFragment(activeCollection);
 
   const handleReview = () => {
     if (!fragmentId) return;

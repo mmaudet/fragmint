@@ -122,6 +122,13 @@ const translations = {
     reject: { fr: 'Rejeter', en: 'Reject' },
     error: { fr: "Erreur lors de l'analyse", en: 'Error during analysis' },
   },
+  collections: {
+    select: { fr: 'Collection', en: 'Collection' },
+    common: { fr: 'Commune', en: 'Common' },
+    personal: { fr: 'Personnelle', en: 'Personal' },
+    team: { fr: '\u00c9quipe', en: 'Team' },
+    readOnly: { fr: 'Lecture seule', en: 'Read only' },
+  },
 } as const;
 
 type Translations = typeof translations;

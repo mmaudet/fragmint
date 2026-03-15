@@ -1,16 +1,26 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
+import { useCollections } from '@/api/hooks/use-collections';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { BookOpen, BarChart3, FileText, CheckCircle, Upload, LogOut, ChevronDown } from 'lucide-react';
+import { BookOpen, BarChart3, FileText, CheckCircle, Upload, LogOut, ChevronDown, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useI18n();
+  const { activeCollection, setActiveCollection, collections, setCollections, isReadOnly } = useCollection();
+  const { data: cols } = useCollections();
+
+  useEffect(() => {
+    if (cols) setCollections(cols);
+  }, [cols, setCollections]);
 
   const navItems = [
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
@@ -28,6 +38,34 @@ export default function AppLayout() {
           <h1 className="text-lg font-bold text-white">⬡ Fragmint</h1>
         </div>
         <Separator className="bg-slate-700" />
+
+        {/* Collection selector */}
+        {collections.length > 0 && (
+          <div className="px-2 pt-2">
+            <Select value={activeCollection} onValueChange={setActiveCollection}>
+              <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-slate-200">
+                <div className="flex items-center gap-2">
+                  {isReadOnly && <Lock className="h-3 w-3 text-slate-400" />}
+                  <SelectValue placeholder={t('collections', 'select')} />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {collections.map(c => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    <span className="flex items-center gap-2">
+                      {c.name}
+                      {c.read_only && <Lock className="h-3 w-3 text-muted-foreground" />}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isReadOnly && (
+              <p className="text-xs text-slate-500 mt-1 px-1">{t('collections', 'readOnly')}</p>
+            )}
+          </div>
+        )}
+
         <nav className="flex-1 p-2 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink

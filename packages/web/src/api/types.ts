@@ -120,3 +120,14 @@ export interface ValidateResult {
   merged: number;
   rejected: number;
 }
+
+export interface CollectionWithRole {
+  id: string;
+  slug: string;
+  name: string;
+  type: 'system' | 'team' | 'personal';
+  role: string;
+  read_only: boolean;
+  description: string | null;
+  tags?: string[];
+}

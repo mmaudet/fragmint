@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/lib/auth-context';
 import { I18nProvider } from '@/lib/i18n';
+import { CollectionProvider } from '@/lib/collection-context';
 import { ProtectedRoute } from '@/components/protected-route';
 import AppLayout from '@/layouts/app-layout';
 import LoginPage from '@/pages/login';
@@ -23,20 +24,22 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <I18nProvider>
-          <BrowserRouter basename="/ui">
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<Navigate to="/fragments" replace />} />
-              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route path="/fragments" element={<FragmentsPage />} />
-                <Route path="/inventory" element={<InventoryPage />} />
-                <Route path="/compose" element={<ComposePage />} />
-                <Route path="/validation" element={<ValidationPage />} />
-                <Route path="/harvest" element={<HarvestPage />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-          <Toaster />
+          <CollectionProvider>
+            <BrowserRouter basename="/ui">
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/" element={<Navigate to="/fragments" replace />} />
+                <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                  <Route path="/fragments" element={<FragmentsPage />} />
+                  <Route path="/inventory" element={<InventoryPage />} />
+                  <Route path="/compose" element={<ComposePage />} />
+                  <Route path="/validation" element={<ValidationPage />} />
+                  <Route path="/harvest" element={<HarvestPage />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+            <Toaster />
+          </CollectionProvider>
         </I18nProvider>
       </AuthProvider>
     </QueryClientProvider>

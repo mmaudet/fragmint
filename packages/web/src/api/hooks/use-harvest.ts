@@ -1,11 +1,11 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest, getToken } from '@/api/client';
+import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
 import type { HarvestJobWithCandidates, ValidateResult } from '@/api/types';
 
-export function useHarvestJob(jobId: string | null) {
+export function useHarvestJob(collectionSlug: string, jobId: string | null) {
   return useQuery({
-    queryKey: ['harvest-job', jobId],
-    queryFn: () => apiRequest<HarvestJobWithCandidates>('GET', `/v1/harvest/${jobId}`),
+    queryKey: ['harvest-job', collectionSlug, jobId],
+    queryFn: () => apiRequest<HarvestJobWithCandidates>('GET', collectionApiUrl(collectionSlug, `/harvest/${jobId}`)),
     enabled: !!jobId,
     refetchInterval: (query) => {
       return query.state.data?.status === 'processing' ? 2000 : false;
@@ -13,7 +13,7 @@ export function useHarvestJob(jobId: string | null) {
   });
 }
 
-export function useStartHarvest() {
+export function useStartHarvest(collectionSlug: string) {
   return useMutation({
     mutationFn: async ({ files, minConfidence }: { files: File[]; minConfidence: number }) => {
       const form = new FormData();
@@ -26,7 +26,7 @@ export function useStartHarvest() {
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/v1/harvest', { method: 'POST', headers, body: form });
+      const res = await fetch(collectionApiUrl(collectionSlug, '/harvest'), { method: 'POST', headers, body: form });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
       return json.data as { job_id: string; status: string; files: string[] };
@@ -34,9 +34,9 @@ export function useStartHarvest() {
   });
 }
 
-export function useValidateCandidates() {
+export function useValidateCandidates(collectionSlug: string) {
   return useMutation({
     mutationFn: ({ jobId, ...body }: { jobId: string; accepted: string[]; rejected: string[]; modified?: any[]; merged?: any[] }) =>
-      apiRequest<ValidateResult>('POST', `/v1/harvest/${jobId}/validate`, body),
+      apiRequest<ValidateResult>('POST', collectionApiUrl(collectionSlug, `/harvest/${jobId}/validate`), body),
   });
 }

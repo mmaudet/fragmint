@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useInventory } from '@/api/hooks/use-inventory';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { QualityBadge } from '@/components/quality-badge';
 import { CoverageBar } from '@/components/coverage-bar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,8 +38,9 @@ function TableSkeleton() {
 
 export default function InventoryPage() {
   const navigate = useNavigate();
-  const { data: inventory, isLoading, error } = useInventory();
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
+  const { data: inventory, isLoading, error } = useInventory(activeCollection);
 
   if (error) {
     return (

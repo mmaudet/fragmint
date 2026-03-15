@@ -1,18 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/api/client';
+import { apiRequest, collectionApiUrl } from '@/api/client';
 import type { Template } from '@/api/types';
 
-export function useTemplates() {
+export function useTemplates(collectionSlug: string) {
   return useQuery({
-    queryKey: ['templates'],
-    queryFn: () => apiRequest<Template[]>('GET', '/v1/templates'),
+    queryKey: ['templates', collectionSlug],
+    queryFn: () => apiRequest<Template[]>('GET', collectionApiUrl(collectionSlug, '/templates')),
   });
 }
 
-export function useTemplate(id: string | null) {
+export function useTemplate(collectionSlug: string, id: string | null) {
   return useQuery({
-    queryKey: ['template', id],
-    queryFn: () => apiRequest<Template>('GET', `/v1/templates/${id}`),
+    queryKey: ['template', collectionSlug, id],
+    queryFn: () => apiRequest<Template>('GET', collectionApiUrl(collectionSlug, `/templates/${id}`)),
     enabled: !!id,
   });
 }

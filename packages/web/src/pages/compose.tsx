@@ -3,6 +3,7 @@ import { useTemplates, useTemplate } from '@/api/hooks/use-templates';
 import { useCompose } from '@/api/hooks/use-compose';
 import { useSearchFragments } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { downloadBlob } from '@/api/client';
 import type { Template, ComposeResponse, Fragment } from '@/api/types';
 
@@ -38,13 +39,14 @@ type TemplateSlot = NonNullable<Template['fragments']>[number];
 interface SlotResolverProps {
   slot: TemplateSlot;
   context: Record<string, string>;
+  collectionSlug: string;
   onResolved: (key: string, fragments: Fragment[]) => void;
 }
 
-function SlotResolver({ slot, context, onResolved }: SlotResolverProps) {
+function SlotResolver({ slot, context, collectionSlug, onResolved }: SlotResolverProps) {
   const resolvedLang = resolveVars(slot.lang, context);
   const resolvedDomain = resolveVars(slot.domain, context);
-  const { data, isLoading } = useSearchFragments(slot.key, {
+  const { data, isLoading } = useSearchFragments(collectionSlug, slot.key, {
     type: [slot.type],
     domain: [resolvedDomain],
     lang: resolvedLang,
@@ -82,10 +84,11 @@ export default function ComposePage() {
   const [context, setContext] = useState<Record<string, string>>({});
   const [resolvedSlots, setResolvedSlots] = useState<Record<string, Fragment[]>>({});
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
 
-  const { data: templates, isLoading: templatesLoading } = useTemplates();
-  const { data: template } = useTemplate(selectedTemplateId || null);
-  const compose = useCompose();
+  const { data: templates, isLoading: templatesLoading } = useTemplates(activeCollection);
+  const { data: template } = useTemplate(activeCollection, selectedTemplateId || null);
+  const compose = useCompose(activeCollection);
 
   const yaml = (template as any)?.yaml as Template | undefined;
   const contextSchema: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }> = yaml?.context_schema ?? template?.context_schema ?? {};
@@ -251,6 +254,7 @@ export default function ComposePage() {
                 key={slot.key}
                 slot={slot}
                 context={context}
+                collectionSlug={activeCollection}
                 onResolved={handleSlotResolved}
               />
             ))}

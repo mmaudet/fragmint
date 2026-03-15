@@ -42,6 +42,10 @@ export async function apiRequest<T>(
   return json.data as T;
 }
 
+export function collectionApiUrl(slug: string, path: string): string {
+  return `/v1/collections/${slug}${path}`;
+}
+
 export async function downloadBlob(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;

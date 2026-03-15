@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
+import { useCollection } from '@/lib/collection-context';
 import { useStartHarvest, useHarvestJob, useValidateCandidates } from '@/api/hooks/use-harvest';
 import { CandidateCard } from '@/components/candidate-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import { cn } from '@/lib/utils';
 
 export default function HarvestPage() {
   const { t } = useI18n();
+  const { activeCollection } = useCollection();
 
   // Phase state
   const [jobId, setJobId] = useState<string | null>(null);
@@ -23,9 +25,9 @@ export default function HarvestPage() {
   const [commitResult, setCommitResult] = useState<{ committed: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const startHarvest = useStartHarvest();
-  const { data: job, isLoading: jobLoading } = useHarvestJob(jobId);
-  const validateMutation = useValidateCandidates();
+  const startHarvest = useStartHarvest(activeCollection);
+  const { data: job, isLoading: jobLoading } = useHarvestJob(activeCollection, jobId);
+  const validateMutation = useValidateCandidates(activeCollection);
 
   const handleFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles).filter((f) => f.name.endsWith('.docx'));
