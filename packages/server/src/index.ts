@@ -16,13 +16,16 @@ import { createDb, type FragmintDb } from './db/index.js';
 import { collections, collectionMemberships, users, toMilvusPartition } from './db/schema.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import { UserService, TokenService, AuditService, FragmentService, TemplateService, ComposerService } from './services/index.js';
+import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
 import { fragmentRoutes } from './routes/fragment-routes.js';
 import { adminRoutes } from './routes/admin-routes.js';
 import { templateRoutes } from './routes/template-routes.js';
 import { harvestRoutes } from './routes/harvest-routes.js';
+import { collectionRoutes } from './routes/collection-routes.js';
 import { GitRepository } from './git/git-repository.js';
+import { buildCollectionMiddleware } from './auth/middleware.js';
 import { LlmClient } from './services/llm-client.js';
 import { HarvesterService } from './services/harvester-service.js';
 
@@ -151,6 +154,10 @@ export async function createServer(options?: {
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
 
+  // Collection service and middleware
+  const collectionService = new CollectionService(db, { collections_path: config.collections_path });
+  const requireCollRole = buildCollectionMiddleware(db);
+
   // Harvester
   const llmClient = new LlmClient({
     endpoint: config.llm_endpoint,
@@ -166,6 +173,24 @@ export async function createServer(options?: {
   adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate);
   templateRoutes(app, templateService, composerService, authenticate);
   harvestRoutes(app, harvesterService, authenticate);
+
+  // Collection CRUD routes
+  collectionRoutes(app, collectionService, authenticate, requireCollRole);
+
+  // Collection-prefixed routes (same handlers under /v1/collections/:slug/*)
+  const collPrefix = '/v1/collections/:slug';
+  fragmentRoutes(app, fragmentService, authenticate, {
+    prefix: collPrefix,
+    collectionMiddleware: requireCollRole('reader'),
+  });
+  templateRoutes(app, templateService, composerService, authenticate, {
+    prefix: collPrefix,
+    collectionMiddleware: requireCollRole('reader'),
+  });
+  harvestRoutes(app, harvesterService, authenticate, {
+    prefix: collPrefix,
+    collectionMiddleware: requireCollRole('reader'),
+  });
 
   // Serve frontend static files
   const __dirname = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));

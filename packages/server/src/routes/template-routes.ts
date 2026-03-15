@@ -11,9 +11,24 @@ export function templateRoutes(
   templateService: TemplateService,
   composerService: ComposerService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
+  options?: {
+    prefix?: string;
+    collectionMiddleware?: any;
+  },
 ) {
+  const prefix = options?.prefix ?? '/v1';
+  const readHandlers = options?.collectionMiddleware
+    ? [authenticate, options.collectionMiddleware]
+    : [authenticate, requireRole('reader')];
+  const expertHandlers = options?.collectionMiddleware
+    ? [authenticate, options.collectionMiddleware]
+    : [authenticate, requireRole('expert')];
+  const adminHandlers = options?.collectionMiddleware
+    ? [authenticate, options.collectionMiddleware]
+    : [authenticate, requireRole('admin')];
+
   // List templates
-  app.get('/v1/templates', { preHandler: [authenticate, requireRole('reader')] }, async (request) => {
+  app.get(`${prefix}/templates`, { preHandler: readHandlers }, async (request) => {
     const query = request.query as Record<string, string>;
     const rows = await templateService.list({
       output_format: query.output_format,
@@ -24,7 +39,7 @@ export function templateRoutes(
   });
 
   // Get template by ID
-  app.get('/v1/templates/:id', { preHandler: [authenticate, requireRole('reader')] }, async (request, reply) => {
+  app.get(`${prefix}/templates/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const template = await templateService.getById(id);
     if (!template) return reply.status(404).send({ data: null, meta: null, error: 'Template not found' });
@@ -32,7 +47,7 @@ export function templateRoutes(
   });
 
   // Create template (multipart: .docx + .yaml)
-  app.post('/v1/templates', { preHandler: [authenticate, requireRole('expert')] }, async (request, reply) => {
+  app.post(`${prefix}/templates`, { preHandler: expertHandlers }, async (request, reply) => {
     let docxBuffer: Buffer | undefined;
     let yamlContent: string | undefined;
     let docxFilename: string | undefined;
@@ -70,7 +85,7 @@ export function templateRoutes(
   });
 
   // Update template (multipart: optional .docx and/or .yaml)
-  app.put('/v1/templates/:id', { preHandler: [authenticate, requireRole('expert')] }, async (request, reply) => {
+  app.put(`${prefix}/templates/:id`, { preHandler: expertHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     let docxBuffer: Buffer | undefined;
     let yamlContent: string | undefined;
@@ -104,14 +119,14 @@ export function templateRoutes(
   });
 
   // Delete template
-  app.delete('/v1/templates/:id', { preHandler: [authenticate, requireRole('admin')] }, async (request) => {
+  app.delete(`${prefix}/templates/:id`, { preHandler: adminHandlers }, async (request) => {
     const { id } = request.params as { id: string };
     const result = await templateService.delete(id, request.user.login, request.user.role, request.ip);
     return { data: result, meta: null, error: null };
   });
 
   // Compose document from template
-  app.post('/v1/templates/:id/compose', { preHandler: [authenticate, requireRole('reader')] }, async (request, reply) => {
+  app.post(`${prefix}/templates/:id/compose`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = ComposeRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -128,7 +143,7 @@ export function templateRoutes(
   });
 
   // Download generated output file
-  app.get('/v1/outputs/:filename', { preHandler: [authenticate, requireRole('reader')] }, async (request, reply) => {
+  app.get(`${prefix}/outputs/:filename`, { preHandler: readHandlers }, async (request, reply) => {
     const { filename } = request.params as { filename: string };
 
     // Prevent path traversal

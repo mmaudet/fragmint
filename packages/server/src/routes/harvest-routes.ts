@@ -7,9 +7,21 @@ export function harvestRoutes(
   app: FastifyInstance,
   harvesterService: HarvesterService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
+  options?: {
+    prefix?: string;
+    collectionMiddleware?: any;
+  },
 ) {
+  const prefix = options?.prefix ?? '/v1';
+  const readHandlers = options?.collectionMiddleware
+    ? [authenticate, options.collectionMiddleware]
+    : [authenticate, requireRole('reader')];
+  const expertHandlers = options?.collectionMiddleware
+    ? [authenticate, options.collectionMiddleware]
+    : [authenticate, requireRole('expert')];
+
   // POST /v1/harvest — upload .docx files for harvesting
-  app.post('/v1/harvest', { preHandler: [authenticate, requireRole('expert')] }, async (request, reply) => {
+  app.post(`${prefix}/harvest`, { preHandler: expertHandlers }, async (request, reply) => {
     const files: Buffer[] = [];
     const filenames: string[] = [];
     let options: { min_confidence: number } = { min_confidence: 0.5 };
@@ -48,7 +60,7 @@ export function harvestRoutes(
   });
 
   // GET /v1/harvest/:jobId — get harvest job status and candidates
-  app.get('/v1/harvest/:jobId', { preHandler: [authenticate, requireRole('reader')] }, async (request, reply) => {
+  app.get(`${prefix}/harvest/:jobId`, { preHandler: readHandlers }, async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const job = await harvesterService.getJob(jobId);
 
@@ -60,7 +72,7 @@ export function harvestRoutes(
   });
 
   // POST /v1/harvest/:jobId/validate — validate harvest candidates
-  app.post('/v1/harvest/:jobId/validate', { preHandler: [authenticate, requireRole('expert')] }, async (request, reply) => {
+  app.post(`${prefix}/harvest/:jobId/validate`, { preHandler: expertHandlers }, async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const body = request.body as ValidationInput;
 
