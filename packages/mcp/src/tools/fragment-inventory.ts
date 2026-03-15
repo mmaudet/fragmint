@@ -2,6 +2,7 @@
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
+import { fragmentUrl } from '../url-helpers.js';
 
 export const inventoryDefinition: ToolDefinition = {
   name: 'fragment_inventory',
@@ -11,6 +12,7 @@ export const inventoryDefinition: ToolDefinition = {
     properties: {
       topic: { type: 'string', description: 'Topic or domain to inventory (e.g. "souveraineté", "openrag")' },
       lang: { type: 'string', description: 'ISO 639-1 language code filter (e.g. "fr", "en")' },
+      collection_slug: { type: 'string', description: 'Collection slug (default: "common"). Use collection_list to discover available collections.' },
     },
   },
 };
@@ -18,7 +20,7 @@ export const inventoryDefinition: ToolDefinition = {
 export function inventoryHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const result = await client.post('/v1/fragments/inventory', {
+      const result = await client.post(fragmentUrl(args.collection_slug as string | undefined, '/fragments/inventory'), {
         topic: args.topic,
         lang: args.lang,
       });

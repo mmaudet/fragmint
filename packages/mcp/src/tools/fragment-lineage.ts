@@ -2,6 +2,7 @@
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
+import { fragmentUrl } from '../url-helpers.js';
 
 export const lineageDefinition: ToolDefinition = {
   name: 'fragment_lineage',
@@ -11,6 +12,7 @@ export const lineageDefinition: ToolDefinition = {
     properties: {
       id: { type: 'string', description: 'Fragment ID' },
       include_translations: { type: 'boolean', description: 'Include translations (default true)' },
+      collection_slug: { type: 'string', description: 'Collection slug (default: "common"). Use collection_list to discover available collections.' },
     },
     required: ['id'],
   },
@@ -19,7 +21,7 @@ export const lineageDefinition: ToolDefinition = {
 export function lineageHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const result = await client.get(`/v1/fragments/${args.id}/lineage`);
+      const result = await client.get(fragmentUrl(args.collection_slug as string | undefined, `/fragments/${args.id}/lineage`));
       // Add community_cluster (null until Phase 6 Leiden clustering)
       const enriched = { ...(result as Record<string, unknown>), community_cluster: null };
       return toolSuccess(enriched);

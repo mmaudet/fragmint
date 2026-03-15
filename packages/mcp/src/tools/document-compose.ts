@@ -2,6 +2,7 @@
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
+import { fragmentUrl } from '../url-helpers.js';
 
 export const composeDefinition: ToolDefinition = {
   name: 'document_compose',
@@ -22,6 +23,7 @@ export const composeDefinition: ToolDefinition = {
         type: 'object',
         description: 'Optional structured data (e.g. { "quantities": { "frag-xxx": 500 } })',
       },
+      collection_slug: { type: 'string', description: 'Collection slug for template location (default: "common"). Use collection_list to discover available collections.' },
     },
     required: ['template_id', 'context'],
   },
@@ -30,8 +32,8 @@ export const composeDefinition: ToolDefinition = {
 export function composeHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const { template_id, context, overrides, structured_data } = args;
-      const result = await client.post(`/v1/templates/${template_id}/compose`, {
+      const { template_id, context, overrides, structured_data, collection_slug } = args;
+      const result = await client.post(fragmentUrl(collection_slug as string | undefined, `/templates/${template_id}/compose`), {
         context,
         overrides: overrides ?? undefined,
         structured_data: structured_data ?? undefined,

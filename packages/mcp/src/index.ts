@@ -17,6 +17,7 @@ import { updateDefinition, updateHandler } from './tools/fragment-update.js';
 import { lineageDefinition, lineageHandler } from './tools/fragment-lineage.js';
 import { composeDefinition, composeHandler } from './tools/document-compose.js';
 import { harvestDefinition, harvestHandler } from './tools/fragment-harvest.js';
+import { collectionListDefinition, collectionListHandler } from './tools/collection-list.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -31,6 +32,7 @@ const client = new FragmintApiClient(FRAGMINT_URL, FRAGMINT_TOKEN);
 
 // Tool registry
 const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
+  { definition: collectionListDefinition, handler: collectionListHandler(client) },
   { definition: inventoryDefinition, handler: inventoryHandler(client) },
   { definition: searchDefinition, handler: searchHandler(client) },
   { definition: getDefinition, handler: getHandler(client) },

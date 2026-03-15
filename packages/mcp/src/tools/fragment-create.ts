@@ -2,6 +2,7 @@
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
+import { fragmentUrl } from '../url-helpers.js';
 
 export const createDefinition: ToolDefinition = {
   name: 'fragment_create',
@@ -15,6 +16,7 @@ export const createDefinition: ToolDefinition = {
       body: { type: 'string', description: 'Fragment content in Markdown' },
       tags: { type: 'array', items: { type: 'string' }, description: 'Tags for classification' },
       parent_id: { type: 'string', description: 'ID of parent fragment if this is a derivation' },
+      collection_slug: { type: 'string', description: 'Collection slug (default: "common"). Use collection_list to discover available collections.' },
     },
     required: ['type', 'domain', 'lang', 'body'],
   },
@@ -23,7 +25,7 @@ export const createDefinition: ToolDefinition = {
 export function createHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const result = await client.post('/v1/fragments', {
+      const result = await client.post(fragmentUrl(args.collection_slug as string | undefined, '/fragments'), {
         type: args.type,
         domain: args.domain,
         lang: args.lang,

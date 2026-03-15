@@ -2,6 +2,7 @@
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
+import { fragmentUrl } from '../url-helpers.js';
 
 export const harvestDefinition: ToolDefinition = {
   name: 'fragment_harvest',
@@ -15,6 +16,7 @@ export const harvestDefinition: ToolDefinition = {
         type: 'number',
         description: 'Minimum confidence threshold (0.0-1.0, default 0.65)',
       },
+      collection_slug: { type: 'string', description: 'Target collection slug (default: "common"). Use collection_list to discover available collections.' },
     },
     required: ['file_path'],
   },
@@ -23,9 +25,10 @@ export const harvestDefinition: ToolDefinition = {
 export function harvestHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const { file_path, min_confidence = 0.65 } = args as {
+      const { file_path, min_confidence = 0.65, collection_slug } = args as {
         file_path: string;
         min_confidence?: number;
+        collection_slug?: string;
       };
 
       const { readFileSync } = await import('node:fs');
@@ -37,7 +40,7 @@ export function harvestHandler(client: FragmintApiClient): ToolHandler {
       form.append('options', JSON.stringify({ min_confidence }));
 
       const uploadResult = await client.postMultipart<{ job_id: string; status: string }>(
-        '/v1/harvest',
+        fragmentUrl(collection_slug, '/harvest'),
         form,
       );
       const jobId = uploadResult.job_id;
@@ -47,7 +50,7 @@ export function harvestHandler(client: FragmintApiClient): ToolHandler {
       const start = Date.now();
       let job: any;
       while (Date.now() - start < maxWait) {
-        job = await client.get<any>(`/v1/harvest/${jobId}`);
+        job = await client.get<any>(fragmentUrl(collection_slug, `/harvest/${jobId}`));
         if (job.status === 'done' || job.status === 'error') break;
         await new Promise((r) => setTimeout(r, 3000));
       }
