@@ -51,6 +51,21 @@ export function createDb(path: string | ':memory:') {
       stats TEXT, error TEXT, created_by TEXT NOT NULL,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS collections (
+      id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL, type TEXT NOT NULL,
+      read_only INTEGER NOT NULL DEFAULT 0,
+      auto_assign INTEGER NOT NULL DEFAULT 0,
+      git_path TEXT NOT NULL, milvus_partition TEXT NOT NULL,
+      owner_id TEXT, description TEXT, tags TEXT,
+      created_at TEXT NOT NULL, created_by TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS collection_memberships (
+      id TEXT PRIMARY KEY, collection_id TEXT NOT NULL,
+      user_id TEXT, token_id TEXT, role TEXT NOT NULL,
+      granted_by TEXT NOT NULL, granted_at TEXT NOT NULL,
+      expires_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS harvest_candidates (
       id TEXT PRIMARY KEY, job_id TEXT NOT NULL, title TEXT NOT NULL,
       body TEXT NOT NULL, type TEXT NOT NULL, domain TEXT NOT NULL,
@@ -60,6 +75,13 @@ export function createDb(path: string | ':memory:') {
       status TEXT NOT NULL DEFAULT 'pending', fragment_id TEXT
     );
   `);
+
+  // Add collection_slug to api_tokens if not already present
+  try {
+    sqlite.exec('ALTER TABLE api_tokens ADD COLUMN collection_slug TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
 
   const db = drizzle(sqlite, { schema });
   return db;

@@ -1,6 +1,7 @@
 // packages/server/src/config.ts
 import { readFileSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { dirname } from 'node:path';
 import yaml from 'js-yaml';
 
 export interface FragmintConfig {
@@ -35,6 +36,9 @@ export interface FragmintConfig {
   milvus_address: string;
   milvus_collection: string;
   milvus_enabled: boolean;
+
+  // Collections
+  collections_path: string;
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -43,6 +47,16 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
   if (configPath && existsSync(configPath)) {
     const raw = readFileSync(configPath, 'utf-8');
     fileConfig = yaml.load(raw) as Partial<FragmintConfig>;
+  }
+
+  // Resolve collections_path with FRAGMINT_REPO_PATH fallback
+  let collectionsPath = process.env.FRAGMINT_COLLECTIONS_PATH ?? fileConfig.collections_path;
+  if (!collectionsPath && process.env.FRAGMINT_REPO_PATH) {
+    collectionsPath = dirname(process.env.FRAGMINT_REPO_PATH);
+    console.warn('FRAGMINT_COLLECTIONS_PATH not set; falling back to parent of FRAGMINT_REPO_PATH:', collectionsPath);
+  }
+  if (!collectionsPath) {
+    collectionsPath = './data/collections';
   }
 
   return {
@@ -71,6 +85,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     milvus_address: process.env.FRAGMINT_MILVUS_ADDRESS ?? fileConfig.milvus_address ?? 'localhost:19530',
     milvus_collection: process.env.FRAGMINT_MILVUS_COLLECTION ?? fileConfig.milvus_collection ?? 'fragmint_fragments',
     milvus_enabled: process.env.FRAGMINT_MILVUS_ENABLED === 'true' || fileConfig.milvus_enabled === true,
+    collections_path: collectionsPath,
   };
 }
 

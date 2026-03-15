@@ -9,8 +9,11 @@ import multipart from '@fastify/multipart';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { eq, count } from 'drizzle-orm';
 import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
+import { collections, collectionMemberships, users, toMilvusPartition } from './db/schema.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import { UserService, TokenService, AuditService, FragmentService, TemplateService, ComposerService } from './services/index.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
@@ -29,6 +32,43 @@ export interface FragmintServer {
   db: FragmintDb;
 }
 
+async function ensureCollections(db: FragmintDb, config: FragmintConfig) {
+  const [row] = await db.select({ value: count() }).from(collections);
+  if (row.value > 0) return; // Already seeded
+
+  const now = new Date().toISOString();
+  const collectionId = randomUUID();
+  const slug = 'common';
+
+  await db.insert(collections).values({
+    id: collectionId,
+    slug,
+    name: 'Common',
+    type: 'system',
+    read_only: 0,
+    auto_assign: 1,
+    git_path: config.store_path,
+    milvus_partition: toMilvusPartition(slug),
+    created_at: now,
+    created_by: 'system',
+  });
+
+  // Assign all existing users to the common collection
+  const allUsers = await db.select().from(users);
+  for (const user of allUsers) {
+    await db.insert(collectionMemberships).values({
+      id: randomUUID(),
+      collection_id: collectionId,
+      user_id: user.id,
+      role: user.role === 'admin' ? 'expert' : 'reader',
+      granted_by: 'system',
+      granted_at: now,
+    });
+  }
+
+  console.log(`Collections migration: created 'common' collection, assigned ${allUsers.length} user(s)`);
+}
+
 export async function createServer(options?: {
   configPath?: string;
   dev?: boolean;
@@ -41,6 +81,9 @@ export async function createServer(options?: {
   // createDb handles table creation on the same connection (critical for :memory:)
   const dbPath = options?.dbPath ?? (config.dev ? ':memory:' : resolve(storePath, '.fragmint.db'));
   const db = createDb(dbPath);
+
+  // Auto-migrate collections
+  await ensureCollections(db, config);
 
   // Git init if needed
   const git = new GitRepository(storePath);

@@ -69,7 +69,39 @@ export const apiTokens = sqliteTable('api_tokens', {
   created_at: text('created_at').notNull(),
   last_used: text('last_used'),
   active: integer('active').notNull().default(1),
+  collection_slug: text('collection_slug'),
 });
+
+export const collections = sqliteTable('collections', {
+  id: text('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),              // 'system' | 'team' | 'personal'
+  read_only: integer('read_only').notNull().default(0),
+  auto_assign: integer('auto_assign').notNull().default(0),
+  git_path: text('git_path').notNull(),
+  milvus_partition: text('milvus_partition').notNull(),
+  owner_id: text('owner_id'),
+  description: text('description'),
+  tags: text('tags'),
+  created_at: text('created_at').notNull(),
+  created_by: text('created_by').notNull(),
+});
+
+export const collectionMemberships = sqliteTable('collection_memberships', {
+  id: text('id').primaryKey(),
+  collection_id: text('collection_id').notNull(),
+  user_id: text('user_id'),
+  token_id: text('token_id'),
+  role: text('role').notNull(),
+  granted_by: text('granted_by').notNull(),
+  granted_at: text('granted_at').notNull(),
+  expires_at: text('expires_at'),
+});
+
+export function toMilvusPartition(slug: string): string {
+  return 'col_' + slug.replace(/-/g, '_');
+}
 
 export const harvestJobs = sqliteTable('harvest_jobs', {
   id: text('id').primaryKey(),
