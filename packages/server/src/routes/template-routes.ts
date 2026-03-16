@@ -61,17 +61,18 @@ export function templateRoutes(
         }
         const buffer = Buffer.concat(buffers);
 
-        if (part.filename.endsWith('.docx')) {
+        if (part.filename.endsWith('.yaml') || part.filename.endsWith('.yml')) {
+          yamlContent = buffer.toString('utf-8');
+        } else {
+          // Accept any template file (.docx, .xlsx, .md, .html, etc.)
           docxBuffer = buffer;
           docxFilename = part.filename;
-        } else if (part.filename.endsWith('.yaml') || part.filename.endsWith('.yml')) {
-          yamlContent = buffer.toString('utf-8');
         }
       }
     }
 
     if (!docxBuffer || !docxFilename) {
-      return reply.status(400).send({ data: null, meta: null, error: 'Missing .docx file' });
+      return reply.status(400).send({ data: null, meta: null, error: 'Missing template file' });
     }
     if (!yamlContent) {
       return reply.status(400).send({ data: null, meta: null, error: 'Missing .yaml file' });
@@ -99,10 +100,10 @@ export function templateRoutes(
         }
         const buffer = Buffer.concat(buffers);
 
-        if (part.filename.endsWith('.docx')) {
-          docxBuffer = buffer;
-        } else if (part.filename.endsWith('.yaml') || part.filename.endsWith('.yml')) {
+        if (part.filename.endsWith('.yaml') || part.filename.endsWith('.yml')) {
           yamlContent = buffer.toString('utf-8');
+        } else {
+          docxBuffer = buffer;
         }
       }
     }

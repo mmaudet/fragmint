@@ -730,11 +730,9 @@ SLIDES_FRAGMENTS='fragments:
     count: 1'
 
 # Note: the upload route only accepts files ending in .docx.
-# For non-DOCX formats, we rename the file with a .docx extension.
 # The render engine determines the actual format from the YAML output_format field.
 
 # Upload Marp slides template
-cp "$TEMPLATES_DIR/lincloud-slides.md" "$TEMPLATES_DIR/lincloud-slides.docx"
 upload_template \
   "tpl-lincloud-slides" \
   "LinCloud Souverain — Présentation Marp" \
@@ -745,7 +743,6 @@ upload_template \
   "Marp slides"
 
 # Upload reveal.js template (same fragments)
-cp "$TEMPLATES_DIR/lincloud-reveal.html" "$TEMPLATES_DIR/lincloud-reveal.docx"
 upload_template \
   "tpl-lincloud-reveal" \
   "LinCloud Souverain — Présentation reveal.js" \
@@ -794,7 +791,6 @@ upload_template \
   "DOCX"
 
 # Upload XLSX template
-cp "$TEMPLATES_DIR/lincloud-devis.xlsx" "$TEMPLATES_DIR/lincloud-devis.docx"
 
 XLSX_FRAGMENTS='fragments:
   - key: introduction
