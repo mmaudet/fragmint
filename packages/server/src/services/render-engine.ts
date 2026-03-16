@@ -4,7 +4,7 @@
  *
  * Supported formats:
  *   - docx: docx-templates (MIT)
- *   - xlsx: xlsx-template  (MIT) — not yet implemented
+ *   - xlsx: xlsx-template  (MIT)
  *   - slides: @marp-team/marp-core (MIT) — not yet implemented
  *   - pptx: docxtemplater  (MIT/GPLv3 free core) — not yet implemented
  *   - reveal: reveal.js (MIT) — not yet implemented
@@ -32,7 +32,7 @@ export async function renderDocument(
     case 'docx':
       return renderDocx(templatePath, data);
     case 'xlsx':
-      throw new Error('XLSX rendering not yet implemented.');
+      return (await import('./render-xlsx.js')).renderXlsx(templatePath, data);
     case 'slides':
       throw new Error('Slides (Marp Markdown) rendering not yet implemented.');
     case 'pptx':
