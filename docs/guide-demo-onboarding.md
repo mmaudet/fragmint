@@ -148,7 +148,7 @@ Exemple concret dans la demo :
 
 ### Le concept de `lignes`
 
-Dans la requete de composition, le champ `structured_data.lignes` contient un tableau d'objets representant les lignes du devis :
+Dans la requete de composition, le champ `structured_data.lignes` contient un tableau d'objets representant les lignes du devis. L'utilisateur fournit uniquement `quantite` et `prix_unitaire` pour chaque ligne :
 
 ```json
 {
@@ -158,40 +158,46 @@ Dans la requete de composition, le champ `structured_data.lignes` contient un ta
         "service": "Compute vCPU",
         "description": "100 vCPU x 730h/mois",
         "quantite": 100,
-        "prix_unitaire": 18.25,
-        "total": 1825.00
+        "prix_unitaire": 18.25
       },
       {
         "service": "Stockage objet S3",
         "description": "5 000 Go stockage objet",
         "quantite": 5000,
-        "prix_unitaire": 0.008,
-        "total": 40.00
+        "prix_unitaire": 0.008
       }
     ]
   }
 }
 ```
 
-Chaque ligne a 5 champs : `service`, `description`, `quantite`, `prix_unitaire`, `total`.
+Chaque ligne a 4 champs fournis par l'utilisateur : `service`, `description`, `quantite`, `prix_unitaire`. Le champ `total` est calcule automatiquement par le moteur de composition.
+
+> **Calcul automatique des totaux**
+> Fragmint calcule automatiquement a la composition :
+> - `total` par ligne = `quantite x prix_unitaire`
+> - `metadata.total_ht` = somme de tous les `total`
+> - `metadata.tva` = `total_ht x 0.2`
+> - `metadata.total_ttc` = `total_ht x 1.2`
+>
+> L'utilisateur n'a qu'a fournir `quantite` et `prix_unitaire` pour chaque ligne.
 
 ### Les totaux
 
-Les totaux sont passes dans le `context` (pas dans `structured_data`) car ils ne sont pas repetes en boucle :
+Les totaux (`total_ht`, `tva`, `total_ttc`) sont **calcules automatiquement** par le moteur de composition et injectes dans `metadata`. Il n'est plus necessaire de les passer dans le `context`.
+
+Le `context` ne contient que les metadonnees du document :
 
 ```json
 {
   "context": {
     "client": "Ministere des Armees",
-    "date": "2026-03-16",
-    "total_ht": "12 305,00",
-    "tva": "2 461,00",
-    "total_ttc": "14 766,00"
+    "date": "2026-03-16"
   }
 }
 ```
 
-Dans les templates, ces valeurs sont accessibles via `metadata.total_ht`, `metadata.tva`, `metadata.total_ttc`. Le mot `metadata` dans le template correspond au champ `context` de la requete.
+Dans les templates, les totaux auto-calcules sont accessibles via `metadata.total_ht`, `metadata.tva`, `metadata.total_ttc`. Le mot `metadata` dans le template correspond au champ `context` de la requete, enrichi par les valeurs calculees par le moteur.
 
 ---
 
@@ -264,7 +270,7 @@ Cela garantit que ces lignes n'apparaissent pas visuellement dans le template av
 
 ### Totaux apres la boucle
 
-Les lignes de total sont placees apres la boucle `END-FOR`, comme des lignes de tableau normales :
+Les lignes de total sont placees apres la boucle `END-FOR`, comme des lignes de tableau normales. Les valeurs `metadata.total_ht`, `metadata.tva` et `metadata.total_ttc` sont auto-calculees par le moteur :
 
 ```
 | Total HT  | +++INS metadata.total_ht+++ EUR  |
@@ -295,6 +301,7 @@ const forRow = new TableRow({ children: [
 ]});
 
 // Ligne de donnees (repetee par le moteur)
+// Note : $l.total est auto-calcule par le moteur (quantite x prix_unitaire)
 const dataRow = new TableRow({ children: [
   dataCell('+++INS $l.service+++'),
   dataCell('+++INS $l.description+++'),
@@ -368,16 +375,16 @@ Le moteur de rendu duplique automatiquement la ligne 8 pour chaque element du ta
 
 ### Totaux
 
-Les cellules de total utilisent la syntaxe d'insertion simple :
+Les cellules de total utilisent la syntaxe d'insertion simple. Les valeurs sont **auto-calculees** par le moteur de composition (il n'est pas necessaire de les passer dans la requete) :
 
-| Cellule | Contenu | Resultat |
-|---------|---------|----------|
+| Cellule | Contenu | Resultat (auto-calcule) |
+|---------|---------|--------------------------|
 | D13 | `Total HT :` | Texte fixe |
-| E13 | `${metadata.total_ht}` | "12 305,00" |
+| E13 | `${metadata.total_ht}` | Somme des totaux par ligne |
 | D14 | `TVA (20%) :` | Texte fixe |
-| E14 | `${metadata.tva}` | "2 461,00" |
+| E14 | `${metadata.tva}` | total_ht x 0.2 |
 | D15 | `Total TTC :` | Texte fixe |
-| E15 | `${metadata.total_ttc}` | "14 766,00" |
+| E15 | `${metadata.total_ttc}` | total_ht x 1.2 |
 
 ### Formatage des nombres
 
@@ -1024,17 +1031,14 @@ Ou `:id` est l'identifiant du template (ex. `tpl-lincloud-docx`).
   "context": {
     "client": "Ministere des Armees",
     "date": "2026-03-16",
-    "reference": "LC-2026-MINARM-001",
-    "total_ht": "12 305,00",
-    "tva": "2 461,00",
-    "total_ttc": "14 766,00"
+    "reference": "LC-2026-MINARM-001"
   },
   "structured_data": {
     "lignes": [
-      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25, "total": 1825.00},
-      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008, "total": 40.00},
-      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12, "total": 240.00},
-      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00, "total": 10200.00}
+      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25},
+      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008},
+      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12},
+      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00}
     ]
   },
   "output": {
@@ -1044,10 +1048,12 @@ Ou `:id` est l'identifiant du template (ex. `tpl-lincloud-docx`).
 }
 ```
 
+> **Note** : les champs `total` par ligne, `total_ht`, `tva` et `total_ttc` ne sont pas fournis dans la requete. Le moteur de composition les calcule automatiquement et les injecte dans `metadata` (voir section 4).
+
 | Champ | Description |
 |-------|-------------|
 | `context` | Les metadonnees du document (accessibles via `metadata.*` dans le template) |
-| `structured_data` | Les donnees tabulaires (accessibles via leur cle, ex. `lignes`) |
+| `structured_data` | Les donnees tabulaires (accessibles via leur cle, ex. `lignes`) — seuls `quantite` et `prix_unitaire` sont requis par ligne |
 | `output.format` | Format de sortie souhaite |
 | `output.filename` | Nom du fichier genere |
 | `overrides` | (optionnel) Surcharges de fragments specifiques |
@@ -1099,14 +1105,11 @@ curl -s -X POST http://localhost:3210/v1/templates/tpl-lincloud-docx/compose \
   -d '{
     "context": {
       "client": "Ministere des Armees",
-      "date": "2026-03-16",
-      "total_ht": "12 305,00",
-      "tva": "2 461,00",
-      "total_ttc": "14 766,00"
+      "date": "2026-03-16"
     },
     "structured_data": {
       "lignes": [
-        {"service": "Compute vCPU", "description": "100 vCPU", "quantite": 100, "prix_unitaire": 18.25, "total": 1825.00}
+        {"service": "Compute vCPU", "description": "100 vCPU", "quantite": 100, "prix_unitaire": 18.25}
       ]
     },
     "output": {"format": "docx", "filename": "ma-proposition.docx"}
