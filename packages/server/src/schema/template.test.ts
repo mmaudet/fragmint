@@ -77,10 +77,10 @@ describe('ComposeRequestSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects unsupported output format (xlsx)', () => {
+  it('rejects unsupported output format (pdf)', () => {
     const result = ComposeRequestSchema.safeParse({
       context: { client_name: 'LINAGORA' },
-      output: { format: 'xlsx' },
+      output: { format: 'pdf' },
     });
     expect(result.success).toBe(false);
   });

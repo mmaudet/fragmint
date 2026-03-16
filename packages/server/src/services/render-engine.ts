@@ -5,12 +5,14 @@
  * Supported formats:
  *   - docx: docx-templates (MIT)
  *   - xlsx: xlsx-template  (MIT) — not yet implemented
+ *   - slides: @marp-team/marp-core (MIT) — not yet implemented
  *   - pptx: docxtemplater  (MIT/GPLv3 free core) — not yet implemented
+ *   - reveal: reveal.js (MIT) — not yet implemented
  */
 import { readFileSync } from 'node:fs';
 import { createReport } from 'docx-templates';
 
-export type SupportedFormat = 'docx' | 'xlsx' | 'pptx';
+export type SupportedFormat = 'docx' | 'xlsx' | 'slides' | 'pptx' | 'reveal';
 
 export interface RenderResult {
   buffer: Buffer;
@@ -30,9 +32,13 @@ export async function renderDocument(
     case 'docx':
       return renderDocx(templatePath, data);
     case 'xlsx':
-      throw new Error('XLSX rendering not yet implemented. Install xlsx-template when ready.');
+      throw new Error('XLSX rendering not yet implemented.');
+    case 'slides':
+      throw new Error('Slides (Marp Markdown) rendering not yet implemented.');
     case 'pptx':
-      throw new Error('PPTX rendering not yet implemented. Install docxtemplater when ready.');
+      throw new Error('PPTX rendering not yet implemented.');
+    case 'reveal':
+      throw new Error('Reveal.js rendering not yet implemented.');
     default:
       throw new Error(`Unsupported format: ${format}`);
   }

@@ -30,7 +30,7 @@ export const TemplateYamlSchema = z.object({
   id: z.string().startsWith('tpl-'),
   name: z.string(),
   description: z.string().optional(),
-  output_format: z.enum(['docx']),
+  output_format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
   author: z.string().optional(),
   carbone_template: z.string(),
   version: z.string(),
@@ -48,7 +48,7 @@ export const ComposeRequestSchema = z.object({
   overrides: z.record(z.string()).optional(),
   structured_data: z.record(z.any()).optional(),
   output: z.object({
-    format: z.enum(['docx']),
+    format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
     filename: z.string().optional(),
   }).optional(),
 });
