@@ -124,14 +124,29 @@ export function buildCollectionMiddleware(db: FragmintDb) {
       if (request.user.role === 'admin') {
         role = 'owner';
       } else {
-        // DB lookup for membership
-        const membershipRows = await db.select()
+        // DB lookup for membership — try by user ID first, then by login
+        // (JWT sets id=login=sub, but memberships may store the UUID)
+        let membershipRows = await db.select()
           .from(collectionMemberships)
           .where(and(
             eq(collectionMemberships.user_id, request.user.id),
             eq(collectionMemberships.collection_id, collection.id),
           ))
           .limit(1);
+
+        // If not found by id, try looking up the actual user UUID from users table
+        if (membershipRows.length === 0) {
+          const userRows = await db.select().from(users).where(eq(users.login, request.user.login)).limit(1);
+          if (userRows.length > 0) {
+            membershipRows = await db.select()
+              .from(collectionMemberships)
+              .where(and(
+                eq(collectionMemberships.user_id, userRows[0].id),
+                eq(collectionMemberships.collection_id, collection.id),
+              ))
+              .limit(1);
+          }
+        }
 
         if (membershipRows.length > 0) {
           role = membershipRows[0].role;

@@ -93,7 +93,8 @@ export function fragmentRoutes(
   app.post(`${prefix}/fragments`, { preHandler: writeHandlers }, async (request, reply) => {
     const parsed = createFragmentSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip);
+    const collection = (request as any).collection;
+    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip, collection?.git_path);
     return reply.status(201).send({ data: result, meta: null, error: null });
   });
 

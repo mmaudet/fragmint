@@ -32,10 +32,11 @@ export class FragmentService {
     return this.git;
   }
 
-  async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string) {
+  async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string, storePathOverride?: string) {
     const id = generateId();
     const now = new Date().toISOString();
-    const fragmentsDir = join(this.storePath, 'fragments', input.domain);
+    const effectivePath = storePathOverride ?? this.storePath;
+    const fragmentsDir = join(effectivePath, 'fragments', input.domain);
 
     // Ensure domain directory exists
     const { mkdirSync } = await import('node:fs');
@@ -65,7 +66,7 @@ export class FragmentService {
     };
 
     const filePath = writeFragment(fragmentsDir, frontmatter, input.body);
-    const relPath = relative(this.storePath, filePath);
+    const relPath = relative(effectivePath, filePath);
 
     const commitMsg = buildCommitMessage({
       action: 'create',
@@ -77,7 +78,9 @@ export class FragmentService {
       qualityTransition: 'draft',
     });
 
-    const commitHash = await this.git.commit(relPath, commitMsg);
+    // Use a scoped GitRepository if storePath is overridden
+    const git = storePathOverride ? new GitRepository(effectivePath) : this.git;
+    const commitHash = await git.commit(relPath, commitMsg);
 
     // Index in SQLite
     const title = deriveTitle(input.body);
