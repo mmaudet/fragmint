@@ -30,9 +30,19 @@ export class GitRepository {
     for (const fp of filePaths) {
       await this.exec('add', fp);
     }
-    const { stdout } = await this.exec('commit', '-m', message);
-    const match = stdout.match(/\[[\w/.()\- ]+ ([a-f0-9]+)\]/);
-    return match ? match[1] : '';
+    try {
+      const { stdout } = await this.exec('commit', '-m', message);
+      const match = stdout.match(/\[[\w/.()\- ]+ ([a-f0-9]+)\]/);
+      return match ? match[1] : '';
+    } catch {
+      // If commit fails (e.g., nothing to commit, files unchanged), return current HEAD
+      try {
+        const { stdout } = await this.exec('rev-parse', '--short', 'HEAD');
+        return stdout.trim();
+      } catch {
+        return '';
+      }
+    }
   }
 
   async rmFiles(filePaths: string[], message: string): Promise<string> {
