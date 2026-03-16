@@ -1,5 +1,7 @@
 # Guide d'utilisation de Fragmint
 
+> **Voir aussi :** Le [guide d'onboarding de la démo](guide-demo-onboarding.md) propose un cas d'usage concret (LinCloud Souverain) avec la création de templates dans tous les formats.
+
 ## 1. Introduction
 
 Fragmint est un systeme de gestion de fragments de contenu destine aux equipes qui redigent des propositions commerciales, des appels d'offres et des documents structurees. Chaque fragment (argument, clause, temoignage, FAQ, etc.) est versionne, classe par domaine et langue, et soumis a un workflow de qualite (draft, reviewed, approved). Fragmint permet de rechercher, composer et reutiliser ces fragments pour produire des documents professionnels coherents et a jour.

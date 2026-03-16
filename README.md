@@ -14,10 +14,10 @@ Les entreprises et administrations produisent quotidiennement des documents comp
 
 **Fragmint** resout ce probleme en proposant :
 
-- Une **bibliotheque de fragments** (introductions, argumentaires, clauses, tarifs) versionnee dans Git
+- Une **bibliotheque de fragments** (introductions, argumentaires, clauses, tarifs) versionnee dans Git, organisee en **collections** (partitions privees/partagees, multi-tenant)
 - Une **recherche semantique** via embeddings vectoriels (Milvus + nomic-embed-text-v2-moe)
-- Un **moteur de composition** qui assemble les fragments dans des templates DOCX
-- Un **moissonneur (Harvester)** qui extrait automatiquement des fragments depuis des documents existants via LLM
+- Un **moteur de composition multi-format** qui assemble les fragments dans des templates DOCX, XLSX, Marp (slides Markdown) et reveal.js (slides HTML)
+- Un **moissonneur (Harvester)** qui extrait automatiquement des fragments depuis des documents existants via Pandoc + Ollama LLM
 - Un **serveur MCP** pour l'integration directe avec Claude Code et Claude Desktop
 - Un fonctionnement **air-gap compatible** -- tout tourne en local, sans dependance cloud
 
@@ -34,6 +34,12 @@ Fragmint est developpe par [LINAGORA](https://linagora.com/) sous licence AGPL-3
 - Lignee (parent, traductions) et historique complet
 - Tags structures (cle:valeur) pour les donnees tabulaires
 
+### Collections
+
+- Multi-tenant : partitions `common` (partagee) et `team`/`project` (privees)
+- Isolation des fragments par collection avec controle d'acces (admin, editor, reader)
+- Composition cross-collection (contenu generique + contenu specifique)
+
 ### Recherche
 
 - Recherche semantique via Milvus + embeddings nomic-embed-text-v2-moe
@@ -43,10 +49,12 @@ Fragmint est developpe par [LINAGORA](https://linagora.com/) sous licence AGPL-3
 
 ### Templates et composition
 
-- Templates DOCX avec slots de fragments et metadonnees
+- **Moteur de rendu multi-format** : DOCX (docx-templates), XLSX (ExcelJS), Marp (slides Markdown), reveal.js (slides HTML)
 - Syntaxe docx-templates (`+++INS ...+++`, `+++FOR ...+++`, `+++IF ...+++`)
+- Syntaxe XLSX avec `${field}` et `${table:array.field}`
+- Directive `+++HTML path+++` pour la conversion Markdown vers HTML (reveal.js)
+- Auto-calcul des totaux (devis) : `total` par ligne, `total_ht`, `tva`, `total_ttc`
 - Composition automatique avec resolution des fragments par domaine/langue/qualite
-- Telechargement du document genere
 
 ### Moissonneur (Harvester)
 
@@ -64,12 +72,12 @@ Fragmint est developpe par [LINAGORA](https://linagora.com/) sous licence AGPL-3
 
 ### MCP (Model Context Protocol)
 
-- 8 outils pour Claude Code et Claude Desktop
-- Gestion complete des fragments et composition depuis l'assistant IA
+- 9 outils pour Claude Code et Claude Desktop
+- Gestion complete des fragments, collections et composition depuis l'assistant IA
 
 ### CLI
 
-- Commandes pour la gestion des fragments, templates, composition et moissonnage
+- Commandes pour la gestion des fragments, collections, templates, composition et moissonnage
 - Configuration via `~/.fragmintrc.yaml` ou variables d'environnement
 
 ---
@@ -88,6 +96,7 @@ fragmint/
 |-- example-vault/  Vault de demo (fragments + templates)
 |-- docker/         Configuration Docker
 |-- docs/           Documentation
+|-- e2e/            Tests end-to-end + demo LinCloud
 |-- scripts/        Scripts utilitaires
 ```
 
@@ -99,7 +108,7 @@ fragmint/
                            | MCP (stdio)
                   +--------v----------+
                   |  @fragmint/mcp    |
-                  |  8 outils MCP     |
+                  |  9 outils MCP     |
                   +--------+----------+
                            | HTTP
 +-------------+   +--------v----------+   +-----------+
@@ -162,6 +171,15 @@ Ouvrir http://localhost:3210/ui/ dans un navigateur.
 
 > En production, definir `NODE_ENV=production` et `FRAGMINT_JWT_SECRET` avec une valeur aleatoire securisee.
 
+### Tester rapidement avec la demo LinCloud
+
+```bash
+# Lancer le serveur puis, dans un autre terminal :
+bash e2e/demo/run-demo.sh
+```
+
+Ce script cree 10 fragments, uploade 4 templates (DOCX, XLSX, Marp, reveal.js) et compose les 4 documents. Les fichiers generes sont dans `e2e/demo/output/`.
+
 Voir le guide complet : [docs/getting-started.md](docs/getting-started.md)
 
 ---
@@ -193,7 +211,7 @@ Voir le guide complet : [docs/docker.md](docs/docker.md)
 
 ## MCP
 
-Fragmint expose 8 outils via le protocole MCP pour Claude Code et Claude Desktop :
+Fragmint expose 9 outils via le protocole MCP pour Claude Code et Claude Desktop :
 
 | Outil               | Description                              |
 |---------------------|------------------------------------------|
@@ -205,6 +223,7 @@ Fragmint expose 8 outils via le protocole MCP pour Claude Code et Claude Desktop
 | fragment_lineage    | Arbre de derivation et traductions       |
 | document_compose    | Composer un document depuis un template  |
 | fragment_harvest    | Moissonner des fragments depuis un DOCX  |
+| collection_list     | Lister les collections accessibles       |
 
 Configuration dans `.claude/settings.json` :
 
@@ -237,6 +256,10 @@ fragmint serve
 fragmint fragments list
 fragmint fragments get <id>
 fragmint fragments create --type argument --domain commercial --lang fr
+
+# Collections
+fragmint collections list
+fragmint collections create projet-x --name "Projet X" --type project
 
 # Templates et composition
 fragmint templates list
@@ -275,19 +298,22 @@ Reference complete : [docs/api.md](docs/api.md)
 
 | Document | Description |
 |----------|-------------|
-| [docs/getting-started.md](docs/getting-started.md) | Guide de demarrage rapide |
-| [docs/api.md](docs/api.md) | Reference de l'API REST |
-| [docs/mcp.md](docs/mcp.md) | Integration MCP (Claude Code / Desktop) |
-| [docs/docker.md](docs/docker.md) | Deploiement Docker |
-| [docs/architecture.md](docs/architecture.md) | Architecture technique |
-| [docs/template-syntax.md](docs/template-syntax.md) | Syntaxe des templates DOCX |
+| [Guide d'onboarding](docs/guide-demo-onboarding.md) | Guide complet avec la demo LinCloud — creation de fragments, templates multi-format, composition |
+| [Guide d'utilisation](docs/guide-utilisation.md) | Scenarios par persona (admin, redacteur, expert, agent IA) |
+| [Reference API](docs/api.md) | Tous les endpoints REST (fragments, templates, harvest, collections) |
+| [Architecture](docs/architecture.md) | Structure monorepo, services, schema DB, flux de donnees |
+| [MCP](docs/mcp.md) | Integration Claude Code / Claude Desktop (9 tools) |
+| [Docker](docs/docker.md) | Deploiement contenerise (fragmint + milvus + ollama) |
+| [Syntaxe templates](docs/template-syntax.md) | Reference rapide des syntaxes par format |
+| [Demarrage rapide](docs/getting-started.md) | Installation et premier document |
+| [Demo E2E](e2e/demo/README.md) | Script de demonstration LinCloud Souverain |
 
 ---
 
 ## Tests
 
 ```bash
-# Tous les tests unitaires (server + web + mcp)
+# Tous les tests unitaires (~200 tests, server + web + mcp)
 pnpm test
 
 # Tests en mode watch
@@ -314,8 +340,11 @@ pnpm lint
 | 5     | Moissonneur (Harvester)                        | Termine     |
 | 6     | Serveur MCP                                    | Termine     |
 | 7     | CLI, Docker, tests E2E                         | Termine     |
-| 8     | Plugin Obsidian                                | Prevu       |
-| 9     | Formats XLSX/PPTX, workflows de validation     | Prevu       |
+| —     | Collections (multi-tenant)                     | Termine     |
+| —     | Moteur de rendu multi-format (XLSX, Marp, reveal.js) | Termine |
+| 8     | Plugin Obsidian                                | Reporte     |
+| 9     | GraphRAG                                       | Post-MVP    |
+| 10    | Community summaries                            | Post-MVP    |
 
 ---
 

@@ -1,5 +1,7 @@
 # Guide de syntaxe des templates Fragmint
 
+> **Voir aussi :** Le [guide d'onboarding](guide-demo-onboarding.md) offre une documentation plus complète avec des exemples commentés pour chaque format (DOCX, XLSX, Marp, reveal.js).
+
 ## 1. Vue d'ensemble
 
 Un template Fragmint est composé de deux fichiers :
