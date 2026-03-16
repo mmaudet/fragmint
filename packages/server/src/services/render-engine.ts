@@ -5,8 +5,8 @@
  * Supported formats:
  *   - docx: docx-templates (MIT)
  *   - xlsx: xlsx-template  (MIT)
- *   - slides: @marp-team/marp-core (MIT) — not yet implemented
- *   - pptx: docxtemplater  (MIT/GPLv3 free core) — not yet implemented
+ *   - slides: @marp-team/marp-core (MIT)
+ *   - pptx: @marp-team/marp-cli  (MIT) — via CLI subprocess
  *   - reveal: reveal.js (MIT)
  */
 import { readFileSync } from 'node:fs';
@@ -34,9 +34,9 @@ export async function renderDocument(
     case 'xlsx':
       return (await import('./render-xlsx.js')).renderXlsx(templatePath, data);
     case 'slides':
-      throw new Error('Slides (Marp Markdown) rendering not yet implemented.');
+      return (await import('./render-marp.js')).renderMarp(templatePath, data, 'html');
     case 'pptx':
-      throw new Error('PPTX rendering not yet implemented.');
+      return (await import('./render-marp.js')).renderMarp(templatePath, data, 'pptx');
     case 'reveal':
       return (await import('./render-reveal.js')).renderReveal(templatePath, data);
     default:
