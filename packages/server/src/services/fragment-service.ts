@@ -3,7 +3,7 @@ import { eq, and, desc, like } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments } from '../db/schema.js';
+import { fragments, collections } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import {
   readFragment, writeFragment, generateId, deriveTitle,
@@ -30,6 +30,26 @@ export class FragmentService {
 
   getGit(): GitRepository {
     return this.git;
+  }
+
+  /**
+   * Resolve the correct store path for a fragment based on its collection_slug.
+   * Falls back to the default storePath for 'common' or null slugs.
+   */
+  private async resolveStorePath(collectionSlug: string | null): Promise<string> {
+    if (!collectionSlug || collectionSlug === 'common') {
+      return this.storePath;
+    }
+    const colRows = await this.db.select().from(collections)
+      .where(eq(collections.slug, collectionSlug)).limit(1);
+    if (colRows.length > 0) {
+      return colRows[0].git_path;
+    }
+    return this.storePath;
+  }
+
+  private resolveGit(storePath: string): GitRepository {
+    return storePath === this.storePath ? this.git : new GitRepository(storePath);
   }
 
   async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string, storePathOverride?: string, collectionSlug?: string) {
@@ -117,7 +137,8 @@ export class FragmentService {
     if (rows.length === 0) return null;
 
     const row = rows[0];
-    const filePath = join(this.storePath, row.file_path);
+    const storePath = await this.resolveStorePath(row.collection_slug);
+    const filePath = join(storePath, row.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     return { ...row, frontmatter, body };
@@ -177,7 +198,9 @@ export class FragmentService {
       }
     }
 
-    const filePath = join(this.storePath, existing.file_path);
+    const storePath = await this.resolveStorePath(existing.collection_slug);
+    const git = this.resolveGit(storePath);
+    const filePath = join(storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const updatedFrontmatter = { ...frontmatter };
@@ -192,7 +215,7 @@ export class FragmentService {
     if (input.access) updatedFrontmatter.access = input.access;
     updatedFrontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(this.storePath, 'fragments', updatedFrontmatter.domain), updatedFrontmatter, newBody);
+    writeFragment(join(storePath, 'fragments', updatedFrontmatter.domain), updatedFrontmatter, newBody);
 
     const commitMsg = buildCommitMessage({
       action: 'update', type: updatedFrontmatter.type,
@@ -202,7 +225,7 @@ export class FragmentService {
       qualityTransition: input.quality ? `${existing.quality} → ${input.quality}` : undefined,
     });
 
-    const commitHash = await this.git.commit(existing.file_path, commitMsg);
+    const commitHash = await git.commit(existing.file_path, commitMsg);
 
     await this.db.update(fragments).set({
       domain: updatedFrontmatter.domain,
@@ -237,14 +260,16 @@ export class FragmentService {
       throw new Error(`Cannot approve: current quality is '${existing.quality}', must be 'reviewed'`);
     }
 
-    const filePath = join(this.storePath, existing.file_path);
+    const storePath = await this.resolveStorePath(existing.collection_slug);
+    const git = this.resolveGit(storePath);
+    const filePath = join(storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     frontmatter.quality = 'approved';
     frontmatter.approved_by = userId;
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(this.storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'approve', type: frontmatter.type,
@@ -254,7 +279,7 @@ export class FragmentService {
       qualityTransition: 'reviewed → approved',
     });
 
-    const commitHash = await this.git.commit(existing.file_path, commitMsg);
+    const commitHash = await git.commit(existing.file_path, commitMsg);
 
     await this.db.update(fragments).set({
       quality: 'approved', updated_at: frontmatter.updated_at, git_hash: commitHash,
@@ -285,14 +310,16 @@ export class FragmentService {
       throw new Error(`Cannot deprecate: current quality '${existing.quality}' does not allow transition to deprecated`);
     }
 
-    const filePath = join(this.storePath, existing.file_path);
+    const storePath = await this.resolveStorePath(existing.collection_slug);
+    const git = this.resolveGit(storePath);
+    const filePath = join(storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const oldQuality = frontmatter.quality;
     frontmatter.quality = 'deprecated';
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(this.storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'deprecate', type: frontmatter.type,
@@ -302,7 +329,7 @@ export class FragmentService {
       qualityTransition: `${oldQuality} → deprecated`,
     });
 
-    const commitHash = await this.git.commit(existing.file_path, commitMsg);
+    const commitHash = await git.commit(existing.file_path, commitMsg);
 
     await this.db.update(fragments).set({
       quality: 'deprecated', updated_at: frontmatter.updated_at, git_hash: commitHash,
@@ -319,10 +346,12 @@ export class FragmentService {
   }
 
   async history(id: string) {
-    const rows = await this.db.select({ file_path: fragments.file_path })
+    const rows = await this.db.select({ file_path: fragments.file_path, collection_slug: fragments.collection_slug })
       .from(fragments).where(eq(fragments.id, id)).limit(1);
     if (rows.length === 0) throw new Error('Fragment not found');
-    return this.git.log(rows[0].file_path);
+    const storePath = await this.resolveStorePath(rows[0].collection_slug);
+    const git = this.resolveGit(storePath);
+    return git.log(rows[0].file_path);
   }
 
   async inventory(topic?: string, lang?: string) {
