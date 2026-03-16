@@ -40,6 +40,24 @@ export function fragmentRoutes(
     return { data: rows, meta: { count: rows.length }, error: null };
   });
 
+  // Export fragments as XLSX
+  app.get(`${prefix}/fragments/export`, { preHandler: readHandlers }, async (request, reply) => {
+    const query = request.query as Record<string, string>;
+    const collection = request.collection;
+    const rows = await fragmentService.list({
+      type: query.type, domain: query.domain, lang: query.lang, quality: query.quality,
+      collectionSlug: collection?.slug,
+    });
+
+    const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
+    const buffer = await exportFragmentsToXlsx(rows);
+
+    return reply
+      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('Content-Disposition', 'attachment; filename="fragments-export.xlsx"')
+      .send(buffer);
+  });
+
   // Get fragment by ID
   app.get(`${prefix}/fragments/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
