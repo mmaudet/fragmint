@@ -170,15 +170,32 @@ export class ComposerService {
       }
     }
 
-    // Auto-compute pricing totals from enriched fragments
+    // Auto-compute pricing: enrich structured_data.lignes with calculated totals
+    const enrichedStructuredData = { ...(structuredData ?? {}) };
     let totalHt = 0;
     let hasPricing = false;
 
+    if (Array.isArray(enrichedStructuredData.lignes)) {
+      enrichedStructuredData.lignes = enrichedStructuredData.lignes.map((ligne: any) => {
+        const enriched = { ...ligne };
+        // Auto-compute total if quantite and prix_unitaire are present
+        if (typeof enriched.quantite === 'number' && typeof enriched.prix_unitaire === 'number') {
+          enriched.total = enriched.quantite * enriched.prix_unitaire;
+          totalHt += enriched.total;
+          hasPricing = true;
+        } else if (typeof enriched.total === 'number') {
+          totalHt += enriched.total;
+          hasPricing = true;
+        }
+        return enriched;
+      });
+    }
+
+    // Also compute from enriched fragments (pricing fragments with structured tags)
     for (const value of Object.values(fragments)) {
       const arr = Array.isArray(value) ? value : [value];
       for (const item of arr) {
         if (item.total && typeof item.total === 'string') {
-          // Parse French-formatted number back to float (e.g. "2 250,00" → 2250)
           const num = parseFloat(item.total.replace(/\s/g, '').replace(',', '.'));
           if (!isNaN(num)) {
             totalHt += num;
@@ -200,7 +217,7 @@ export class ComposerService {
     }
 
     return {
-      ...(structuredData ?? {}),
+      ...enrichedStructuredData,
       fragments,
       metadata,
     };

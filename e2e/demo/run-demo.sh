@@ -460,17 +460,14 @@ COMPOSE_CONTEXT='{
     "date": "2026-03-16",
     "reference": "LC-2026-MINARM-001",
     "product": "lincloud",
-    "lang": "fr",
-    "total_ht": "12 305,00",
-    "tva": "2 461,00",
-    "total_ttc": "14 766,00"
-  },
+        "lang": "fr"
+              },
   "structured_data": {
     "lignes": [
-      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25, "total": 1825.00},
-      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008, "total": 40.00},
-      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12, "total": 240.00},
-      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00, "total": 10200.00}
+      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25},
+      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008},
+      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12},
+      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00}
     ]
   }
 }'

@@ -144,7 +144,7 @@ create_fragment() {
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "introduction",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "LinCloud Souverain est une plateforme cloud souveraine développée par LINAGORA. Elle garantit la maîtrise complète des données hébergées sur le territoire français, conforme au RGPD et au référentiel SecNumCloud de l'\''ANSSI. Conçue pour les administrations et les OIV, LinCloud offre une alternative crédible aux hyperscalers américains.",
   "tags": ["lincloud", "introduction", "souverainete"],
   "quality": "approved"
@@ -160,7 +160,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Architecture technique — LinCloud repose sur une architecture microservices conteneurisée (Kubernetes) déployée sur des datacenters certifiés SecNumCloud. Le stockage objet S3-compatible, le compute élastique et le réseau SDN sont entièrement gérés par des composants open source audités.",
   "tags": ["lincloud", "architecture", "kubernetes"],
   "quality": "approved"
@@ -176,7 +176,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Sécurité et conformité — Chiffrement de bout en bout (AES-256), gestion des clés par HSM souverain, journalisation exhaustive des accès, conformité RGPD, HDS (Hébergement de Données de Santé) et qualification SecNumCloud. Audit de sécurité annuel par un organisme indépendant.",
   "tags": ["lincloud", "securite", "secnumcloud"],
   "quality": "approved"
@@ -192,7 +192,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Interopérabilité — APIs S3, OpenStack et Kubernetes natives. Migration transparente depuis AWS, Azure ou GCP via des outils de portabilité intégrés. Support des standards TOSCA et OASIS pour l'\''orchestration multi-cloud.",
   "tags": ["lincloud", "interoperabilite", "openstack"],
   "quality": "approved"
@@ -208,7 +208,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Haute disponibilité — Architecture multi-zones avec réplication synchrone, SLA de 99,99% garanti contractuellement. Plan de reprise d'\''activité (PRA) automatisé avec un RPO de 15 minutes et un RTO de 1 heure.",
   "tags": ["lincloud", "disponibilite", "sla"],
   "quality": "approved"
@@ -224,7 +224,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Souveraineté des données — Aucune donnée ne transite par des infrastructures étrangères. Immunité au Cloud Act et aux réglementations extraterritoriales. Traçabilité complète de la chaîne de sous-traitance.",
   "tags": ["lincloud", "souverainete", "cloud-act"],
   "quality": "approved"
@@ -240,7 +240,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Support et accompagnement — Équipe d'\''ingénieurs basée en France, support 24/7 avec SLA garanti 4h pour les incidents critiques. Programme d'\''accompagnement à la migration incluant audit de l'\''existant, plan de migration et formation des équipes.",
   "tags": ["lincloud", "support", "migration"],
   "quality": "approved"
@@ -256,7 +256,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "pricing",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.\n\n| Service | Prix unitaire |\n|---------|---------------|\n| Compute (vCPU) | 0,025 €/heure |\n| Stockage objet S3 | 0,008 €/Go/mois |\n| Stockage bloc SSD | 0,12 €/Go/mois |\n| Transfert réseau sortant | 0,05 €/Go |\n| Support Premium 24/7 | 850 €/mois |\n\nRemise volume dès 10 000 €/mois.",
   "tags": ["lincloud", "tarification", "pricing"],
   "quality": "approved"
@@ -272,7 +272,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "Références clients — Déjà adopté par 3 ministères, 12 collectivités territoriales et 8 OIV. Plus de 500 applications métier hébergées en production. Certification ISO 27001 et qualification SecNumCloud obtenues en 2025.",
   "tags": ["lincloud", "references", "iso27001"],
   "quality": "approved"
@@ -288,7 +288,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "conclusion",
   "domain": "lincloud",
-  "lang": "fr",
+      "lang": "fr"
   "body": "LinCloud Souverain représente la seule alternative française complète aux hyperscalers. En choisissant LinCloud, vous garantissez la souveraineté de vos données, la conformité réglementaire et le soutien à l'\''écosystème technologique français. LINAGORA s'\''engage à vos côtés pour réussir votre transition vers un cloud de confiance.",
   "tags": ["lincloud", "conclusion", "confiance"],
   "quality": "approved"
@@ -833,17 +833,14 @@ COMPOSE_CONTEXT='{
     "date": "2026-03-16",
     "reference": "LC-2026-MINARM-001",
     "product": "lincloud",
-    "lang": "fr",
-    "total_ht": "12 305,00",
-    "tva": "2 461,00",
-    "total_ttc": "14 766,00"
+        "lang": "fr"
   },
   "structured_data": {
     "lignes": [
-      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25, "total": 1825.00},
-      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008, "total": 40.00},
-      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12, "total": 240.00},
-      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00, "total": 10200.00}
+      {"service": "Compute vCPU", "description": "100 vCPU x 730h/mois", "quantite": 100, "prix_unitaire": 18.25},
+      {"service": "Stockage objet S3", "description": "5 000 Go stockage objet", "quantite": 5000, "prix_unitaire": 0.008},
+      {"service": "Stockage bloc SSD", "description": "2 000 Go SSD haute perf.", "quantite": 2000, "prix_unitaire": 0.12},
+      {"service": "Support Premium 24/7", "description": "12 mois SLA 4h", "quantite": 12, "prix_unitaire": 850.00}
     ]
   }
 }'
