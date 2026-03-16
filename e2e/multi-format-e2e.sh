@@ -346,7 +346,12 @@ style: |
 
 ## Tarification
 
-+++INS fragments.pricing.body+++
+| Service | Description | Qté | P.U. | Total |
+|---------|-------------|-----|------|-------|
++++FOR l IN lignes+++| +++INS $l.service+++ | +++INS $l.description+++ | +++INS $l.quantite+++ | +++INS $l.prix_unitaire+++ | +++INS $l.total+++ |
++++END-FOR l+++
+
+**Total HT : +++INS metadata.total_ht+++ €** | **TVA : +++INS metadata.tva+++ €** | **TTC : +++INS metadata.total_ttc+++ €**
 
 ---
 
@@ -392,7 +397,40 @@ cat > "$TEMPLATES_DIR/lincloud-reveal.html" << 'REVEAL_EOF'
 
 <section>
   <h2>Tarification</h2>
-  +++HTML fragments.pricing.body+++
+  <table style="font-size:0.7em;width:100%;border-collapse:collapse;">
+    <thead><tr style="background:#2B579A;color:white;">
+      <th style="padding:8px;text-align:left;">Service</th>
+      <th style="padding:8px;text-align:left;">Description</th>
+      <th style="padding:8px;text-align:right;">Qté</th>
+      <th style="padding:8px;text-align:right;">P.U.</th>
+      <th style="padding:8px;text-align:right;">Total</th>
+    </tr></thead>
+    <tbody>
+    +++FOR l IN lignes+++
+    <tr style="border-bottom:1px solid #ddd;">
+      <td style="padding:6px;">+++INS $l.service+++</td>
+      <td style="padding:6px;">+++INS $l.description+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.quantite+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.prix_unitaire+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.total+++</td>
+    </tr>
+    +++END-FOR l+++
+    </tbody>
+    <tfoot>
+      <tr style="background:#f0f0f0;font-weight:bold;">
+        <td colspan="4" style="padding:8px;text-align:right;">Total HT</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.total_ht+++ €</td>
+      </tr>
+      <tr>
+        <td colspan="4" style="padding:8px;text-align:right;">TVA (20%)</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.tva+++ €</td>
+      </tr>
+      <tr style="background:#2B579A;color:white;font-weight:bold;">
+        <td colspan="4" style="padding:8px;text-align:right;">Total TTC</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.total_ttc+++ €</td>
+      </tr>
+    </tfoot>
+  </table>
 </section>
 
 <section>
