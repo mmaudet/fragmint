@@ -9,3 +9,4 @@ example-vault/outputs/
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
 *.~lock.*
+e2e/demo/output/
