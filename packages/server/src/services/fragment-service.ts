@@ -32,7 +32,7 @@ export class FragmentService {
     return this.git;
   }
 
-  async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string, storePathOverride?: string) {
+  async create(input: CreateFragmentInput, author: string, authorRole: string, ip?: string, storePathOverride?: string, collectionSlug?: string) {
     const id = generateId();
     const now = new Date().toISOString();
     const effectivePath = storePathOverride ?? this.storePath;
@@ -90,6 +90,7 @@ export class FragmentService {
       body_excerpt: input.body.slice(0, 200),
       created_at: now, updated_at: now,
       file_path: relPath, git_hash: commitHash,
+      collection_slug: collectionSlug ?? 'common',
       origin: input.origin,
       parent_id: input.parent_id ?? null,
       translation_of: input.translation_of ?? null,
@@ -130,13 +131,15 @@ export class FragmentService {
     limit?: number;
     offset?: number;
     filePathPrefix?: string;
+    collectionSlug?: string;
   }) {
     const conditions = [];
     if (filters?.type) conditions.push(eq(fragments.type, filters.type));
     if (filters?.domain) conditions.push(eq(fragments.domain, filters.domain));
     if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
     if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
-    if (filters?.filePathPrefix) conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
+    if (filters?.collectionSlug) conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
+    else if (filters?.filePathPrefix) conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
 
     const limit = filters?.limit ?? 50;
     const offset = filters?.offset ?? 0;
@@ -425,6 +428,7 @@ export class FragmentService {
           created_at: frontmatter.created_at,
           updated_at: frontmatter.updated_at,
           file_path: relPath,
+          collection_slug: 'common',
           origin: frontmatter.origin ?? 'manual',
           parent_id: frontmatter.parent_id ?? null,
           translation_of: frontmatter.translation_of ?? null,
@@ -436,6 +440,7 @@ export class FragmentService {
             title,
             body_excerpt: body.slice(0, 200),
             file_path: relPath,
+            collection_slug: 'common',
           },
         });
         indexed++;

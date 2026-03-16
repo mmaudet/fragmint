@@ -10,10 +10,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { eq, count } from 'drizzle-orm';
+import { eq, count, isNull } from 'drizzle-orm';
 import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
-import { collections, collectionMemberships, users, toMilvusPartition } from './db/schema.js';
+import { collections, collectionMemberships, users, fragments, toMilvusPartition } from './db/schema.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import { UserService, TokenService, AuditService, FragmentService, TemplateService, ComposerService } from './services/index.js';
 import { CollectionService } from './services/collection-service.js';
@@ -72,6 +72,13 @@ async function ensureCollections(db: FragmintDb, config: FragmintConfig) {
   console.log(`Collections migration: created 'common' collection, assigned ${allUsers.length} user(s)`);
 }
 
+async function migrateFragmentCollectionSlug(db: FragmintDb) {
+  // Set collection_slug = 'common' for any fragments that don't have one yet
+  await db.update(fragments)
+    .set({ collection_slug: 'common' })
+    .where(isNull(fragments.collection_slug));
+}
+
 export async function createServer(options?: {
   configPath?: string;
   dev?: boolean;
@@ -87,6 +94,7 @@ export async function createServer(options?: {
 
   // Auto-migrate collections
   await ensureCollections(db, config);
+  await migrateFragmentCollectionSlug(db);
 
   // Git init if needed
   const git = new GitRepository(storePath);

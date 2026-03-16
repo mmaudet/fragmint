@@ -83,6 +83,13 @@ export function createDb(path: string | ':memory:') {
     // Column already exists — ignore
   }
 
+  // Add collection_slug to fragments if not already present
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN collection_slug TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
   const db = drizzle(sqlite, { schema });
   return db;
 }

@@ -35,7 +35,7 @@ export function fragmentRoutes(
     const rows = await fragmentService.list({
       type: query.type, domain: query.domain, lang: query.lang, quality: query.quality,
       limit: query.limit ? parseInt(query.limit) : undefined,
-      filePathPrefix: collection?.git_path,
+      collectionSlug: collection?.slug,
     });
     return { data: rows, meta: { count: rows.length }, error: null };
   });
@@ -94,7 +94,7 @@ export function fragmentRoutes(
     const parsed = createFragmentSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     const collection = (request as any).collection;
-    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip, collection?.git_path);
+    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip, collection?.git_path, collection?.slug);
     return reply.status(201).send({ data: result, meta: null, error: null });
   });
 

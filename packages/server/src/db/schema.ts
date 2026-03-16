@@ -16,6 +16,7 @@ export const fragments = sqliteTable('fragments', {
   translation_of: text('translation_of'),
   tags: text('tags'),
   file_path: text('file_path').notNull(),
+  collection_slug: text('collection_slug'),
   git_hash: text('git_hash'),
   origin: text('origin').notNull().default('manual'),
   origin_source: text('origin_source'),
