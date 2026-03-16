@@ -477,26 +477,44 @@ function dataCell(text, opts={}) {
   });
 }
 
+const cmdText = (t) => new TextRun({ text: t, size: 2, color: 'FFFFFF' });
+const nb = { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} };
+
 const pricingTable = new Table({
   width: { size: 100, type: WidthType.PERCENTAGE },
   rows: [
-    new TableRow({ children: [headerCell('Service'), headerCell('Quantité'), headerCell('P.U. HT'), headerCell('Total HT')] }),
-    new TableRow({ children: [dataCell('Compute vCPU'), dataCell('100', {align:AlignmentType.CENTER}), dataCell('18,25 €/mois', {align:AlignmentType.RIGHT}), dataCell('1 825,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Stockage objet S3'), dataCell('5 000', {align:AlignmentType.CENTER}), dataCell('0,008 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('40,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Stockage bloc SSD'), dataCell('2 000', {align:AlignmentType.CENTER}), dataCell('0,12 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('240,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Transfert réseau'), dataCell('10 000 Go', {align:AlignmentType.CENTER}), dataCell('0,05 €/Go', {align:AlignmentType.RIGHT}), dataCell('500,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Support Premium 24/7'), dataCell('12', {align:AlignmentType.CENTER}), dataCell('850,00 €/mois', {align:AlignmentType.RIGHT}), dataCell('10 200,00 €', {align:AlignmentType.RIGHT})] }),
+    // Header
+    new TableRow({ children: [headerCell('Service'), headerCell('Description'), headerCell('Qté'), headerCell('P.U.'), headerCell('Total')] }),
+    // FOR loop row (invisible)
     new TableRow({ children: [
-      new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: 'E8E8E8' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total HT', size: 20, bold: true })], alignment: AlignmentType.RIGHT })] }),
-      dataCell('12 305,00 €', { bold: true, align: AlignmentType.RIGHT, shading: { type: ShadingType.SOLID, color: 'E8E8E8' } }),
+      new TableCell({ children: [new Paragraph({ children: [cmdText('+++FOR l IN lignes+++')] })], borders: nb, columnSpan: 5 }),
     ] }),
+    // Data row — repeated by docx-templates
     new TableRow({ children: [
-      new TableCell({ borders: b, columnSpan: 3, children: [new Paragraph({ children: [new TextRun({ text: 'TVA (20%)', size: 20 })], alignment: AlignmentType.RIGHT })] }),
-      dataCell('2 461,00 €', { align: AlignmentType.RIGHT }),
+      dataCell('+++INS \$l.service+++'),
+      dataCell('+++INS \$l.description+++'),
+      dataCell('+++INS \$l.quantite+++', {align:AlignmentType.RIGHT}),
+      dataCell('+++INS \$l.prix_unitaire+++', {align:AlignmentType.RIGHT}),
+      dataCell('+++INS \$l.total+++', {align:AlignmentType.RIGHT}),
     ] }),
+    // END-FOR row (invisible)
     new TableRow({ children: [
-      new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total TTC', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
-      new TableCell({ borders: b, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: '14 766,00 €', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
+      new TableCell({ children: [new Paragraph({ children: [cmdText('+++END-FOR l+++')] })], borders: nb, columnSpan: 5 }),
+    ] }),
+    // Total HT
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 4, shading: { type: ShadingType.SOLID, color: 'E8E8E8' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total HT', size: 20, bold: true })], alignment: AlignmentType.RIGHT })] }),
+      dataCell('+++INS metadata.total_ht+++ \u20ac', { bold: true, align: AlignmentType.RIGHT, shading: { type: ShadingType.SOLID, color: 'E8E8E8' } }),
+    ] }),
+    // TVA
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 4, children: [new Paragraph({ children: [new TextRun({ text: 'TVA (20%)', size: 20 })], alignment: AlignmentType.RIGHT })] }),
+      dataCell('+++INS metadata.tva+++ \u20ac', { align: AlignmentType.RIGHT }),
+    ] }),
+    // Total TTC
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 4, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total TTC', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
+      new TableCell({ borders: b, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: '+++INS metadata.total_ttc+++ \u20ac', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
     ] }),
   ],
 });
