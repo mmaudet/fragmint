@@ -349,9 +349,9 @@ style: |
 | Service | Description | Qté | P.U. | Total |
 |---------|-------------|-----|------|-------|
 +++FOR l IN lignes+++| +++INS $l.service+++ | +++INS $l.description+++ | +++INS $l.quantite+++ | +++INS $l.prix_unitaire+++ | +++INS $l.total+++ |
-+++END-FOR l+++
-
-**Total HT : +++INS metadata.total_ht+++ €** | **TVA : +++INS metadata.tva+++ €** | **TTC : +++INS metadata.total_ttc+++ €**
++++END-FOR l+++| | | | **Total HT** | **+++INS metadata.total_ht+++ €** |
+| | | | **TVA 20%** | **+++INS metadata.tva+++ €** |
+| | | | **Total TTC** | **+++INS metadata.total_ttc+++ €** |
 
 ---
 
