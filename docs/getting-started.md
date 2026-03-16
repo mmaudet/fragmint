@@ -49,7 +49,7 @@ ollama pull mistral-nemo:12b
 ## 2. Installation
 
 ```bash
-git clone https://github.com/linagora/fragmint.git
+git clone https://github.com/mmaudet/fragmint.git
 cd fragmint
 pnpm install
 ```

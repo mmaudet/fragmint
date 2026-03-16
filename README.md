@@ -140,9 +140,10 @@ fragmint/
 ### Installation
 
 ```bash
-git clone https://github.com/linagora/fragmint.git
+git clone https://github.com/mmaudet/fragmint.git
 cd fragmint
 pnpm install
+pnpm --filter @fragmint/web build
 ```
 
 ### Demarrer le serveur
@@ -151,17 +152,11 @@ pnpm install
 npx tsx packages/server/src/index.ts
 ```
 
-Le serveur demarre sur http://localhost:3210.
+Le serveur demarre sur http://localhost:3210. L'interface web est accessible sur http://localhost:3210/ui/.
 
-### Ouvrir l'interface web
+Identifiants par defaut (mode developpement) : `mmaudet` / `fragmint-dev`
 
-Construire le frontend, puis acceder a l'interface :
-
-```bash
-pnpm --filter @fragmint/web build
-```
-
-Ouvrir http://localhost:3210/ui/ dans un navigateur.
+> **Note :** L'etape `pnpm --filter @fragmint/web build` est indispensable avant le premier demarrage. Sans elle, l'interface web retourne une erreur 404.
 
 ### Identifiants par defaut (mode dev)
 
