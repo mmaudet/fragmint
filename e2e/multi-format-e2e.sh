@@ -257,7 +257,17 @@ api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "pricing",
   "domain": "lincloud",
   "lang": "fr",
-  "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel. Compute : à partir de 0,025€/vCPU/heure. Stockage objet : 0,008€/Go/mois. Stockage bloc SSD : 0,12€/Go/mois. Transfert réseau sortant : 0,05€/Go. Remise volume dès 10 000€/mois.",
+  "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.
+
+| Service | Prix unitaire |
+|---------|---------------|
+| Compute (vCPU) | 0,025 €/heure |
+| Stockage objet S3 | 0,008 €/Go/mois |
+| Stockage bloc SSD | 0,12 €/Go/mois |
+| Transfert réseau sortant | 0,05 €/Go |
+| Support Premium 24/7 | 850 €/mois |
+
+Remise volume dès 10 000 €/mois.",
   "tags": ["lincloud", "tarification", "pricing"],
   "quality": "approved"
 }'
