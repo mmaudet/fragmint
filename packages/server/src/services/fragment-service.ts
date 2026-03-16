@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, like } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -126,12 +126,14 @@ export class FragmentService {
     quality?: string;
     limit?: number;
     offset?: number;
+    filePathPrefix?: string;
   }) {
     const conditions = [];
     if (filters?.type) conditions.push(eq(fragments.type, filters.type));
     if (filters?.domain) conditions.push(eq(fragments.domain, filters.domain));
     if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
     if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
+    if (filters?.filePathPrefix) conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
 
     const limit = filters?.limit ?? 50;
     const offset = filters?.offset ?? 0;

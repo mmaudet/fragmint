@@ -31,9 +31,11 @@ export function fragmentRoutes(
   // List fragments
   app.get(`${prefix}/fragments`, { preHandler: readHandlers }, async (request) => {
     const query = request.query as Record<string, string>;
+    const collection = request.collection;
     const rows = await fragmentService.list({
       type: query.type, domain: query.domain, lang: query.lang, quality: query.quality,
       limit: query.limit ? parseInt(query.limit) : undefined,
+      filePathPrefix: collection?.git_path,
     });
     return { data: rows, meta: { count: rows.length }, error: null };
   });

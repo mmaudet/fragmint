@@ -230,6 +230,8 @@ export async function createServer(options?: {
       await userService.create('mmaudet', 'fragmint-dev', 'Michel-Marie Maudet', 'admin');
       console.log('Dev user created: mmaudet / fragmint-dev');
     }
+    // Ensure dev user is assigned to all auto_assign system collections
+    await collectionService.assignSystemCollections('mmaudet');
   }
 
   // Reindex on startup if empty

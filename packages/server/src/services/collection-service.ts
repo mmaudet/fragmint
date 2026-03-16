@@ -101,6 +101,13 @@ export class CollectionService {
     return rows[0];
   }
 
+  async listAll(): Promise<CollectionWithRole[]> {
+    const rows = await this.db
+      .select()
+      .from(collections);
+    return rows.map((r) => ({ ...r, role: 'owner' })) as CollectionWithRole[];
+  }
+
   async listForUser(userId: string): Promise<CollectionWithRole[]> {
     const rows = await this.db
       .select({

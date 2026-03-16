@@ -10,7 +10,9 @@ export function collectionRoutes(
 ) {
   // GET /v1/collections — list accessible collections
   app.get('/v1/collections', { preHandler: [authenticate] }, async (request) => {
-    const collections = await collectionService.listForUser(request.user.id);
+    const collections = request.user.role === 'admin'
+      ? await collectionService.listAll()
+      : await collectionService.listForUser(request.user.id);
     return { data: collections, meta: { count: collections.length }, error: null };
   });
 
