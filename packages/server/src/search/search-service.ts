@@ -1,5 +1,5 @@
 // packages/server/src/search/search-service.ts
-import { eq, like, and, or, desc, inArray, ne } from 'drizzle-orm';
+import { eq, like, and, or, desc, inArray, ne, isNull } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 import type { EmbeddingClient } from './embedding-client.js';
@@ -23,6 +23,7 @@ export interface SearchFilters {
   lang?: string;
   quality_min?: string;
   tags?: string[];
+  collectionSlug?: string;
 }
 
 export interface SearchResult {
@@ -234,6 +235,15 @@ export class SearchService {
     if (filters?.tags?.length) {
       for (const tag of filters.tags) {
         conditions.push(like(fragments.tags, `%${tag}%`));
+      }
+    }
+
+    // Filter by collection
+    if (filters?.collectionSlug) {
+      if (filters.collectionSlug === 'common') {
+        conditions.push(or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug)));
+      } else {
+        conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
       }
     }
 

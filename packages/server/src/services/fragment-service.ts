@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, desc, like } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -159,8 +159,16 @@ export class FragmentService {
     if (filters?.domain) conditions.push(eq(fragments.domain, filters.domain));
     if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
     if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
-    if (filters?.collectionSlug) conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
-    else if (filters?.filePathPrefix) conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
+    if (filters?.collectionSlug) {
+      if (filters.collectionSlug === 'common') {
+        // Match both collection_slug='common' and NULL (legacy fragments)
+        conditions.push(or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug)));
+      } else {
+        conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
+      }
+    } else if (filters?.filePathPrefix) {
+      conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
+    }
 
     const limit = filters?.limit ?? 50;
     const offset = filters?.offset ?? 0;

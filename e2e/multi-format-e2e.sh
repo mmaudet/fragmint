@@ -143,7 +143,7 @@ create_fragment() {
 # Fragment 1: introduction
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "introduction",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "LinCloud Souverain est une plateforme cloud souveraine développée par LINAGORA. Elle garantit la maîtrise complète des données hébergées sur le territoire français, conforme au RGPD et au référentiel SecNumCloud de l'\''ANSSI. Conçue pour les administrations et les OIV, LinCloud offre une alternative crédible aux hyperscalers américains.",
   "tags": ["lincloud", "introduction", "souverainete"],
@@ -159,7 +159,7 @@ fi
 # Fragment 2: architecture
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Architecture technique — LinCloud repose sur une architecture microservices conteneurisée (Kubernetes) déployée sur des datacenters certifiés SecNumCloud. Le stockage objet S3-compatible, le compute élastique et le réseau SDN sont entièrement gérés par des composants open source audités.",
   "tags": ["lincloud", "architecture", "kubernetes"],
@@ -175,7 +175,7 @@ fi
 # Fragment 3: security
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Sécurité et conformité — Chiffrement de bout en bout (AES-256), gestion des clés par HSM souverain, journalisation exhaustive des accès, conformité RGPD, HDS (Hébergement de Données de Santé) et qualification SecNumCloud. Audit de sécurité annuel par un organisme indépendant.",
   "tags": ["lincloud", "securite", "secnumcloud"],
@@ -191,7 +191,7 @@ fi
 # Fragment 4: interoperability
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Interopérabilité — APIs S3, OpenStack et Kubernetes natives. Migration transparente depuis AWS, Azure ou GCP via des outils de portabilité intégrés. Support des standards TOSCA et OASIS pour l'\''orchestration multi-cloud.",
   "tags": ["lincloud", "interoperabilite", "openstack"],
@@ -207,7 +207,7 @@ fi
 # Fragment 5: high availability
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Haute disponibilité — Architecture multi-zones avec réplication synchrone, SLA de 99,99% garanti contractuellement. Plan de reprise d'\''activité (PRA) automatisé avec un RPO de 15 minutes et un RTO de 1 heure.",
   "tags": ["lincloud", "disponibilite", "sla"],
@@ -223,7 +223,7 @@ fi
 # Fragment 6: data sovereignty
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Souveraineté des données — Aucune donnée ne transite par des infrastructures étrangères. Immunité au Cloud Act et aux réglementations extraterritoriales. Traçabilité complète de la chaîne de sous-traitance.",
   "tags": ["lincloud", "souverainete", "cloud-act"],
@@ -239,7 +239,7 @@ fi
 # Fragment 7: support
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Support et accompagnement — Équipe d'\''ingénieurs basée en France, support 24/7 avec SLA garanti 4h pour les incidents critiques. Programme d'\''accompagnement à la migration incluant audit de l'\''existant, plan de migration et formation des équipes.",
   "tags": ["lincloud", "support", "migration"],
@@ -255,7 +255,7 @@ fi
 # Fragment 8: pricing
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "pricing",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel. Compute : à partir de 0,025€/vCPU/heure. Stockage objet : 0,008€/Go/mois. Stockage bloc SSD : 0,12€/Go/mois. Transfert réseau sortant : 0,05€/Go. Remise volume dès 10 000€/mois.",
   "tags": ["lincloud", "tarification", "pricing"],
@@ -271,7 +271,7 @@ fi
 # Fragment 9: references
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "Références clients — Déjà adopté par 3 ministères, 12 collectivités territoriales et 8 OIV. Plus de 500 applications métier hébergées en production. Certification ISO 27001 et qualification SecNumCloud obtenues en 2025.",
   "tags": ["lincloud", "references", "iso27001"],
@@ -287,7 +287,7 @@ fi
 # Fragment 10: conclusion
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "conclusion",
-  "domain": "cloud",
+  "domain": "lincloud",
   "lang": "fr",
   "body": "LinCloud Souverain représente la seule alternative française complète aux hyperscalers. En choisissant LinCloud, vous garantissez la souveraineté de vos données, la conformité réglementaire et le soutien à l'\''écosystème technologique français. LINAGORA s'\''engage à vos côtés pour réussir votre transition vers un cloud de confiance.",
   "tags": ["lincloud", "conclusion", "confiance"],
@@ -415,15 +415,15 @@ pass "Create reveal.js template"
 # ── 3c. DOCX template ───────────────────────────────────────────────────────
 
 echo "Creating DOCX template with Node.js..."
-node -e "
-const { createReport } = require('docx-templates');
+cd /Users/mmaudet/work/fragmint/packages/server && node -e "
+const { createReport } = require('./node_modules/docx-templates');
 const fs = require('fs');
 const path = require('path');
 
 // We need to create a valid .docx that contains +++INS+++ placeholders.
 // docx-templates can create from a template buffer, but we need to first
 // create a base .docx. We'll use the 'docx' package instead.
-const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = require('docx');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = require('/Users/mmaudet/work/fragmint/node_modules/docx');
 
 const doc = new Document({
   sections: [{
@@ -507,9 +507,9 @@ fi
 # ── 3d. XLSX template ───────────────────────────────────────────────────────
 
 echo "Creating XLSX template with Node.js..."
-node -e "
+cd /Users/mmaudet/work/fragmint/packages/server && node -e "
 const XlsxTemplate = require('xlsx-template');
-const ExcelJS = require('exceljs');
+const ExcelJS = require('/Users/mmaudet/work/fragmint/packages/server/node_modules/exceljs');
 const fs = require('fs');
 
 async function createTemplate() {

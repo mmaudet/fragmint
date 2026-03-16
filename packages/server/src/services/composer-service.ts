@@ -415,12 +415,21 @@ export class ComposerService {
       ? ComposerService.resolvePartitions(slot, yaml, accessiblePartitions)
       : accessiblePartitions;
 
-    const results = await this.fragmentService.search(
-      slot.type,
-      { type: [slot.type], domain: [domain], lang, quality_min: slot.quality_min },
-      slot.count,
-      partitionNames,
-    );
+    // Use list() instead of search() for slot resolution — search() does a LIKE
+    // match on title/body which may miss fragments. list() filters by exact metadata.
+    const collectionSlug = slot.collection ?? 'common';
+
+    // Don't filter by quality when quality_min is 'draft' (accept everything)
+    const qualityFilter = slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
+
+    const results = await this.fragmentService.list({
+      type: slot.type,
+      domain,
+      lang,
+      quality: qualityFilter,
+      limit: slot.count,
+      collectionSlug,
+    });
 
     const items: ResolvedFragment[] = [];
     for (const result of results) {
@@ -430,7 +439,7 @@ export class ComposerService {
           id: full.id,
           body: full.body,
           quality: full.quality,
-          score: result.score,
+          score: (result as any).score ?? 0,
           tags: full.frontmatter?.tags ?? [],
         });
       }
