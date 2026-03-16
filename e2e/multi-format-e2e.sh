@@ -422,40 +422,65 @@ const fs = require('fs');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, AlignmentType } = require('/Users/mmaudet/work/fragmint/node_modules/docx');
 
 const b = { top:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, bottom:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, left:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, right:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'} };
-const nb = { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} };
 const hs = { type: ShadingType.SOLID, color: '2B579A' };
 const ht = (t) => new TextRun({ text: t, bold: true, size: 20, color: 'FFFFFF' });
 const ct = (t, o={}) => new TextRun({ text: t, size: 22, ...o });
 
+function headerCell(text) {
+  return new TableCell({
+    borders: b, shading: hs,
+    children: [new Paragraph({ children: [ht(text)], alignment: AlignmentType.CENTER })],
+  });
+}
+function dataCell(text, opts={}) {
+  return new TableCell({
+    borders: b, shading: opts.shading,
+    children: [new Paragraph({ children: [new TextRun({ text, size: 20, bold: opts.bold || false, color: opts.color })], alignment: opts.align || AlignmentType.LEFT })],
+  });
+}
+
+const pricingTable = new Table({
+  width: { size: 100, type: WidthType.PERCENTAGE },
+  rows: [
+    new TableRow({ children: [headerCell('Service'), headerCell('Quantité'), headerCell('P.U. HT'), headerCell('Total HT')] }),
+    new TableRow({ children: [dataCell('Compute vCPU'), dataCell('100', {align:AlignmentType.CENTER}), dataCell('0,025 €/h', {align:AlignmentType.RIGHT}), dataCell('2,50 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Stockage objet S3'), dataCell('5 000 Go', {align:AlignmentType.CENTER}), dataCell('0,008 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('40,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Stockage bloc SSD'), dataCell('2 000 Go', {align:AlignmentType.CENTER}), dataCell('0,12 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('240,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Transfert réseau'), dataCell('10 000 Go', {align:AlignmentType.CENTER}), dataCell('0,05 €/Go', {align:AlignmentType.RIGHT}), dataCell('500,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Support Premium 24/7'), dataCell('12 mois', {align:AlignmentType.CENTER}), dataCell('850 €/mois', {align:AlignmentType.RIGHT}), dataCell('10 200,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: 'E8E8E8' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total HT', size: 20, bold: true })], alignment: AlignmentType.RIGHT })] }),
+      dataCell('10 982,50 €', { bold: true, align: AlignmentType.RIGHT, shading: { type: ShadingType.SOLID, color: 'E8E8E8' } }),
+    ] }),
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 3, children: [new Paragraph({ children: [new TextRun({ text: 'TVA (20%)', size: 20 })], alignment: AlignmentType.RIGHT })] }),
+      dataCell('2 196,50 €', { align: AlignmentType.RIGHT }),
+    ] }),
+    new TableRow({ children: [
+      new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total TTC', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
+      new TableCell({ borders: b, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: '13 179,00 €', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
+    ] }),
+  ],
+});
+
 const doc = new Document({
   sections: [{
     children: [
-      // Title
       new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Proposition LinCloud Souverain', bold: true, size: 48, color: '2B579A' })], spacing: { after: 200 } }),
       new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '+++INS metadata.client+++', size: 28 })], spacing: { after: 100 } }),
       new Paragraph({ alignment: AlignmentType.CENTER, children: [ct('+++INS metadata.date+++', { italics: true })], spacing: { after: 400 } }),
-
-      // Introduction
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Contexte', color: '2B579A', bold: true })] }),
       new Paragraph({ children: [ct('+++INS fragments.introduction.body+++')] , spacing: { after: 300 } }),
-
-      // Arguments — each as a separate section
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Notre solution', color: '2B579A', bold: true })], spacing: { before: 300 } }),
-      // FOR loop row (invisible)
       new Paragraph({ children: [new TextRun({ text: '+++FOR arg IN fragments.arguments+++', size: 2, color: 'FFFFFF' })] }),
       new Paragraph({ heading: HeadingLevel.HEADING_2, children: [ct('+++INS \$arg.title+++', { bold: true })] }),
       new Paragraph({ children: [ct('+++INS \$arg.body+++')] , spacing: { after: 200 } }),
       new Paragraph({ children: [new TextRun({ text: '+++END-FOR arg+++', size: 2, color: 'FFFFFF' })] }),
-
-      // Pricing
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Tarification', color: '2B579A', bold: true })], spacing: { before: 400, after: 200 } }),
-      new Paragraph({ children: [ct('+++INS fragments.pricing.body+++')] , spacing: { after: 300 } }),
-
-      // References
+      pricingTable,
+      new Paragraph({ spacing: { after: 300 } }),
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Références', color: '2B579A', bold: true })], spacing: { before: 300 } }),
       new Paragraph({ children: [ct('+++INS fragments.references.body+++')] , spacing: { after: 300 } }),
-
-      // Conclusion
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Conclusion', color: '2B579A', bold: true })], spacing: { before: 300 } }),
       new Paragraph({ children: [ct('+++INS fragments.conclusion.body+++')] }),
     ],
@@ -521,16 +546,22 @@ async function createTemplate() {
   ws.getCell('D' + dataRow).value = '\${table:lignes.prix_unitaire}';
   ws.getCell('E' + dataRow).value = '\${table:lignes.total}';
 
-  // Totals
-  ws.getCell('D10').value = 'Total HT :';
-  ws.getCell('E10').value = '\${metadata.total_ht}';
-  ws.getCell('D10').font = { bold: true };
-  ws.getCell('D11').value = 'TVA (20%) :';
-  ws.getCell('E11').value = '\${metadata.tva}';
-  ws.getCell('D12').value = 'Total TTC :';
-  ws.getCell('E12').value = '\${metadata.total_ttc}';
-  ws.getCell('D12').font = { bold: true };
-  ws.getCell('E12').font = { bold: true };
+  // Totals with Excel formulas
+  ws.getCell('D13').value = 'Total HT :';
+  ws.getCell('D13').font = { bold: true };
+  ws.getCell('E13').value = { formula: 'SUM(E8:E11)' };
+  ws.getCell('E13').font = { bold: true };
+  ws.getCell('E13').numFmt = '#,##0.00\\ \"€\"';
+
+  ws.getCell('D14').value = 'TVA (20%) :';
+  ws.getCell('E14').value = { formula: 'E13*0.2' };
+  ws.getCell('E14').numFmt = '#,##0.00\\ \"€\"';
+
+  ws.getCell('D15').value = 'Total TTC :';
+  ws.getCell('D15').font = { bold: true };
+  ws.getCell('E15').value = { formula: 'E13+E14' };
+  ws.getCell('E15').font = { bold: true };
+  ws.getCell('E15').numFmt = '#,##0.00\\ \"€\"';
 
   // Column widths
   ws.getColumn(1).width = 20;
