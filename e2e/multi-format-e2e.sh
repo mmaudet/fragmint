@@ -549,17 +549,17 @@ async function createTemplate() {
   // Totals with Excel formulas
   ws.getCell('D13').value = 'Total HT :';
   ws.getCell('D13').font = { bold: true };
-  ws.getCell('E13').value = { formula: 'SUM(E8:E11)' };
+  ws.getCell('E13').value = '\${metadata.total_ht}';
   ws.getCell('E13').font = { bold: true };
   ws.getCell('E13').numFmt = '#,##0.00\\ \"€\"';
 
   ws.getCell('D14').value = 'TVA (20%) :';
-  ws.getCell('E14').value = { formula: 'E13*0.2' };
+  ws.getCell('E14').value = '\${metadata.tva}';
   ws.getCell('E14').numFmt = '#,##0.00\\ \"€\"';
 
   ws.getCell('D15').value = 'Total TTC :';
   ws.getCell('D15').font = { bold: true };
-  ws.getCell('E15').value = { formula: 'E13+E14' };
+  ws.getCell('E15').value = '\${metadata.total_ttc}';
   ws.getCell('E15').font = { bold: true };
   ws.getCell('E15').numFmt = '#,##0.00\\ \"€\"';
 
@@ -781,7 +781,10 @@ COMPOSE_CONTEXT='{
     "date": "2026-03-16",
     "reference": "LC-2026-MINARM-001",
     "product": "lincloud",
-    "lang": "fr"
+    "lang": "fr",
+    "total_ht": "35 185,00",
+    "tva": "7 037,00",
+    "total_ttc": "42 222,00"
   },
   "structured_data": {
     "lignes": [
