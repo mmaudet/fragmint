@@ -17,7 +17,7 @@
 #   ./e2e/collections-e2e.sh [BASE_URL]
 # =============================================================================
 
-set -euo pipefail
+set -eo pipefail
 
 BASE_URL="${1:-http://localhost:3737}"
 PASS_COUNT=0
@@ -187,9 +187,7 @@ api POST /v1/collections/projet-anfsi/fragments "$JDUPONT_TOKEN" '{
   "domain": "defense",
   "lang": "fr",
   "body": "La souverainete numerique est un enjeu strategique majeur pour la France. ANFSI permettra de centraliser les competences.",
-  "tags": ["anfsi", "souverainete"],
-  "access": {"read": "collection", "write": "collection"},
-  "origin": "manual"
+  "tags": ["anfsi", "souverainete"]
 }'
 if [[ "$HTTP_CODE" == "201" ]]; then
   ANFSI_FRAG_ID=$(json_val "d['data']['id']")
@@ -263,9 +261,7 @@ api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "domain": "open-source",
   "lang": "fr",
   "body": "Les logiciels libres garantissent la transparence, la securite et la perennite des systemes informatiques de etat.",
-  "tags": ["open-source", "transparence"],
-  "access": {"read": "public", "write": "team"},
-  "origin": "manual"
+  "tags": ["open-source", "transparence"]
 }'
 if [[ "$HTTP_CODE" == "201" ]]; then
   COMMON_FRAG_ID=$(json_val "d['data']['id']")
