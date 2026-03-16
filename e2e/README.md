@@ -45,3 +45,51 @@ End-to-end test for the collections workflow. Validates multi-tenant fragment is
 
 - `0` — all tests passed
 - `1` — one or more tests failed
+
+---
+
+## multi-format-e2e.sh
+
+End-to-end test for multi-format document generation. Creates a complete "LinCloud Souverain" sovereign cloud proposal and renders it in all supported formats: DOCX, XLSX, Marp slides (HTML), and reveal.js (HTML).
+
+### Prerequisites
+
+- Fragmint server running on port 3210 (or custom URL)
+- Default admin user `mmaudet` / `fragmint-dev`
+- `curl`, `python3`, and `node` available in PATH
+- npm packages `docx` and `exceljs` installed (workspace root)
+
+### Usage
+
+```bash
+# Against default local server (http://localhost:3210)
+./e2e/multi-format-e2e.sh
+
+# Against a custom URL
+./e2e/multi-format-e2e.sh http://localhost:4000
+```
+
+### Test Scenario
+
+| Phase | Description |
+|-------|-------------|
+| 1. Login | Authenticate as admin |
+| 2. Create fragments | Create 10 fragments for a fictional "LinCloud Souverain" cloud platform (introduction, 6 arguments, pricing, references, conclusion) |
+| 3. Create templates | Generate template files locally: Marp (.md), reveal.js (.html), DOCX (.docx via `docx` npm), XLSX (.xlsx via `exceljs`) |
+| 4. Upload templates | Upload all 4 templates via multipart POST to `/v1/templates` |
+| 5. Compose | POST `/v1/templates/:id/compose` for each format, download output files |
+| 6. Verify | Check output files exist, are non-empty, and contain expected content (for HTML formats) |
+| 7. Cleanup | Delete templates via API |
+
+### Output Files
+
+Generated files are saved to `/tmp/fragmint-multi-format/` for manual inspection:
+- `lincloud-presentation-marp.html` — Marp slide deck
+- `lincloud-presentation-reveal.html` — reveal.js presentation
+- `lincloud-proposition.docx` — Word proposal document
+- `lincloud-devis.xlsx` — Excel pricing spreadsheet
+
+### Exit Code
+
+- `0` — all tests passed
+- `1` — one or more tests failed
