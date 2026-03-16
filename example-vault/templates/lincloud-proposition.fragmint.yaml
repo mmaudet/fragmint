@@ -1,0 +1,68 @@
+id: tpl-lincloud-proposition-001
+name: Proposition LinCloud Souverain
+description: "Proposition commerciale complète avec tableau de tarification"
+output_format: docx
+carbone_template: lincloud-proposition.docx
+version: "1.0"
+
+fragments:
+  - key: introduction
+    type: introduction
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: true
+    fallback: error
+    count: 1
+
+  - key: arguments
+    type: argument
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: false
+    fallback: skip
+    count: 10
+
+  - key: pricing
+    type: pricing
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: false
+    fallback: skip
+    count: 1
+
+  - key: references
+    type: argument
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: false
+    fallback: skip
+    count: 1
+
+  - key: conclusion
+    type: conclusion
+    domain: "{{context.product}}"
+    lang: "{{context.lang}}"
+    quality_min: draft
+    required: false
+    fallback: skip
+    count: 1
+
+context_schema:
+  lang:
+    type: string
+    enum: [fr, en]
+    required: true
+  product:
+    type: string
+    required: true
+  client:
+    type: string
+    required: true
+  date:
+    type: date
+    default: today
+ 
