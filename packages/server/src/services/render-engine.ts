@@ -7,7 +7,7 @@
  *   - xlsx: xlsx-template  (MIT)
  *   - slides: @marp-team/marp-core (MIT) — not yet implemented
  *   - pptx: docxtemplater  (MIT/GPLv3 free core) — not yet implemented
- *   - reveal: reveal.js (MIT) — not yet implemented
+ *   - reveal: reveal.js (MIT)
  */
 import { readFileSync } from 'node:fs';
 import { createReport } from 'docx-templates';
@@ -38,7 +38,7 @@ export async function renderDocument(
     case 'pptx':
       throw new Error('PPTX rendering not yet implemented.');
     case 'reveal':
-      throw new Error('Reveal.js rendering not yet implemented.');
+      return (await import('./render-reveal.js')).renderReveal(templatePath, data);
     default:
       throw new Error(`Unsupported format: ${format}`);
   }
