@@ -316,12 +316,14 @@ cat > "$TEMPLATES_DIR/lincloud-slides.md" << 'MARP_EOF'
 marp: true
 theme: default
 paginate: true
-header: "LINAGORA — LinCloud Souverain"
-footer: "Confidentiel"
+style: |
+  section { font-size: 24px; }
+  h1 { color: #2B579A; }
+  h2 { color: #2B579A; }
 ---
 
-# Proposition LinCloud Souverain
-## +++INS metadata.client+++
+# LinCloud Souverain
+## Proposition pour +++INS metadata.client+++
 +++INS metadata.date+++
 
 ---
@@ -333,6 +335,7 @@ footer: "Confidentiel"
 ---
 
 +++FOR arg IN fragments.arguments+++
+
 ## +++INS $arg.title+++
 
 +++INS $arg.body+++
@@ -360,9 +363,8 @@ footer: "Confidentiel"
 ---
 
 # Merci
-
-**LINAGORA** — Éditeur de logiciels libres
-contact@linagora.com | www.linagora.com
+## +++INS metadata.client+++
+**LINAGORA** — LinCloud Souverain
 MARP_EOF
 
 pass "Create Marp slides template"
@@ -416,77 +418,46 @@ pass "Create reveal.js template"
 
 echo "Creating DOCX template with Node.js..."
 cd /Users/mmaudet/work/fragmint/packages/server && node -e "
-const { createReport } = require('./node_modules/docx-templates');
 const fs = require('fs');
-const path = require('path');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, AlignmentType } = require('/Users/mmaudet/work/fragmint/node_modules/docx');
 
-// We need to create a valid .docx that contains +++INS+++ placeholders.
-// docx-templates can create from a template buffer, but we need to first
-// create a base .docx. We'll use the 'docx' package instead.
-const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = require('/Users/mmaudet/work/fragmint/node_modules/docx');
+const b = { top:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, bottom:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, left:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'}, right:{style:BorderStyle.SINGLE,size:1,color:'CCCCCC'} };
+const nb = { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} };
+const hs = { type: ShadingType.SOLID, color: '2B579A' };
+const ht = (t) => new TextRun({ text: t, bold: true, size: 20, color: 'FFFFFF' });
+const ct = (t, o={}) => new TextRun({ text: t, size: 22, ...o });
 
 const doc = new Document({
   sections: [{
-    properties: {},
     children: [
-      new Paragraph({
-        heading: HeadingLevel.TITLE,
-        children: [new TextRun({ text: 'Proposition LinCloud Souverain', bold: true, size: 48 })],
-      }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('+++INS metadata.client+++')],
-      }),
-      new Paragraph({
-        children: [new TextRun('Date : +++INS metadata.date+++')],
-      }),
-      new Paragraph({ children: [] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('Contexte')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++INS fragments.introduction.body+++')],
-      }),
-      new Paragraph({ children: [] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('Arguments clés')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++FOR arg IN fragments.arguments+++')],
-      }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun('+++INS \$arg.body+++')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++END-FOR arg+++')],
-      }),
-      new Paragraph({ children: [] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('Tarification')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++INS fragments.pricing.body+++')],
-      }),
-      new Paragraph({ children: [] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('Références')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++INS fragments.references.body+++')],
-      }),
-      new Paragraph({ children: [] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun('Conclusion')],
-      }),
-      new Paragraph({
-        children: [new TextRun('+++INS fragments.conclusion.body+++')],
-      }),
+      // Title
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Proposition LinCloud Souverain', bold: true, size: 48, color: '2B579A' })], spacing: { after: 200 } }),
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '+++INS metadata.client+++', size: 28 })], spacing: { after: 100 } }),
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [ct('+++INS metadata.date+++', { italics: true })], spacing: { after: 400 } }),
+
+      // Introduction
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Contexte', color: '2B579A', bold: true })] }),
+      new Paragraph({ children: [ct('+++INS fragments.introduction.body+++')] , spacing: { after: 300 } }),
+
+      // Arguments — each as a separate section
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Notre solution', color: '2B579A', bold: true })], spacing: { before: 300 } }),
+      // FOR loop row (invisible)
+      new Paragraph({ children: [new TextRun({ text: '+++FOR arg IN fragments.arguments+++', size: 2, color: 'FFFFFF' })] }),
+      new Paragraph({ heading: HeadingLevel.HEADING_2, children: [ct('+++INS \$arg.title+++', { bold: true })] }),
+      new Paragraph({ children: [ct('+++INS \$arg.body+++')] , spacing: { after: 200 } }),
+      new Paragraph({ children: [new TextRun({ text: '+++END-FOR arg+++', size: 2, color: 'FFFFFF' })] }),
+
+      // Pricing
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Tarification', color: '2B579A', bold: true })], spacing: { before: 400, after: 200 } }),
+      new Paragraph({ children: [ct('+++INS fragments.pricing.body+++')] , spacing: { after: 300 } }),
+
+      // References
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Références', color: '2B579A', bold: true })], spacing: { before: 300 } }),
+      new Paragraph({ children: [ct('+++INS fragments.references.body+++')] , spacing: { after: 300 } }),
+
+      // Conclusion
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Conclusion', color: '2B579A', bold: true })], spacing: { before: 300 } }),
+      new Paragraph({ children: [ct('+++INS fragments.conclusion.body+++')] }),
     ],
   }],
 });
