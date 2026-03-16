@@ -481,22 +481,22 @@ const pricingTable = new Table({
   width: { size: 100, type: WidthType.PERCENTAGE },
   rows: [
     new TableRow({ children: [headerCell('Service'), headerCell('Quantité'), headerCell('P.U. HT'), headerCell('Total HT')] }),
-    new TableRow({ children: [dataCell('Compute vCPU'), dataCell('100', {align:AlignmentType.CENTER}), dataCell('0,025 €/h', {align:AlignmentType.RIGHT}), dataCell('2,50 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Stockage objet S3'), dataCell('5 000 Go', {align:AlignmentType.CENTER}), dataCell('0,008 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('40,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Stockage bloc SSD'), dataCell('2 000 Go', {align:AlignmentType.CENTER}), dataCell('0,12 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('240,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Compute vCPU'), dataCell('100', {align:AlignmentType.CENTER}), dataCell('18,25 €/mois', {align:AlignmentType.RIGHT}), dataCell('1 825,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Stockage objet S3'), dataCell('5 000', {align:AlignmentType.CENTER}), dataCell('0,008 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('40,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Stockage bloc SSD'), dataCell('2 000', {align:AlignmentType.CENTER}), dataCell('0,12 €/Go/mois', {align:AlignmentType.RIGHT}), dataCell('240,00 €', {align:AlignmentType.RIGHT})] }),
     new TableRow({ children: [dataCell('Transfert réseau'), dataCell('10 000 Go', {align:AlignmentType.CENTER}), dataCell('0,05 €/Go', {align:AlignmentType.RIGHT}), dataCell('500,00 €', {align:AlignmentType.RIGHT})] }),
-    new TableRow({ children: [dataCell('Support Premium 24/7'), dataCell('12 mois', {align:AlignmentType.CENTER}), dataCell('850 €/mois', {align:AlignmentType.RIGHT}), dataCell('10 200,00 €', {align:AlignmentType.RIGHT})] }),
+    new TableRow({ children: [dataCell('Support Premium 24/7'), dataCell('12', {align:AlignmentType.CENTER}), dataCell('850,00 €/mois', {align:AlignmentType.RIGHT}), dataCell('10 200,00 €', {align:AlignmentType.RIGHT})] }),
     new TableRow({ children: [
       new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: 'E8E8E8' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total HT', size: 20, bold: true })], alignment: AlignmentType.RIGHT })] }),
-      dataCell('10 982,50 €', { bold: true, align: AlignmentType.RIGHT, shading: { type: ShadingType.SOLID, color: 'E8E8E8' } }),
+      dataCell('12 305,00 €', { bold: true, align: AlignmentType.RIGHT, shading: { type: ShadingType.SOLID, color: 'E8E8E8' } }),
     ] }),
     new TableRow({ children: [
       new TableCell({ borders: b, columnSpan: 3, children: [new Paragraph({ children: [new TextRun({ text: 'TVA (20%)', size: 20 })], alignment: AlignmentType.RIGHT })] }),
-      dataCell('2 196,50 €', { align: AlignmentType.RIGHT }),
+      dataCell('2 461,00 €', { align: AlignmentType.RIGHT }),
     ] }),
     new TableRow({ children: [
       new TableCell({ borders: b, columnSpan: 3, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: 'Total TTC', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
-      new TableCell({ borders: b, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: '13 179,00 €', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
+      new TableCell({ borders: b, shading: { type: ShadingType.SOLID, color: '2B579A' }, children: [new Paragraph({ children: [new TextRun({ text: '14 766,00 €', size: 20, bold: true, color: 'FFFFFF' })], alignment: AlignmentType.RIGHT })] }),
     ] }),
   ],
 });
