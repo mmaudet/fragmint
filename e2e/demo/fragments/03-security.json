@@ -1,0 +1,8 @@
+{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Sécurité et conformité — Chiffrement de bout en bout (AES-256), gestion des clés par HSM souverain, journalisation exhaustive des accès, conformité RGPD, HDS (Hébergement de Données de Santé) et qualification SecNumCloud. Audit de sécurité annuel par un organisme indépendant.",
+  "tags": ["lincloud", "securite", "secnumcloud"],
+  "quality": "approved"
+}

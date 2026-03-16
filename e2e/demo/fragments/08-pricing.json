@@ -1,0 +1,8 @@
+{
+  "type": "pricing",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.\n\n| Service | Prix unitaire |\n|---------|---------------|\n| Compute (vCPU) | 0,025 €/heure |\n| Stockage objet S3 | 0,008 €/Go/mois |\n| Stockage bloc SSD | 0,12 €/Go/mois |\n| Transfert réseau sortant | 0,05 €/Go |\n| Support Premium 24/7 | 850 €/mois |\n\nRemise volume dès 10 000 €/mois.",
+  "tags": ["lincloud", "tarification", "pricing"],
+  "quality": "approved"
+}

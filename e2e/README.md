@@ -93,3 +93,21 @@ Generated files are saved to `/tmp/fragmint-multi-format/` for manual inspection
 
 - `0` — all tests passed
 - `1` — one or more tests failed
+
+---
+
+## Demo LinCloud Souverain
+
+Un scenario complet de demonstration est disponible dans `demo/`. Il cree 10 fragments, 4 templates, et genere des documents dans tous les formats supportes.
+
+```bash
+bash e2e/demo/run-demo.sh
+```
+
+Le script accepte une URL de serveur en argument et l'option `--keep` pour conserver les donnees apres execution :
+
+```bash
+bash e2e/demo/run-demo.sh http://localhost:3210 --keep
+```
+
+Voir `demo/README.md` pour les details.

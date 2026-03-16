@@ -1,0 +1,34 @@
+id: tpl-lincloud-xlsx
+name: "LinCloud Souverain — Devis XLSX"
+output_format: xlsx
+carbone_template: lincloud-devis.xlsx
+version: "1.0"
+context_schema:
+  client:
+    type: string
+    required: true
+  date:
+    type: date
+    default: today
+  reference:
+    type: string
+    default: "LC-2026-001"
+fragments:
+  - key: introduction
+    type: introduction
+    domain: cloud
+    lang: fr
+    count: 1
+    fallback: skip
+  - key: pricing
+    type: pricing
+    domain: cloud
+    lang: fr
+    count: 1
+    fallback: skip
+  - key: conclusion
+    type: conclusion
+    domain: cloud
+    lang: fr
+    count: 1
+    fallback: skip

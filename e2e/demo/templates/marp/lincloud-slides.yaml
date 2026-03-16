@@ -1,0 +1,42 @@
+id: tpl-lincloud-slides
+name: "LinCloud Souverain — Présentation Marp"
+output_format: slides
+carbone_template: lincloud-slides.md
+version: "1.0"
+context_schema:
+  client:
+    type: string
+    required: true
+  date:
+    type: date
+    default: today
+  reference:
+    type: string
+    default: "LC-2026-001"
+fragments:
+  - key: introduction
+    type: introduction
+    domain: cloud
+    lang: fr
+    count: 1
+  - key: arguments
+    type: argument
+    domain: cloud
+    lang: fr
+    count: 6
+  - key: pricing
+    type: pricing
+    domain: cloud
+    lang: fr
+    count: 1
+  - key: references
+    type: argument
+    domain: cloud
+    lang: fr
+    count: 1
+    fallback: skip
+  - key: conclusion
+    type: conclusion
+    domain: cloud
+    lang: fr
+    count: 1

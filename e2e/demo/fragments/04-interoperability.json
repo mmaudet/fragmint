@@ -1,0 +1,8 @@
+{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Interopérabilité — APIs S3, OpenStack et Kubernetes natives. Migration transparente depuis AWS, Azure ou GCP via des outils de portabilité intégrés. Support des standards TOSCA et OASIS pour l'orchestration multi-cloud.",
+  "tags": ["lincloud", "interoperabilite", "openstack"],
+  "quality": "approved"
+}

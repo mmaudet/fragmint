@@ -1,0 +1,8 @@
+{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Haute disponibilité — Architecture multi-zones avec réplication synchrone, SLA de 99,99% garanti contractuellement. Plan de reprise d'activité (PRA) automatisé avec un RPO de 15 minutes et un RTO de 1 heure.",
+  "tags": ["lincloud", "disponibilite", "sla"],
+  "quality": "approved"
+}

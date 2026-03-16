@@ -1,0 +1,8 @@
+{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Architecture technique — LinCloud repose sur une architecture microservices conteneurisée (Kubernetes) déployée sur des datacenters certifiés SecNumCloud. Le stockage objet S3-compatible, le compute élastique et le réseau SDN sont entièrement gérés par des composants open source audités.",
+  "tags": ["lincloud", "architecture", "kubernetes"],
+  "quality": "approved"
+}

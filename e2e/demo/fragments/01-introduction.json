@@ -1,0 +1,8 @@
+{
+  "type": "introduction",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "LinCloud Souverain est une plateforme cloud souveraine développée par LINAGORA. Elle garantit la maîtrise complète des données hébergées sur le territoire français, conforme au RGPD et au référentiel SecNumCloud de l'ANSSI. Conçue pour les administrations et les OIV, LinCloud offre une alternative crédible aux hyperscalers américains.",
+  "tags": ["lincloud", "introduction", "souverainete"],
+  "quality": "approved"
+}

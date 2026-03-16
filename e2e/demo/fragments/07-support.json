@@ -1,0 +1,8 @@
+{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Support et accompagnement — Équipe d'ingénieurs basée en France, support 24/7 avec SLA garanti 4h pour les incidents critiques. Programme d'accompagnement à la migration incluant audit de l'existant, plan de migration et formation des équipes.",
+  "tags": ["lincloud", "support", "migration"],
+  "quality": "approved"
+}

@@ -1,0 +1,71 @@
+<section>
+  <h1>Proposition LinCloud Souverain</h1>
+  <h2>+++INS metadata.client+++</h2>
+  <p>+++INS metadata.date+++</p>
+</section>
+
+<section>
+  <h2>Contexte</h2>
+  +++HTML fragments.introduction.body+++
+</section>
+
++++FOR arg IN fragments.arguments+++
+<section>
+  <h2>+++INS $arg.title+++</h2>
+  +++HTML $arg.body+++
+</section>
++++END-FOR arg+++
+
+<section>
+  <h2>Tarification</h2>
+  <table style="font-size:0.7em;width:100%;border-collapse:collapse;">
+    <thead><tr style="background:#2B579A;color:white;">
+      <th style="padding:8px;text-align:left;">Service</th>
+      <th style="padding:8px;text-align:left;">Description</th>
+      <th style="padding:8px;text-align:right;">Qté</th>
+      <th style="padding:8px;text-align:right;">P.U.</th>
+      <th style="padding:8px;text-align:right;">Total</th>
+    </tr></thead>
+    <tbody>
+    +++FOR l IN lignes+++
+    <tr style="border-bottom:1px solid #ddd;">
+      <td style="padding:6px;">+++INS $l.service+++</td>
+      <td style="padding:6px;">+++INS $l.description+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.quantite+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.prix_unitaire+++</td>
+      <td style="padding:6px;text-align:right;">+++INS $l.total+++</td>
+    </tr>
+    +++END-FOR l+++
+    </tbody>
+    <tfoot>
+      <tr style="background:#f0f0f0;font-weight:bold;">
+        <td colspan="4" style="padding:8px;text-align:right;">Total HT</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.total_ht+++ €</td>
+      </tr>
+      <tr>
+        <td colspan="4" style="padding:8px;text-align:right;">TVA (20%)</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.tva+++ €</td>
+      </tr>
+      <tr style="background:#2B579A;color:white;font-weight:bold;">
+        <td colspan="4" style="padding:8px;text-align:right;">Total TTC</td>
+        <td style="padding:8px;text-align:right;">+++INS metadata.total_ttc+++ €</td>
+      </tr>
+    </tfoot>
+  </table>
+</section>
+
+<section>
+  <h2>Références</h2>
+  +++HTML fragments.references.body+++
+</section>
+
+<section>
+  <h2>Conclusion</h2>
+  +++HTML fragments.conclusion.body+++
+</section>
+
+<section>
+  <h1>Merci</h1>
+  <p><strong>LINAGORA</strong> — Éditeur de logiciels libres</p>
+  <p>contact@linagora.com | www.linagora.com</p>
+</section>
