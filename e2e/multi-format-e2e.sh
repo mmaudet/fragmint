@@ -737,8 +737,8 @@ upload_template \
   "tpl-lincloud-slides" \
   "LinCloud Souverain — Présentation Marp" \
   "slides" \
-  "$TEMPLATES_DIR/lincloud-slides.docx" \
-  "lincloud-slides.docx" \
+  "$TEMPLATES_DIR/lincloud-slides.md" \
+  "lincloud-slides.md" \
   "$SLIDES_FRAGMENTS" \
   "Marp slides"
 
@@ -747,8 +747,8 @@ upload_template \
   "tpl-lincloud-reveal" \
   "LinCloud Souverain — Présentation reveal.js" \
   "reveal" \
-  "$TEMPLATES_DIR/lincloud-reveal.docx" \
-  "lincloud-reveal.docx" \
+  "$TEMPLATES_DIR/lincloud-reveal.html" \
+  "lincloud-reveal.html" \
   "$SLIDES_FRAGMENTS" \
   "reveal.js"
 
@@ -816,8 +816,8 @@ upload_template \
   "tpl-lincloud-xlsx" \
   "LinCloud Souverain — Devis XLSX" \
   "xlsx" \
-  "$TEMPLATES_DIR/lincloud-devis.docx" \
-  "lincloud-devis.docx" \
+  "$TEMPLATES_DIR/lincloud-devis.xlsx" \
+  "lincloud-devis.xlsx" \
   "$XLSX_FRAGMENTS" \
   "XLSX"
 
