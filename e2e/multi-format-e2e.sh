@@ -257,17 +257,7 @@ api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "pricing",
   "domain": "lincloud",
   "lang": "fr",
-  "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.
-
-| Service | Prix unitaire |
-|---------|---------------|
-| Compute (vCPU) | 0,025 €/heure |
-| Stockage objet S3 | 0,008 €/Go/mois |
-| Stockage bloc SSD | 0,12 €/Go/mois |
-| Transfert réseau sortant | 0,05 €/Go |
-| Support Premium 24/7 | 850 €/mois |
-
-Remise volume dès 10 000 €/mois.",
+  "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.\n\n| Service | Prix unitaire |\n|---------|---------------|\n| Compute (vCPU) | 0,025 €/heure |\n| Stockage objet S3 | 0,008 €/Go/mois |\n| Stockage bloc SSD | 0,12 €/Go/mois |\n| Transfert réseau sortant | 0,05 €/Go |\n| Support Premium 24/7 | 850 €/mois |\n\nRemise volume dès 10 000 €/mois.",
   "tags": ["lincloud", "tarification", "pricing"],
   "quality": "approved"
 }'
@@ -390,29 +380,29 @@ cat > "$TEMPLATES_DIR/lincloud-reveal.html" << 'REVEAL_EOF'
 
 <section>
   <h2>Contexte</h2>
-  <p>+++INS fragments.introduction.body+++</p>
+  +++HTML fragments.introduction.body+++
 </section>
 
 +++FOR arg IN fragments.arguments+++
 <section>
   <h2>+++INS $arg.title+++</h2>
-  <p>+++INS $arg.body+++</p>
+  +++HTML $arg.body+++
 </section>
 +++END-FOR arg+++
 
 <section>
   <h2>Tarification</h2>
-  <p>+++INS fragments.pricing.body+++</p>
+  +++HTML fragments.pricing.body+++
 </section>
 
 <section>
   <h2>Références</h2>
-  <p>+++INS fragments.references.body+++</p>
+  +++HTML fragments.references.body+++
 </section>
 
 <section>
   <h2>Conclusion</h2>
-  <p>+++INS fragments.conclusion.body+++</p>
+  +++HTML fragments.conclusion.body+++
 </section>
 
 <section>
