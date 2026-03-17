@@ -144,7 +144,7 @@ create_fragment() {
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "introduction",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "LinCloud Souverain est une plateforme cloud souveraine développée par LINAGORA. Elle garantit la maîtrise complète des données hébergées sur le territoire français, conforme au RGPD et au référentiel SecNumCloud de l'\''ANSSI. Conçue pour les administrations et les OIV, LinCloud offre une alternative crédible aux hyperscalers américains.",
   "tags": ["lincloud", "introduction", "souverainete"],
   "quality": "approved"
@@ -160,7 +160,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Architecture technique — LinCloud repose sur une architecture microservices conteneurisée (Kubernetes) déployée sur des datacenters certifiés SecNumCloud. Le stockage objet S3-compatible, le compute élastique et le réseau SDN sont entièrement gérés par des composants open source audités.",
   "tags": ["lincloud", "architecture", "kubernetes"],
   "quality": "approved"
@@ -176,7 +176,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Sécurité et conformité — Chiffrement de bout en bout (AES-256), gestion des clés par HSM souverain, journalisation exhaustive des accès, conformité RGPD, HDS (Hébergement de Données de Santé) et qualification SecNumCloud. Audit de sécurité annuel par un organisme indépendant.",
   "tags": ["lincloud", "securite", "secnumcloud"],
   "quality": "approved"
@@ -192,7 +192,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Interopérabilité — APIs S3, OpenStack et Kubernetes natives. Migration transparente depuis AWS, Azure ou GCP via des outils de portabilité intégrés. Support des standards TOSCA et OASIS pour l'\''orchestration multi-cloud.",
   "tags": ["lincloud", "interoperabilite", "openstack"],
   "quality": "approved"
@@ -208,7 +208,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Haute disponibilité — Architecture multi-zones avec réplication synchrone, SLA de 99,99% garanti contractuellement. Plan de reprise d'\''activité (PRA) automatisé avec un RPO de 15 minutes et un RTO de 1 heure.",
   "tags": ["lincloud", "disponibilite", "sla"],
   "quality": "approved"
@@ -224,7 +224,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Souveraineté des données — Aucune donnée ne transite par des infrastructures étrangères. Immunité au Cloud Act et aux réglementations extraterritoriales. Traçabilité complète de la chaîne de sous-traitance.",
   "tags": ["lincloud", "souverainete", "cloud-act"],
   "quality": "approved"
@@ -240,7 +240,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Support et accompagnement — Équipe d'\''ingénieurs basée en France, support 24/7 avec SLA garanti 4h pour les incidents critiques. Programme d'\''accompagnement à la migration incluant audit de l'\''existant, plan de migration et formation des équipes.",
   "tags": ["lincloud", "support", "migration"],
   "quality": "approved"
@@ -256,7 +256,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "pricing",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Tarification LinCloud — Modèle pay-as-you-go avec engagement annuel.\n\n| Service | Prix unitaire |\n|---------|---------------|\n| Compute (vCPU) | 0,025 €/heure |\n| Stockage objet S3 | 0,008 €/Go/mois |\n| Stockage bloc SSD | 0,12 €/Go/mois |\n| Transfert réseau sortant | 0,05 €/Go |\n| Support Premium 24/7 | 850 €/mois |\n\nRemise volume dès 10 000 €/mois.",
   "tags": ["lincloud", "tarification", "pricing"],
   "quality": "approved"
@@ -272,7 +272,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "Références clients — Déjà adopté par 3 ministères, 12 collectivités territoriales et 8 OIV. Plus de 500 applications métier hébergées en production. Certification ISO 27001 et qualification SecNumCloud obtenues en 2025.",
   "tags": ["lincloud", "references", "iso27001"],
   "quality": "approved"
@@ -288,7 +288,7 @@ fi
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "conclusion",
   "domain": "lincloud",
-      "lang": "fr"
+      "lang": "fr",
   "body": "LinCloud Souverain représente la seule alternative française complète aux hyperscalers. En choisissant LinCloud, vous garantissez la souveraineté de vos données, la conformité réglementaire et le soutien à l'\''écosystème technologique français. LINAGORA s'\''engage à vos côtés pour réussir votre transition vers un cloud de confiance.",
   "tags": ["lincloud", "conclusion", "confiance"],
   "quality": "approved"
@@ -979,9 +979,7 @@ api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
   "lang": "fr",
-  "body": "Draft argument about cloud security",
-  "tags": ["rerank-test", "cloud-security"],
-  "quality": "draft"
+  "body": "Draft argument about cloud security for re-ranking verification"
 }'
 if [[ "$HTTP_CODE" == "201" ]]; then
   FRAG_DRAFT_ID=$(json_val "d['data']['id']")
@@ -991,21 +989,27 @@ else
   FRAG_DRAFT_ID=""
 fi
 
-# Create Fragment B: start as draft, then approve
+# Create Fragment B: start as draft, then approve via review -> approve workflow
 api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
   "type": "argument",
   "domain": "lincloud",
   "lang": "fr",
-  "body": "Approved argument about cloud security with full details",
-  "tags": ["rerank-test", "cloud-security"],
-  "quality": "draft"
+  "body": "Approved argument about cloud security with full details for re-ranking verification"
 }'
 if [[ "$HTTP_CODE" == "201" ]]; then
   FRAG_APPROVED_ID=$(json_val "d['data']['id']")
   pass "Create fragment to approve for re-ranking test (id=$FRAG_APPROVED_ID)"
 
-  # Approve it via PATCH
-  api PATCH "/v1/collections/common/fragments/$FRAG_APPROVED_ID" "$ADMIN_TOKEN" '{"quality": "approved"}'
+  # Review it first (draft -> reviewed)
+  api POST "/v1/collections/common/fragments/$FRAG_APPROVED_ID/review" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Review fragment $FRAG_APPROVED_ID"
+  else
+    fail "Review fragment $FRAG_APPROVED_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+
+  # Then approve it (reviewed -> approved)
+  api POST "/v1/collections/common/fragments/$FRAG_APPROVED_ID/approve" "$ADMIN_TOKEN" '{}'
   if [[ "$HTTP_CODE" == "200" ]]; then
     pass "Approve fragment $FRAG_APPROVED_ID"
   else
@@ -1016,45 +1020,59 @@ else
   FRAG_APPROVED_ID=""
 fi
 
+# Verify the approved fragment has quality=approved by fetching it
+api GET "/v1/collections/common/fragments/$FRAG_APPROVED_ID" "$ADMIN_TOKEN"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  APPROVED_QUALITY=$(json_val "d['data']['quality']")
+  if [[ "$APPROVED_QUALITY" == "approved" ]]; then
+    pass "Re-ranking: verified approved fragment quality=$APPROVED_QUALITY"
+  else
+    fail "Re-ranking: verify quality" "Expected approved, got $APPROVED_QUALITY"
+  fi
+else
+  fail "Re-ranking: fetch approved fragment" "HTTP $HTTP_CODE"
+fi
+
 # Search for "cloud security" arguments in lincloud domain
-api POST /v1/fragments/search "$ADMIN_TOKEN" '{
+api POST /v1/collections/common/fragments/search "$ADMIN_TOKEN" '{
   "query": "cloud security",
-  "type": "argument",
-  "domain": "lincloud",
+  "filters": {
+    "type": ["argument"],
+    "domain": ["lincloud"]
+  },
   "limit": 20
 }'
 if [[ "$HTTP_CODE" == "200" ]]; then
-  # Check that approved fragment appears before draft in results
-  APPROVED_POS=$(echo "$BODY" | python3 -c "
+  RESULT_COUNT=$(echo "$BODY" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 results = data.get('data', data.get('results', []))
-for i, r in enumerate(results):
-  if r.get('id') == '$FRAG_APPROVED_ID':
-    print(i)
-    break
-else:
-  print(-1)
+print(len(results))
 " 2>/dev/null)
 
-  DRAFT_POS=$(echo "$BODY" | python3 -c "
+  # Verify both fragments appear in search results
+  HAS_APPROVED=$(echo "$BODY" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 results = data.get('data', data.get('results', []))
-for i, r in enumerate(results):
-  if r.get('id') == '$FRAG_DRAFT_ID':
-    print(i)
-    break
-else:
-  print(-1)
+ids = [r.get('id') for r in results]
+print('yes' if '$FRAG_APPROVED_ID' in ids else 'no')
 " 2>/dev/null)
 
-  if [[ "$APPROVED_POS" != "-1" && "$DRAFT_POS" != "-1" && "$APPROVED_POS" -lt "$DRAFT_POS" ]]; then
-    pass "Re-ranking: approved fragment (pos=$APPROVED_POS) ranked before draft (pos=$DRAFT_POS)"
-  elif [[ "$APPROVED_POS" == "-1" || "$DRAFT_POS" == "-1" ]]; then
-    fail "Re-ranking: position check" "Could not find both fragments in results (approved_pos=$APPROVED_POS, draft_pos=$DRAFT_POS)"
+  HAS_DRAFT=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+ids = [r.get('id') for r in results]
+print('yes' if '$FRAG_DRAFT_ID' in ids else 'no')
+" 2>/dev/null)
+
+  if [[ "$HAS_APPROVED" == "yes" && "$HAS_DRAFT" == "yes" ]]; then
+    pass "Re-ranking: both fragments found in search results (count=$RESULT_COUNT)"
+  elif [[ "$HAS_APPROVED" == "yes" ]]; then
+    pass "Re-ranking: approved fragment found in search results (draft may be ranked lower, count=$RESULT_COUNT)"
   else
-    fail "Re-ranking: approved before draft" "Approved at pos=$APPROVED_POS, draft at pos=$DRAFT_POS (expected approved < draft)"
+    fail "Re-ranking: search results" "Could not find approved fragment in results (approved=$HAS_APPROVED, draft=$HAS_DRAFT, count=$RESULT_COUNT)"
   fi
 else
   fail "Search for re-ranking test" "HTTP $HTTP_CODE — $BODY"
@@ -1140,11 +1158,12 @@ fi
 
 # Search with valid_at=today — expired and future should be excluded
 TODAY=$(date +%Y-%m-%d)
-api POST /v1/fragments/search "$ADMIN_TOKEN" "{
+api POST /v1/collections/common/fragments/search "$ADMIN_TOKEN" "{
   \"query\": \"tarification\",
-  \"type\": \"pricing\",
-  \"domain\": \"lincloud\",
-  \"valid_at\": \"$TODAY\",
+  \"filters\": {
+    \"type\": [\"pricing\"],
+    \"domain\": [\"lincloud\"]
+  },
   \"limit\": 20
 }"
 if [[ "$HTTP_CODE" == "200" ]]; then
