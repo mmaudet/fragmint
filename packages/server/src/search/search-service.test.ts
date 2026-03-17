@@ -1,6 +1,6 @@
 // packages/server/src/search/search-service.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SearchService } from './search-service.js';
+import { SearchService, reRankResults, type SearchResult } from './search-service.js';
 import { createDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 
@@ -116,5 +116,74 @@ describe('SearchService', () => {
     const status = await service.status();
     expect(status.mode).toBe('sqlite');
     expect(status.milvus).toBe(false);
+  });
+});
+
+describe('reRankResults', () => {
+  function makeResult(overrides: Partial<SearchResult>): SearchResult {
+    return {
+      id: 'frag-1',
+      score: 1.0,
+      title: 'Test',
+      body_excerpt: 'body',
+      type: 'argument',
+      domain: 'test',
+      lang: 'fr',
+      quality: 'approved',
+      author: 'test',
+      uses: 0,
+      updated_at: '2025-01-01',
+      ...overrides,
+    };
+  }
+
+  it('boosts approved fragments over drafts', () => {
+    const results = [
+      makeResult({ id: 'draft', quality: 'draft', score: 1.0 }),
+      makeResult({ id: 'approved', quality: 'approved', score: 1.0 }),
+    ];
+    const ranked = reRankResults(results);
+    expect(ranked[0].id).toBe('approved');
+    expect(ranked[1].id).toBe('draft');
+    // approved keeps score * 1.0, draft gets score * 0.80
+    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+  });
+
+  it('boosts recently updated fragments', () => {
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    const results = [
+      makeResult({ id: 'old', updated_at: oneYearAgo, score: 1.0 }),
+      makeResult({ id: 'fresh', updated_at: threeDaysAgo, score: 1.0 }),
+    ];
+    const ranked = reRankResults(results);
+    expect(ranked[0].id).toBe('fresh');
+    // fresh gets +0.05, old gets no freshness boost
+    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+  });
+
+  it('boosts high-usage fragments', () => {
+    const results = [
+      makeResult({ id: 'low-use', uses: 0, score: 1.0 }),
+      makeResult({ id: 'high-use', uses: 15, score: 1.0 }),
+    ];
+    const ranked = reRankResults(results);
+    expect(ranked[0].id).toBe('high-use');
+    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+  });
+
+  it('preserves order when all fragments have same quality/age/usage', () => {
+    const now = new Date().toISOString();
+    const results = [
+      makeResult({ id: 'a', score: 0.9, quality: 'approved', uses: 0, updated_at: now }),
+      makeResult({ id: 'b', score: 0.8, quality: 'approved', uses: 0, updated_at: now }),
+      makeResult({ id: 'c', score: 0.7, quality: 'approved', uses: 0, updated_at: now }),
+    ];
+    const ranked = reRankResults(results);
+    expect(ranked[0].id).toBe('a');
+    expect(ranked[1].id).toBe('b');
+    expect(ranked[2].id).toBe('c');
   });
 });

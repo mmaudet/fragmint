@@ -37,6 +37,7 @@ export interface SearchResult {
   quality: string;
   author: string;
   uses: number;
+  updated_at: string;
 }
 
 const QUALITY_ORDER = ['draft', 'reviewed', 'approved'];
@@ -45,6 +46,41 @@ export interface EmbeddingPrefixes {
   document: string;
   query: string;
   cluster: string;
+}
+
+/**
+ * Re-rank search results based on quality, freshness, and usage momentum.
+ */
+export function reRankResults(results: SearchResult[]): SearchResult[] {
+  const now = Date.now();
+
+  return results.map(r => {
+    let adjustedScore = r.score;
+
+    // Quality boost
+    const qualityMultiplier =
+      r.quality === 'approved' ? 1.0 :
+      r.quality === 'reviewed' ? 0.95 :
+      0.80;
+    adjustedScore *= qualityMultiplier;
+
+    // Freshness boost (if updated_at available)
+    if (r.updated_at) {
+      const ageMs = now - new Date(r.updated_at).getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      if (ageDays <= 7) adjustedScore += 0.05;
+      else if (ageDays <= 30) adjustedScore += 0.03;
+      else if (ageDays <= 90) adjustedScore += 0.01;
+    }
+
+    // Usage momentum
+    if (r.uses !== undefined) {
+      if (r.uses > 10) adjustedScore += 0.02;
+      else if (r.uses > 5) adjustedScore += 0.01;
+    }
+
+    return { ...r, score: adjustedScore };
+  }).sort((a, b) => b.score - a.score);
 }
 
 /**
@@ -160,7 +196,7 @@ export class SearchService {
             .where(inArray(fragments.id, ids));
 
           const rowMap = new Map(rows.map(r => [r.id, r]));
-          return milvusResults
+          const enriched = milvusResults
             .map(mr => {
               const row = rowMap.get(mr.id);
               if (!row) return null;
@@ -175,9 +211,11 @@ export class SearchService {
                 quality: row.quality,
                 author: row.author,
                 uses: row.uses,
+                updated_at: row.updated_at,
               };
             })
             .filter((r): r is SearchResult => r !== null);
+          return reRankResults(enriched);
         }
       } catch (err) {
         console.warn('Milvus search failed, falling back to SQLite:', err);
@@ -255,9 +293,9 @@ export class SearchService {
       .orderBy(desc(fragments.uses))
       .limit(limit);
 
-    return rows.map(row => ({
+    const results = rows.map(row => ({
       id: row.id,
-      score: 0, // no score for SQLite fallback
+      score: 0, // no vector score for SQLite fallback
       title: row.title,
       body_excerpt: row.body_excerpt,
       type: row.type,
@@ -266,6 +304,8 @@ export class SearchService {
       quality: row.quality,
       author: row.author,
       uses: row.uses,
+      updated_at: row.updated_at,
     }));
+    return reRankResults(results);
   }
 }
