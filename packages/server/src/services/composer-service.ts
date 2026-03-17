@@ -446,6 +446,7 @@ export class ComposerService {
       quality: qualityFilter,
       limit: slot.count,
       collectionSlug,
+      valid_at: new Date().toISOString().slice(0, 10),
     });
 
     const items: ResolvedFragment[] = [];

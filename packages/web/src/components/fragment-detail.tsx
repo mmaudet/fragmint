@@ -93,6 +93,8 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                       [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
                       [t('common', 'uses'), String(fragment.uses)],
                       [t('common', 'file'), fragment.file_path],
+                      ...(fragment.valid_from ? [[t('common', 'validFrom'), fragment.valid_from] as const] : []),
+                      ...(fragment.valid_until ? [[t('common', 'validUntil'), fragment.valid_until] as const] : []),
                     ] as const).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
                         <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>

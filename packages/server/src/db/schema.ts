@@ -22,6 +22,8 @@ export const fragments = sqliteTable('fragments', {
   origin_source: text('origin_source'),
   origin_page: integer('origin_page'),
   harvest_confidence: real('harvest_confidence'),
+  valid_from: text('valid_from'),
+  valid_until: text('valid_until'),
 });
 
 export const auditLog = sqliteTable('audit_log', {

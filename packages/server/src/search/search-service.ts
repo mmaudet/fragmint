@@ -1,5 +1,5 @@
 // packages/server/src/search/search-service.ts
-import { eq, like, and, or, desc, inArray, ne, isNull } from 'drizzle-orm';
+import { eq, like, and, or, desc, inArray, ne, isNull, lte, gte } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 import type { EmbeddingClient } from './embedding-client.js';
@@ -24,6 +24,7 @@ export interface SearchFilters {
   quality_min?: string;
   tags?: string[];
   collectionSlug?: string;
+  valid_at?: string;
 }
 
 export interface SearchResult {
@@ -283,6 +284,15 @@ export class SearchService {
       } else {
         conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
       }
+    }
+
+    if (filters?.valid_at) {
+      conditions.push(
+        or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))
+      );
+      conditions.push(
+        or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))
+      );
     }
 
     // Always exclude deprecated

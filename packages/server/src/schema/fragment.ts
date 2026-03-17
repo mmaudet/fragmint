@@ -65,6 +65,8 @@ export const createFragmentSchema = z.object({
   translation_of: z.string().nullable().default(null),
   parent_id: z.string().nullable().default(null),
   generation: z.number().int().min(0).default(0),
+  valid_from: z.string().nullable().default(null),
+  valid_until: z.string().nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   access: z.object({
     read: z.array(z.string()),

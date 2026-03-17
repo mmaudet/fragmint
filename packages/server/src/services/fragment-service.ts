@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, or, desc, like, isNull } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull, lte, gte } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -75,8 +75,8 @@ export class FragmentService {
       approved_by: null,
       created_at: now,
       updated_at: now,
-      valid_from: null,
-      valid_until: null,
+      valid_from: input.valid_from ?? null,
+      valid_until: input.valid_until ?? null,
       parent_id: input.parent_id,
       generation: input.generation,
       uses: 0,
@@ -114,6 +114,8 @@ export class FragmentService {
       origin: input.origin,
       parent_id: input.parent_id ?? null,
       translation_of: input.translation_of ?? null,
+      valid_from: input.valid_from ?? null,
+      valid_until: input.valid_until ?? null,
     });
 
     await this.audit.log({
@@ -153,6 +155,7 @@ export class FragmentService {
     offset?: number;
     filePathPrefix?: string;
     collectionSlug?: string;
+    valid_at?: string;
   }) {
     const conditions = [];
     if (filters?.type) conditions.push(eq(fragments.type, filters.type));
@@ -168,6 +171,15 @@ export class FragmentService {
       }
     } else if (filters?.filePathPrefix) {
       conditions.push(like(fragments.file_path, `${filters.filePathPrefix}%`));
+    }
+
+    if (filters?.valid_at) {
+      conditions.push(
+        or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))
+      );
+      conditions.push(
+        or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))
+      );
     }
 
     const limit = filters?.limit ?? 50;
@@ -469,6 +481,8 @@ export class FragmentService {
           origin: frontmatter.origin ?? 'manual',
           parent_id: frontmatter.parent_id ?? null,
           translation_of: frontmatter.translation_of ?? null,
+          valid_from: frontmatter.valid_from ?? null,
+          valid_until: frontmatter.valid_until ?? null,
         }).onConflictDoUpdate({
           target: fragments.id,
           set: {
@@ -478,6 +492,8 @@ export class FragmentService {
             body_excerpt: body.slice(0, 200),
             file_path: relPath,
             collection_slug: 'common',
+            valid_from: frontmatter.valid_from ?? null,
+            valid_until: frontmatter.valid_until ?? null,
           },
         });
         indexed++;

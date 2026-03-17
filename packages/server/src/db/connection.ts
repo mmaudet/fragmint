@@ -90,6 +90,18 @@ export function createDb(path: string | ':memory:') {
     // Column already exists — ignore
   }
 
+  // Add valid_from / valid_until to fragments if not already present
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN valid_from TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN valid_until TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
   const db = drizzle(sqlite, { schema });
   return db;
 }
