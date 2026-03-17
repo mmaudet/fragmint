@@ -38,6 +38,61 @@ Thank you for reading this document.`;
     });
   });
 
+  describe('chunkMarkdown', () => {
+    it('returns single chunk for short text', () => {
+      const short = 'Hello world, this is a short document.';
+      const chunks = HarvesterService.chunkMarkdown(short);
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toBe(short);
+    });
+
+    it('splits long text into overlapping chunks', () => {
+      // Create text longer than MAX_CHUNK_CHARS (6000)
+      const sentence = 'This is a sentence that repeats. ';
+      const long = sentence.repeat(250); // ~8000 chars
+      const chunks = HarvesterService.chunkMarkdown(long);
+      expect(chunks.length).toBeGreaterThan(1);
+
+      // Verify overlap: end of first chunk should appear at start of second chunk
+      const overlapRegion = chunks[0].slice(-HarvesterService.OVERLAP_CHARS);
+      expect(chunks[1].startsWith(overlapRegion)).toBe(true);
+    });
+
+    it('breaks at paragraph boundaries when possible', () => {
+      // Build text with a paragraph break in the second half of the max range
+      const partA = 'A'.repeat(4000);
+      const partB = 'B'.repeat(1500);
+      const partC = 'C'.repeat(3000);
+      const text = partA + '\n\n' + partB + '\n\n' + partC;
+      const chunks = HarvesterService.chunkMarkdown(text);
+      // First chunk should end at a paragraph boundary (contains \n\n at end)
+      expect(chunks[0].endsWith('\n\n')).toBe(true);
+    });
+  });
+
+  describe('deduplicateBlocks', () => {
+    it('removes blocks with same body prefix', () => {
+      const blocks = [
+        { title: 'A', body: 'This is the first block with some content.', type: 'intro', lang: 'en' },
+        { title: 'B', body: 'This is the second block with different content.', type: 'arg', lang: 'en' },
+        { title: 'A dup', body: 'This is the first block with some content.', type: 'intro', lang: 'en' },
+      ];
+      const result = HarvesterService.deduplicateBlocks(blocks);
+      expect(result).toHaveLength(2);
+      expect(result[0].title).toBe('A');
+      expect(result[1].title).toBe('B');
+    });
+
+    it('keeps blocks with different body prefixes', () => {
+      const blocks = [
+        { title: 'A', body: 'Unique content here.', type: 'intro', lang: 'en' },
+        { title: 'B', body: 'Different content here.', type: 'arg', lang: 'en' },
+      ];
+      const result = HarvesterService.deduplicateBlocks(blocks);
+      expect(result).toHaveLength(2);
+    });
+  });
+
   describe('detectLanguage', () => {
     it('returns fr for French text', () => {
       const frenchText =

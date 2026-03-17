@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments, harvestJobs, harvestCandidates } from '../db/schema.js';
-import type { LlmClient } from './llm-client.js';
+import type { LlmClient, SegmentBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
 
@@ -145,8 +145,17 @@ export class HarvesterService {
         markdown = markdown.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
         const lang = HarvesterService.detectLanguage(markdown);
 
-        // Segment via LLM
-        const blocks = await this.llmClient.segment(markdown);
+        // Chunk the markdown for better LLM segmentation on long documents
+        const chunks = HarvesterService.chunkMarkdown(markdown);
+        let allBlocks: SegmentBlock[] = [];
+
+        for (const chunk of chunks) {
+          const chunkBlocks = await this.llmClient.segment(chunk);
+          allBlocks.push(...chunkBlocks);
+        }
+
+        // Deduplicate blocks with similar bodies (overlap may produce duplicates)
+        const blocks = HarvesterService.deduplicateBlocks(allBlocks);
 
         for (const block of blocks) {
           // The LLM returns the full block text in body — use it directly
@@ -407,6 +416,42 @@ export class HarvesterService {
 
     const endPos = startPos + startMatch[0].length + endMatch.index + endMatch[0].length;
     return markdown.slice(startPos, endPos).trim();
+  }
+
+  static readonly MAX_CHUNK_CHARS = 6000;  // ~1500 tokens
+  static readonly OVERLAP_CHARS = 400;     // ~100 tokens overlap
+
+  static chunkMarkdown(markdown: string): string[] {
+    if (markdown.length <= HarvesterService.MAX_CHUNK_CHARS) return [markdown];
+
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < markdown.length) {
+      let end = Math.min(start + HarvesterService.MAX_CHUNK_CHARS, markdown.length);
+      // Try to break at a paragraph boundary
+      if (end < markdown.length) {
+        const lastParagraph = markdown.lastIndexOf('\n\n', end);
+        if (lastParagraph > start + HarvesterService.MAX_CHUNK_CHARS * 0.5) {
+          end = lastParagraph + 2;
+        }
+      }
+      chunks.push(markdown.slice(start, end));
+      start = end - HarvesterService.OVERLAP_CHARS;
+      if (start < 0) start = 0;
+      if (end >= markdown.length) break;
+    }
+    return chunks;
+  }
+
+  static deduplicateBlocks(blocks: SegmentBlock[]): SegmentBlock[] {
+    const seen = new Set<string>();
+    return blocks.filter(b => {
+      // Use first 50 chars of body as dedup key
+      const key = (b.body || '').substring(0, 50).trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   static detectLanguage(text: string): 'fr' | 'en' {
