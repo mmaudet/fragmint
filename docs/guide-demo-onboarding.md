@@ -1123,7 +1123,85 @@ curl -s -o ma-proposition.docx \
 
 ---
 
-## 11. Creer sa propre demo
+## 11. Optimisations de qualite (Context Rot)
+
+Fragmint integre trois mecanismes pour lutter contre le **Context Rot** — la degradation progressive de la pertinence du contenu dans une base de fragments. Ces optimisations sont actives par defaut.
+
+### Re-ranking par qualite
+
+Les resultats de recherche sont automatiquement re-classes selon trois signaux : la qualite du fragment, sa fraicheur, et sa frequence d'utilisation.
+
+| Signal | Boost |
+|--------|-------|
+| Qualite approved | score x 1.0 |
+| Qualite reviewed | score x 0.95 |
+| Qualite draft | score x 0.80 |
+| Mis a jour < 7 jours | +0.05 |
+| Mis a jour < 30 jours | +0.03 |
+| Mis a jour < 90 jours | +0.01 |
+| Utilise > 10 fois | +0.02 |
+| Utilise > 5 fois | +0.01 |
+
+**Consequence** : lors de la composition, les fragments approuves et recents sont privilegies. Deux fragments avec le meme contenu semantique mais des qualites differentes donneront un classement different — le fragment `approved` apparaitra toujours avant le `draft`.
+
+Exemple : si un fragment `draft` et un fragment `approved` correspondent tous deux a la requete "securite cloud" avec un score brut de 0.85, les scores ajustes seront :
+- Fragment approved : `0.85 x 1.0 + 0.05` (fraicheur) = **0.90**
+- Fragment draft : `0.85 x 0.80 + 0.05` (fraicheur) = **0.73**
+
+Le re-ranking est applique automatiquement par le `SearchService` sur tous les resultats (Milvus et SQLite).
+
+### Validite temporelle (valid_from / valid_until)
+
+Les fragments peuvent avoir des **dates de validite** qui determinent leur eligibilite a la composition :
+
+```json
+{
+  "type": "pricing",
+  "domain": "twake",
+  "valid_from": "2026-01-01",
+  "valid_until": "2026-06-30",
+  "body": "Tarification Q1-Q2 2026..."
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `valid_from` | Date a partir de laquelle le fragment est valide (inclus). Si absent, valide depuis toujours. |
+| `valid_until` | Date jusqu'a laquelle le fragment est valide (inclus). Si absent, valide indefiniment. |
+
+Lorsqu'une recherche est effectuee avec le parametre `valid_at`, les fragments dont la validite ne couvre pas cette date sont **exclus des resultats**. Le composeur passe automatiquement `valid_at: today` lors de la resolution des slots.
+
+**Cas d'usage** :
+- **Tarification** : grille de prix valable un trimestre (`valid_until: "2026-06-30"`) — ne sera plus utilisee en juillet
+- **Offres promotionnelles** : contenu saisonnier avec dates de debut et fin
+- **Reglementations** : textes conformes a une version specifique d'une norme
+- **Certifications** : references valides jusqu'a expiration du certificat
+
+Un fragment expire reste dans la base (consultable via l'API de listing) mais n'est plus resolu lors de la composition.
+
+### Segmentation intelligente des longs documents
+
+Le `HarvesterService` gere les documents longs en les decoupant en **chunks chevauchants** avant de les soumettre au LLM pour segmentation :
+
+| Parametre | Valeur | Description |
+|-----------|--------|-------------|
+| Taille max par chunk | ~6000 caracteres (~1500 tokens) | Evite de depasser la fenetre de contexte du LLM |
+| Chevauchement | ~400 caracteres (~100 tokens) | Garantit la continuite entre chunks adjacents |
+| Decoupage | Aux frontieres de paragraphe | Preserve la coherence semantique des blocs |
+
+**Fonctionnement** :
+1. Si le document fait moins de 6000 caracteres, il est traite en un seul bloc (pas de chunking)
+2. Au-dela, le texte est decoupe en chunks chevauchants aux frontieres de paragraphe
+3. Chaque chunk est soumis independamment au LLM pour segmentation
+4. Les resultats sont fusionnes et dedupliques
+
+**Probleme resolu** : sans chunking, les LLM ont tendance a "oublier" le contenu situe a la fin des longs documents (au-dela de ~1500 tokens). Le chunking chevauchant garantit que chaque portion du texte recoit une attention egale du modele.
+
+La methode est implementee dans `HarvesterService.chunkMarkdown()` et couverte par des tests unitaires.
+
+---
+
+## 12. Creer sa propre demo
 
 ### Etape 1 : Definir son cas d'usage
 
@@ -1175,7 +1253,7 @@ Copiez `e2e/demo/run-demo.sh` et modifiez :
 
 ---
 
-## 12. Resume des syntaxes par format
+## 13. Resume des syntaxes par format
 
 ### Tableau recapitulatif
 

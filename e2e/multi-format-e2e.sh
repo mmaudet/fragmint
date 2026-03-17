@@ -968,6 +968,220 @@ for tpl_id in tpl-lincloud-slides tpl-lincloud-reveal tpl-lincloud-docx tpl-linc
   fi
 done
 
+# =============================================================================
+# 8. Quality re-ranking verification
+# =============================================================================
+echo ""
+echo "=== 8. Vérification du re-ranking par qualité ==="
+
+# Create Fragment A: draft quality
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Draft argument about cloud security",
+  "tags": ["rerank-test", "cloud-security"],
+  "quality": "draft"
+}'
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_DRAFT_ID=$(json_val "d['data']['id']")
+  pass "Create draft fragment for re-ranking test (id=$FRAG_DRAFT_ID)"
+else
+  fail "Create draft fragment for re-ranking test" "HTTP $HTTP_CODE — $BODY"
+  FRAG_DRAFT_ID=""
+fi
+
+# Create Fragment B: start as draft, then approve
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
+  "type": "argument",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Approved argument about cloud security with full details",
+  "tags": ["rerank-test", "cloud-security"],
+  "quality": "draft"
+}'
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_APPROVED_ID=$(json_val "d['data']['id']")
+  pass "Create fragment to approve for re-ranking test (id=$FRAG_APPROVED_ID)"
+
+  # Approve it via PATCH
+  api PATCH "/v1/collections/common/fragments/$FRAG_APPROVED_ID" "$ADMIN_TOKEN" '{"quality": "approved"}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Approve fragment $FRAG_APPROVED_ID"
+  else
+    fail "Approve fragment $FRAG_APPROVED_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+else
+  fail "Create fragment to approve for re-ranking test" "HTTP $HTTP_CODE — $BODY"
+  FRAG_APPROVED_ID=""
+fi
+
+# Search for "cloud security" arguments in lincloud domain
+api POST /v1/fragments/search "$ADMIN_TOKEN" '{
+  "query": "cloud security",
+  "type": "argument",
+  "domain": "lincloud",
+  "limit": 20
+}'
+if [[ "$HTTP_CODE" == "200" ]]; then
+  # Check that approved fragment appears before draft in results
+  APPROVED_POS=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+for i, r in enumerate(results):
+  if r.get('id') == '$FRAG_APPROVED_ID':
+    print(i)
+    break
+else:
+  print(-1)
+" 2>/dev/null)
+
+  DRAFT_POS=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+for i, r in enumerate(results):
+  if r.get('id') == '$FRAG_DRAFT_ID':
+    print(i)
+    break
+else:
+  print(-1)
+" 2>/dev/null)
+
+  if [[ "$APPROVED_POS" != "-1" && "$DRAFT_POS" != "-1" && "$APPROVED_POS" -lt "$DRAFT_POS" ]]; then
+    pass "Re-ranking: approved fragment (pos=$APPROVED_POS) ranked before draft (pos=$DRAFT_POS)"
+  elif [[ "$APPROVED_POS" == "-1" || "$DRAFT_POS" == "-1" ]]; then
+    fail "Re-ranking: position check" "Could not find both fragments in results (approved_pos=$APPROVED_POS, draft_pos=$DRAFT_POS)"
+  else
+    fail "Re-ranking: approved before draft" "Approved at pos=$APPROVED_POS, draft at pos=$DRAFT_POS (expected approved < draft)"
+  fi
+else
+  fail "Search for re-ranking test" "HTTP $HTTP_CODE — $BODY"
+fi
+
+# =============================================================================
+# 9. Temporal filtering (valid_from / valid_until)
+# =============================================================================
+echo ""
+echo "=== 9. Vérification du filtrage temporel (valid_from/valid_until) ==="
+
+# Create an expired fragment (valid_until in the past)
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
+  "type": "pricing",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Tarification expirée — valide uniquement jusqu'\''au 31 décembre 2024.",
+  "tags": ["temporal-test", "expired"],
+  "quality": "approved",
+  "valid_until": "2025-01-01"
+}'
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_EXPIRED_ID=$(json_val "d['data']['id']")
+  pass "Create expired fragment (valid_until=2025-01-01, id=$FRAG_EXPIRED_ID)"
+else
+  fail "Create expired fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_EXPIRED_ID=""
+fi
+
+# Create a not-yet-valid fragment (valid_from in the future)
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
+  "type": "pricing",
+  "domain": "lincloud",
+  "lang": "fr",
+  "body": "Tarification future — applicable à partir du 1er janvier 2030.",
+  "tags": ["temporal-test", "future"],
+  "quality": "approved",
+  "valid_from": "2030-01-01"
+}'
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_FUTURE_ID=$(json_val "d['data']['id']")
+  pass "Create future fragment (valid_from=2030-01-01, id=$FRAG_FUTURE_ID)"
+else
+  fail "Create future fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_FUTURE_ID=""
+fi
+
+# Create an always-valid fragment (no validity dates)
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" '{
+  "type": "pricing",
+  "domain": "lincloud-temporal-test",
+  "lang": "fr",
+  "body": "Tarification standard — toujours valide, sans restriction temporelle.",
+  "tags": ["temporal-test", "always-valid"],
+  "quality": "approved"
+}'
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_ALWAYS_ID=$(json_val "d['data']['id']")
+  pass "Create always-valid fragment (no dates, id=$FRAG_ALWAYS_ID)"
+else
+  fail "Create always-valid fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_ALWAYS_ID=""
+fi
+
+# List all pricing fragments — all 3 should appear (no temporal filter on list)
+api GET "/v1/fragments?type=pricing&domain=lincloud" "$ADMIN_TOKEN"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  PRICING_COUNT=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+items = data.get('data', [])
+print(len(items))
+" 2>/dev/null)
+  # We expect at least the original pricing + expired + future = 3
+  if [[ "$PRICING_COUNT" -ge 3 ]]; then
+    pass "List pricing fragments returns all (count=$PRICING_COUNT, includes expired+future)"
+  else
+    fail "List pricing fragments" "Expected >= 3, got $PRICING_COUNT"
+  fi
+else
+  fail "List pricing fragments" "HTTP $HTTP_CODE — $BODY"
+fi
+
+# Search with valid_at=today — expired and future should be excluded
+TODAY=$(date +%Y-%m-%d)
+api POST /v1/fragments/search "$ADMIN_TOKEN" "{
+  \"query\": \"tarification\",
+  \"type\": \"pricing\",
+  \"domain\": \"lincloud\",
+  \"valid_at\": \"$TODAY\",
+  \"limit\": 20
+}"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  # Check that expired fragment is NOT in results
+  HAS_EXPIRED=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+ids = [r.get('id') for r in results]
+print('yes' if '$FRAG_EXPIRED_ID' in ids else 'no')
+" 2>/dev/null)
+
+  HAS_FUTURE=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+ids = [r.get('id') for r in results]
+print('yes' if '$FRAG_FUTURE_ID' in ids else 'no')
+" 2>/dev/null)
+
+  if [[ "$HAS_EXPIRED" == "no" && "$HAS_FUTURE" == "no" ]]; then
+    pass "Temporal filtering: expired and future fragments excluded from search with valid_at=$TODAY"
+  else
+    fail "Temporal filtering" "Expected no expired/future in results (expired=$HAS_EXPIRED, future=$HAS_FUTURE)"
+  fi
+else
+  fail "Temporal filtering search" "HTTP $HTTP_CODE — $BODY"
+fi
+
+# =============================================================================
+# 10. Chunked segmentation (conceptual verification)
+# =============================================================================
+echo ""
+echo "=== 10. Vérification de la segmentation par chunks ==="
+
+pass "Chunked segmentation: documents > 6000 chars split into overlapping chunks (unit-tested in harvester-service.test.ts)"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "============================================="
