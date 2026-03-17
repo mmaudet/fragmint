@@ -1,6 +1,6 @@
 # Fragmint
 
-**Bibliotheque de fragments de contenu versionnee pour la production documentaire souveraine assistee par IA.**
+**Bibliotheque de fragments de contenu versionnee et certifiee pour la production documentaire souveraine assistee par IA — *fragment + mint*.**
 
 [![Licence AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 [![Node.js 20+](https://img.shields.io/badge/node.js-20%2B-green.svg)](https://nodejs.org/)
@@ -8,9 +8,20 @@
 
 ---
 
+## Pourquoi Fragmint ?
+
+**Fragmint** = **Fragment** + **Mint**.
+
+- **Fragment** — l'unite atomique de contenu, le bloc reutilisable qui est au coeur du systeme.
+- **Mint** — au sens anglais de *to mint* : frapper une monnaie, creer quelque chose de nouveau avec une valeur certifiee.
+
+Un fragment *minte* dans Fragmint est un fragment qui a passe le cycle de qualite humain (draft, reviewed, approved). Il a de la valeur parce qu'il a ete certifie. Les fragments ne sont pas de simples bouts de texte stockes : ce sont des **unites de contenu frappees par le processus de validation humaine**, avec une tracabilite Git, une qualite attestee et une identite propre.
+
+---
+
 ## Presentation
 
-Les entreprises et administrations produisent quotidiennement des documents complexes -- devis, propositions commerciales, contrats, rapports -- en assemblant manuellement des blocs de texte disperses dans des fichiers Word, des e-mails et des bases de connaissances heterogenes. Ce processus est lent, source d'erreurs et incompatible avec les exigences de souverainete numerique.
+Les entreprises et administrations produisent quotidiennement des documents complexes — devis, propositions commerciales, contrats, rapports — en assemblant manuellement des blocs de texte disperses dans des fichiers Word, des e-mails et des bases de connaissances heterogenes. Ce processus est lent, source d'erreurs et incompatible avec les exigences de souverainete numerique.
 
 **Fragmint** resout ce probleme en proposant :
 
