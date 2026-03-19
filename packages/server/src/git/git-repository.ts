@@ -1,7 +1,19 @@
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+// Resolve git binary at import time — tsx/watch may strip PATH entries
+const GIT_BIN = (() => {
+  // Check common locations when PATH lookup fails
+  const candidates = ['/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git'];
+  try {
+    return execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+  } catch {
+    return candidates.find(existsSync) ?? 'git';
+  }
+})();
 
 export interface GitLogEntry {
   commit: string;
@@ -101,6 +113,6 @@ export class GitRepository {
   }
 
   private async exec(...args: string[]) {
-    return execFileAsync('git', args, { cwd: this.repoPath, env: process.env });
+    return execFileAsync(GIT_BIN, args, { cwd: this.repoPath });
   }
 }

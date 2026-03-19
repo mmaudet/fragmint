@@ -5,6 +5,7 @@ import { UserService } from '../services/user-service.js';
 import { TokenService } from '../services/token-service.js';
 import { AuditService } from '../services/audit-service.js';
 import { FragmentService } from '../services/fragment-service.js';
+import { SearchService } from '../search/search-service.js';
 import { createUserSchema, createTokenSchema } from '../schema/api.js';
 
 export function adminRoutes(
@@ -14,6 +15,7 @@ export function adminRoutes(
   auditService: AuditService,
   fragmentService: FragmentService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
+  searchService?: SearchService,
 ) {
   // Users
   app.get('/v1/users', { preHandler: [authenticate, requireRole('admin')] }, async () => {
@@ -61,6 +63,17 @@ export function adminRoutes(
   });
 
   app.get('/v1/index/status', { preHandler: [authenticate, requireRole('admin')] }, async () => {
-    return { data: { status: 'ok', last_run: new Date().toISOString() }, meta: null, error: null };
+    let mode: 'milvus' | 'sqlite' = 'sqlite';
+    let milvus = false;
+    let embedding = false;
+    if (searchService) {
+      try {
+        const status = await searchService.status();
+        mode = status.mode;
+        milvus = status.milvus;
+        embedding = status.embedding;
+      } catch { /* fallback to defaults */ }
+    }
+    return { data: { status: 'ok', mode, milvus, embedding, last_run: new Date().toISOString() }, meta: null, error: null };
   });
 }

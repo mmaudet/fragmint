@@ -22,8 +22,6 @@ export interface Fragment {
   parent_id?: string | null;
   translation_of?: string | null;
   frontmatter?: Record<string, any>;
-  valid_from?: string | null;
-  valid_until?: string | null;
 }
 
 export interface Template {

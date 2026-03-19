@@ -95,7 +95,12 @@ export function fragmentRoutes(
   app.post(`${prefix}/fragments/search`, { preHandler: readHandlers }, async (request) => {
     const parsed = searchQuerySchema.safeParse(request.body);
     if (!parsed.success) return { data: null, meta: null, error: parsed.error.message };
-    const results = await fragmentService.search(parsed.data.query, parsed.data.filters, parsed.data.limit);
+    // Auto-apply valid_at=today to exclude expired/future fragments from search
+    const filters = {
+      ...parsed.data.filters,
+      valid_at: new Date().toISOString().slice(0, 10),
+    };
+    const results = await fragmentService.search(parsed.data.query, filters, parsed.data.limit);
     return { data: results, meta: { count: results.length }, error: null };
   });
 

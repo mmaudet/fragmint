@@ -1,6 +1,6 @@
 # Deploiement Docker
 
-Fragmint fournit une configuration Docker Compose avec trois services : le serveur Fragmint, Milvus (recherche vectorielle) et Ollama (LLM local).
+Fragmint fournit une configuration Docker Compose avec cinq services : le serveur Fragmint, Milvus (recherche vectorielle) avec ses dependances etcd et minio, et Ollama (LLM local).
 
 ---
 
@@ -20,49 +20,19 @@ L'application est accessible sur http://localhost:3210/ui/.
 |-----------|---------------------------|-------|------------------------------------------|
 | fragmint  | Build local (Dockerfile)  | 3210  | Serveur API + frontend                   |
 | milvus    | milvusdb/milvus:v2.4.0    | 19530 | Base de donnees vectorielle              |
+| etcd      | quay.io/coreos/etcd:v3.5.18 | 2379 | Stockage metadonnees Milvus            |
+| minio     | minio/minio               | 9001  | Stockage objets Milvus                   |
 | ollama    | ollama/ollama:latest      | 11434 | LLM local (embeddings + moissonnage)     |
+
+> **Note** : etcd et minio sont des dependances internes de Milvus. Ils sont demarres automatiquement avec Milvus et n'ont pas besoin d'etre configures manuellement.
 
 ---
 
 ## docker-compose.yml
 
-```yaml
-services:
-  fragmint:
-    build: .
-    ports:
-      - "3210:3210"
-    volumes:
-      - ./example-vault:/data/vault
-    environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      FRAGMINT_STORE_PATH: /data/vault
-      FRAGMINT_JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
-      FRAGMINT_MILVUS_ENABLED: ${FRAGMINT_MILVUS_ENABLED:-false}
-      FRAGMINT_MILVUS_ADDRESS: milvus:19530
-      FRAGMINT_EMBEDDING_ENDPOINT: http://ollama:11434
-      FRAGMINT_LLM_ENDPOINT: http://ollama:11434/v1
-      FRAGMINT_LLM_MODEL: mistral-nemo:12b
-      FRAGMINT_CORS_ORIGIN: http://localhost:3210
+Le fichier `docker-compose.yml` a la racine du projet contient la configuration complete. Milvus v2.4 necessite etcd (metadonnees) et minio (stockage objets) comme dependances. Des health checks sont configures pour garantir l'ordre de demarrage correct.
 
-  milvus:
-    image: milvusdb/milvus:v2.4.0
-    ports:
-      - "19530:19530"
-    volumes:
-      - milvus-data:/var/lib/milvus
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-
-volumes:
-  milvus-data:
-  ollama-data:
-```
+Voir le fichier [docker-compose.yml](../docker-compose.yml) pour la configuration complete.
 
 ---
 
@@ -130,17 +100,30 @@ docker compose exec ollama ollama list
 
 ## Activer la recherche vectorielle
 
-Par defaut, Milvus est demarre mais non connecte. Pour l'activer :
+Milvus est active par defaut dans le docker-compose.yml (`FRAGMINT_MILVUS_ENABLED: "true"`). Pour le verifier, consultez l'endpoint `/v1/index/status` :
 
 ```bash
-FRAGMINT_MILVUS_ENABLED=true docker compose up -d
+curl -s http://localhost:3210/v1/index/status \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 
-Ou dans un fichier `.env` :
+Reponse attendue :
 
+```json
+{
+  "data": {
+    "status": "ok",
+    "mode": "milvus",
+    "milvus": true,
+    "embedding": true
+  }
+}
 ```
-FRAGMINT_MILVUS_ENABLED=true
-JWT_SECRET=une-valeur-secrete-aleatoire
+
+Pour un deploiement sans Docker (mode leger, SQLite fallback) :
+
+```bash
+npx tsx packages/server/src/index.ts
 ```
 
 ---
@@ -151,6 +134,8 @@ JWT_SECRET=une-valeur-secrete-aleatoire
 |---------------|---------------------------------|
 | ./example-vault (bind mount) | Fragments et templates (vault Git) |
 | milvus-data   | Index vectoriels Milvus         |
+| etcd-data     | Metadonnees Milvus              |
+| minio-data    | Stockage objets Milvus          |
 | ollama-data   | Modeles Ollama telecharges      |
 
 La base SQLite est stockee dans le vault (`/data/vault/.fragmint.db`).
@@ -184,6 +169,8 @@ docker compose build
 # Sauvegarder les images
 docker save fragmint-fragmint:latest | gzip > fragmint.tar.gz
 docker save milvusdb/milvus:v2.4.0 | gzip > milvus.tar.gz
+docker save quay.io/coreos/etcd:v3.5.18 | gzip > etcd.tar.gz
+docker save minio/minio:RELEASE.2023-03-20T20-16-18Z | gzip > minio.tar.gz
 docker save ollama/ollama:latest | gzip > ollama.tar.gz
 ```
 
@@ -201,6 +188,8 @@ docker run --rm -v ollama-data:/data -v $(pwd):/backup alpine \
 # Charger les images
 docker load < fragmint.tar.gz
 docker load < milvus.tar.gz
+docker load < etcd.tar.gz
+docker load < minio.tar.gz
 docker load < ollama.tar.gz
 
 # Restaurer les modeles Ollama

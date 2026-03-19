@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const FRAGMENT_TYPES = [
   'introduction', 'argument', 'pricing', 'clause',
   'faq', 'conclusion', 'bio', 'témoignage',
+  'reference-technique', 'methodology', 'engagement', 'cas-usage',
 ] as const;
 
 export const QUALITY_VALUES = ['draft', 'reviewed', 'approved', 'deprecated'] as const;

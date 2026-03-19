@@ -5,8 +5,15 @@ dist/
 .env
 .DS_Store
 data/
+# example-vault is managed by fragmint (has its own .git)
+# Only track the .gitignore and .gitkeep files in the main repo
+example-vault/fragments/
+example-vault/templates/
 example-vault/outputs/
+example-vault/.git/
+example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
+.claude/
 *.~lock.*
 e2e/demo/output/

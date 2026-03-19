@@ -193,8 +193,23 @@ export class SearchService {
         if (milvusResults.length > 0) {
           // Enrich from SQLite
           const ids = milvusResults.map(r => r.id);
+          const conditions = [inArray(fragments.id, ids)];
+
+          // Apply temporal filtering on Milvus results too
+          if (filters?.valid_at) {
+            conditions.push(
+              or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))!
+            );
+            conditions.push(
+              or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))!
+            );
+          }
+
+          // Exclude deprecated
+          conditions.push(ne(fragments.quality, 'deprecated'));
+
           const rows = await this.db.select().from(fragments)
-            .where(inArray(fragments.id, ids));
+            .where(and(...conditions));
 
           const rowMap = new Map(rows.map(r => [r.id, r]));
           const enriched = milvusResults

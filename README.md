@@ -196,13 +196,17 @@ Voir le guide complet : [docs/getting-started.md](docs/getting-started.md)
 docker compose up -d
 ```
 
-Cela demarre 3 services :
+Cela demarre 5 services :
 
 | Service   | Port  | Description                          |
 |-----------|-------|--------------------------------------|
 | fragmint  | 3210  | Serveur API + frontend               |
 | milvus    | 19530 | Base vectorielle (recherche semantique) |
+| etcd      | 2379  | Metadonnees Milvus                   |
+| minio     | 9001  | Stockage objets Milvus               |
 | ollama    | 11434 | LLM local (moissonnage + embeddings) |
+
+> **Mode leger** : pour demarrer sans Milvus (recherche SQLite fallback), lancez uniquement `npx tsx packages/server/src/index.ts`. Aucun Docker n'est requis.
 
 Pour pre-charger les modeles Ollama :
 
@@ -324,6 +328,14 @@ pnpm test
 
 # Tests en mode watch
 pnpm test:watch
+
+# Tests E2E multi-format (58 tests, SQLite ou Milvus)
+bash e2e/multi-format-e2e.sh
+
+# Tests E2E avec recherche semantique (necessite Milvus)
+docker compose up -d milvus
+FRAGMINT_MILVUS_ENABLED=true npx tsx packages/server/src/index.ts &
+bash e2e/multi-format-e2e.sh
 
 # Tests E2E (Playwright)
 pnpm --filter @fragmint/web e2e

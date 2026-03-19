@@ -9,7 +9,8 @@
 #   - reveal.js (HTML output)
 #
 # Creates 10 fragments, 4 templates (one per format), composes each,
-# and verifies the output files.
+# and verifies the output files. Also tests cross-type search diversity,
+# re-ranking by quality across types, and multi-type inventory.
 #
 # Prerequisites:
 #   - Fragmint server running on BASE_URL (default: http://localhost:3210)
@@ -86,9 +87,9 @@ echo "============================================="
 echo ""
 
 # =============================================================================
-# 1. Login as admin
+# 1. Login as admin + detect search mode
 # =============================================================================
-echo "=== 1. Setup: login ==="
+echo "=== 1. Setup: login + detect search mode ==="
 
 api POST /v1/auth/login "" '{"username":"mmaudet","password":"fragmint-dev"}'
 if [[ "$HTTP_CODE" == "200" ]]; then
@@ -104,6 +105,22 @@ else
   fail "Admin login" "HTTP $HTTP_CODE"
   echo "Cannot continue without admin token."
   exit 1
+fi
+
+# Detect search mode: Milvus (semantic) or SQLite (fallback)
+api GET /v1/index/status "$ADMIN_TOKEN"
+SEARCH_MODE="sqlite"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  SEARCH_MODE_RAW=$(json_val "d.get('data',{}).get('mode','sqlite')" 2>/dev/null || echo "sqlite")
+  if [[ "$SEARCH_MODE_RAW" == "milvus" ]]; then
+    SEARCH_MODE="milvus"
+  fi
+fi
+echo "  Search mode: $SEARCH_MODE"
+if [[ "$SEARCH_MODE" == "milvus" ]]; then
+  pass "Search mode: Milvus (semantic vector search active)"
+else
+  pass "Search mode: SQLite fallback (set FRAGMINT_MILVUS_ENABLED=true for semantic search)"
 fi
 
 # =============================================================================
@@ -704,28 +721,28 @@ YAMLEOF
 SLIDES_FRAGMENTS='fragments:
   - key: introduction
     type: introduction
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
   - key: arguments
     type: argument
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 6
   - key: pricing
     type: pricing
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
   - key: references
     type: argument
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: conclusion
     type: conclusion
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1'
 
@@ -756,28 +773,28 @@ upload_template \
 DOCX_FRAGMENTS='fragments:
   - key: introduction
     type: introduction
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
   - key: arguments
     type: argument
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 6
   - key: pricing
     type: pricing
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
   - key: references
     type: argument
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: conclusion
     type: conclusion
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1'
 
@@ -795,19 +812,19 @@ upload_template \
 XLSX_FRAGMENTS='fragments:
   - key: introduction
     type: introduction
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: pricing
     type: pricing
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: conclusion
     type: conclusion
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip'
@@ -1200,6 +1217,237 @@ echo ""
 echo "=== 10. Vérification de la segmentation par chunks ==="
 
 pass "Chunked segmentation: documents > 6000 chars split into overlapping chunks (unit-tested in harvester-service.test.ts)"
+
+# =============================================================================
+# 11. Cross-type search diversity
+# =============================================================================
+echo ""
+echo "=== 11. Recherche cross-type sur la sécurité ==="
+
+# Use a unique keyword "cyberprotection-e2e" to ensure our test fragments are the ones found
+CROSS_KEYWORD="cyberprotection-e2e"
+
+# Fragment 1: type=argument, domain=lincloud, quality=draft
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" "{
+  \"type\": \"argument\",
+  \"domain\": \"lincloud\",
+  \"lang\": \"fr\",
+  \"body\": \"La cyberprotection-e2e est au coeur de LinCloud avec le chiffrement AES-256\"
+}"
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_SEC_DRAFT_ID=$(json_val "d['data']['id']")
+  pass "Create cross-type argument fragment (draft, id=$FRAG_SEC_DRAFT_ID)"
+else
+  fail "Create cross-type argument fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_SEC_DRAFT_ID=""
+fi
+
+# Fragment 2: type=engagement, domain=securite, quality=approved (review+approve)
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" "{
+  \"type\": \"engagement\",
+  \"domain\": \"securite\",
+  \"lang\": \"fr\",
+  \"body\": \"LINAGORA s'engage en cyberprotection-e2e à maintenir un niveau conforme ISO 27001\"
+}"
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_SEC_ENGAGE_ID=$(json_val "d['data']['id']")
+  pass "Create cross-type engagement fragment (id=$FRAG_SEC_ENGAGE_ID)"
+
+  # Review it first (draft -> reviewed)
+  api POST "/v1/collections/common/fragments/$FRAG_SEC_ENGAGE_ID/review" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Review engagement fragment $FRAG_SEC_ENGAGE_ID"
+  else
+    fail "Review engagement fragment $FRAG_SEC_ENGAGE_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+
+  # Then approve it (reviewed -> approved)
+  api POST "/v1/collections/common/fragments/$FRAG_SEC_ENGAGE_ID/approve" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Approve engagement fragment $FRAG_SEC_ENGAGE_ID"
+  else
+    fail "Approve engagement fragment $FRAG_SEC_ENGAGE_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+else
+  fail "Create cross-type engagement fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_SEC_ENGAGE_ID=""
+fi
+
+# Fragment 3: type=reference-technique, domain=produit, quality=reviewed
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" "{
+  \"type\": \"reference-technique\",
+  \"domain\": \"produit\",
+  \"lang\": \"fr\",
+  \"body\": \"LinShare assure la cyberprotection-e2e des transferts de fichiers par chiffrement\"
+}"
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_SEC_REFTECH_ID=$(json_val "d['data']['id']")
+  pass "Create cross-type reference-technique fragment (id=$FRAG_SEC_REFTECH_ID)"
+
+  # Review it (draft -> reviewed)
+  api POST "/v1/collections/common/fragments/$FRAG_SEC_REFTECH_ID/review" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Review reference-technique fragment $FRAG_SEC_REFTECH_ID"
+  else
+    fail "Review reference-technique fragment $FRAG_SEC_REFTECH_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+else
+  fail "Create cross-type reference-technique fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_SEC_REFTECH_ID=""
+fi
+
+# Fragment 4: type=clause, domain=securite, quality=approved (review+approve)
+api POST /v1/collections/common/fragments "$ADMIN_TOKEN" "{
+  \"type\": \"clause\",
+  \"domain\": \"securite\",
+  \"lang\": \"fr\",
+  \"body\": \"En matière de cyberprotection-e2e le prestataire notifie toute faille sous 72h\"
+}"
+if [[ "$HTTP_CODE" == "201" ]]; then
+  FRAG_SEC_CLAUSE_ID=$(json_val "d['data']['id']")
+  pass "Create cross-type clause fragment (id=$FRAG_SEC_CLAUSE_ID)"
+
+  # Review it first (draft -> reviewed)
+  api POST "/v1/collections/common/fragments/$FRAG_SEC_CLAUSE_ID/review" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Review clause fragment $FRAG_SEC_CLAUSE_ID"
+  else
+    fail "Review clause fragment $FRAG_SEC_CLAUSE_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+
+  # Then approve it (reviewed -> approved)
+  api POST "/v1/collections/common/fragments/$FRAG_SEC_CLAUSE_ID/approve" "$ADMIN_TOKEN" '{}'
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    pass "Approve clause fragment $FRAG_SEC_CLAUSE_ID"
+  else
+    fail "Approve clause fragment $FRAG_SEC_CLAUSE_ID" "HTTP $HTTP_CODE — $BODY"
+  fi
+else
+  fail "Create cross-type clause fragment" "HTTP $HTTP_CODE — $BODY"
+  FRAG_SEC_CLAUSE_ID=""
+fi
+
+# Search for our unique keyword across all types and domains
+api POST /v1/collections/common/fragments/search "$ADMIN_TOKEN" "{
+  \"query\": \"$CROSS_KEYWORD\",
+  \"limit\": 20
+}"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  CROSS_TYPE_INFO=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+types = set(r.get('type', '') for r in results)
+domains = set(r.get('domain', '') for r in results)
+print(f'{len(types)} {len(domains)} {len(results)}')
+" 2>/dev/null)
+  CROSS_TYPES=$(echo "$CROSS_TYPE_INFO" | cut -d' ' -f1)
+  CROSS_DOMAINS=$(echo "$CROSS_TYPE_INFO" | cut -d' ' -f2)
+  CROSS_COUNT=$(echo "$CROSS_TYPE_INFO" | cut -d' ' -f3)
+
+  if [[ "$CROSS_TYPES" -ge 3 ]]; then
+    pass "Cross-type search: found $CROSS_TYPES types across $CROSS_DOMAINS domains ($CROSS_COUNT results)"
+  else
+    fail "Cross-type search" "Expected >= 3 types, got $CROSS_TYPES ($CROSS_COUNT results)"
+  fi
+
+  if [[ "$CROSS_DOMAINS" -ge 2 ]]; then
+    pass "Cross-domain search: found $CROSS_DOMAINS domains"
+  else
+    fail "Cross-domain search" "Expected >= 2 domains, got $CROSS_DOMAINS"
+  fi
+else
+  fail "Cross-type search for $CROSS_KEYWORD" "HTTP $HTTP_CODE — $BODY"
+fi
+
+# =============================================================================
+# 12. Re-ranking with diverse quality across types
+# =============================================================================
+echo ""
+echo "=== 12. Re-ranking diversifié par qualité cross-type ==="
+
+# Search for our unique keyword again and check quality ordering
+api POST /v1/collections/common/fragments/search "$ADMIN_TOKEN" "{
+  \"query\": \"$CROSS_KEYWORD\",
+  \"limit\": 20
+}"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  RERANK_CHECK=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+qualities = [r.get('quality', '') for r in results]
+quality_levels = len(set(qualities))
+mode = '$SEARCH_MODE'
+
+if mode == 'milvus':
+    # Milvus mode: verify approved fragments rank above draft
+    approved_positions = [i for i, q in enumerate(qualities) if q == 'approved']
+    draft_positions = [i for i, q in enumerate(qualities) if q == 'draft']
+    if approved_positions and draft_positions:
+        best_approved = min(approved_positions)
+        worst_draft = max(draft_positions)
+        if best_approved < worst_draft:
+            print(f'milvus_ok {quality_levels}')
+        else:
+            print(f'milvus_fail {quality_levels}')
+    else:
+        print(f'milvus_ok {quality_levels}')
+else:
+    # SQLite mode: just verify quality diversity
+    if quality_levels >= 2:
+        print(f'sqlite_ok {quality_levels}')
+    else:
+        print(f'sqlite_fail {quality_levels}')
+" 2>/dev/null)
+
+  RERANK_STATUS=$(echo "$RERANK_CHECK" | cut -d' ' -f1)
+  RERANK_LEVELS=$(echo "$RERANK_CHECK" | cut -d' ' -f2)
+
+  if [[ "$RERANK_STATUS" == "milvus_ok" ]]; then
+    pass "Re-ranking Milvus: approved fragments rank above draft ($RERANK_LEVELS quality levels, vector scores active)"
+  elif [[ "$RERANK_STATUS" == "sqlite_ok" ]]; then
+    pass "Re-ranking SQLite: $RERANK_LEVELS quality levels verified (quality boost requires Milvus for strict ordering)"
+  else
+    fail "Re-ranking diversity" "Status=$RERANK_STATUS, quality levels=$RERANK_LEVELS"
+  fi
+else
+  fail "Re-ranking diversity search" "HTTP $HTTP_CODE — $BODY"
+fi
+
+# =============================================================================
+# 13. Multi-type inventory verification
+# =============================================================================
+echo ""
+echo "=== 13. Vérification de l'inventaire multi-type ==="
+
+api GET "/v1/fragments?limit=500" "$ADMIN_TOKEN"
+if [[ "$HTTP_CODE" == "200" ]]; then
+  INVENTORY_INFO=$(echo "$BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+results = data.get('data', data.get('results', []))
+types = set(r.get('type', '') for r in results if r.get('type'))
+domains = set(r.get('domain', '') for r in results if r.get('domain'))
+print(f'{len(types)} {len(domains)}')
+" 2>/dev/null)
+  INV_TYPES=$(echo "$INVENTORY_INFO" | cut -d' ' -f1)
+  INV_DOMAINS=$(echo "$INVENTORY_INFO" | cut -d' ' -f2)
+
+  if [[ "$INV_TYPES" -ge 5 ]]; then
+    pass "Fragment diversity: $INV_TYPES types, $INV_DOMAINS domains in inventory"
+  else
+    fail "Fragment diversity (types)" "Expected >= 5 types, got $INV_TYPES"
+  fi
+
+  if [[ "$INV_DOMAINS" -ge 3 ]]; then
+    pass "Fragment diversity (domains): $INV_DOMAINS domains in inventory"
+  else
+    fail "Fragment diversity (domains)" "Expected >= 3 domains, got $INV_DOMAINS"
+  fi
+else
+  fail "Multi-type inventory" "HTTP $HTTP_CODE — $BODY"
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

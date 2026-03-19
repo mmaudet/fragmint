@@ -9,6 +9,8 @@ Ce guide utilise la demo **LinCloud Souverain** comme cas d'ecole pour comprendr
 - Comment creer un template dans **4 formats** : DOCX, XLSX, Marp (slides Markdown), reveal.js (slides HTML)
 - Comment ecrire le fichier **YAML de definition** qui lie le template aux fragments
 - Comment appeler l'**API de composition** pour generer le document final
+- Comment fonctionne la **recherche semantique** (Milvus + nomic-embed-text-v2-moe)
+- Comment le **re-ranking par qualite**, le **filtrage temporel** et la **segmentation intelligente** ameliorent la pertinence des resultats
 
 Chaque section est autonome : vous pouvez sauter directement a la partie qui vous interesse.
 
@@ -36,6 +38,8 @@ Les **4 documents** sont generes a partir des **memes fragments** et des **memes
 
 ### Executer la demo
 
+**Demo guidee** (scenario simple, 4 documents) :
+
 ```bash
 # Lancer le serveur Fragmint
 pnpm dev
@@ -48,6 +52,16 @@ bash e2e/demo/run-demo.sh --keep
 ```
 
 Les fichiers generes sont dans `e2e/demo/output/`.
+
+**Test E2E complet** (58 tests, couvre toute la chaine avec Milvus) :
+
+```bash
+# Demarrer la stack Milvus + le serveur (voir section 13)
+# Puis lancer le test multi-format
+bash e2e/multi-format-e2e.sh
+```
+
+Ce test valide : creation de fragments, upload de templates (Marp, reveal.js, DOCX, XLSX), composition multi-format, re-ranking par qualite, filtrage temporel, recherche cross-type et inventaire.
 
 ---
 
@@ -1169,7 +1183,7 @@ Les fragments peuvent avoir des **dates de validite** qui determinent leur eligi
 | `valid_from` | Date a partir de laquelle le fragment est valide (inclus). Si absent, valide depuis toujours. |
 | `valid_until` | Date jusqu'a laquelle le fragment est valide (inclus). Si absent, valide indefiniment. |
 
-Lorsqu'une recherche est effectuee avec le parametre `valid_at`, les fragments dont la validite ne couvre pas cette date sont **exclus des resultats**. Le composeur passe automatiquement `valid_at: today` lors de la resolution des slots.
+Le filtrage temporel est applique automatiquement sur toutes les recherches (`valid_at: today`) et lors de la composition. Les fragments expires ou pas encore valides sont exclus des resultats, que la recherche passe par **Milvus** (semantique) ou **SQLite** (fallback).
 
 **Cas d'usage** :
 - **Tarification** : grille de prix valable un trimestre (`valid_until: "2026-06-30"`) — ne sera plus utilisee en juillet
@@ -1201,7 +1215,118 @@ La methode est implementee dans `HarvesterService.chunkMarkdown()` et couverte p
 
 ---
 
-## 12. Creer sa propre demo
+## 12. Diversite des fragments et recherche cross-type
+
+### Types de fragments disponibles
+
+Fragmint supporte 12 types de fragments, chacun adapte a un usage specifique dans la production documentaire :
+
+| Type | Usage | Exemple |
+|------|-------|---------|
+| `introduction` | Paragraphe d'ouverture d'un document | Presentation de LinCloud Souverain |
+| `argument` | Point de valeur, avantage, justification | Securite AES-256, interoperabilite |
+| `pricing` | Grille tarifaire, conditions financieres | Tarification pay-as-you-go LinCloud |
+| `clause` | Clause contractuelle, engagement juridique | Notification de faille sous 72h |
+| `conclusion` | Paragraphe de fermeture | Appel a l'action, prochaines etapes |
+| `bio` | Presentation d'entreprise ou de personne | LINAGORA — 200 collaborateurs, 4 continents |
+| `faq` | Question/reponse frequente | Qu'est-ce que le modele LUX ? |
+| `temoignage` | Retour d'experience, citation client | (pour citations et verbatims) |
+| `reference-technique` | Fiche produit, specifications techniques | Twake Workplace, LinShare, LinTO, OpenLLM |
+| `methodology` | Processus, methodologie, bonnes pratiques | MARAP — 5 etapes de gestion de projet |
+| `engagement` | Politique, certification, objectif RSE | Strategie Good Tech For Good 2021-2030 |
+| `cas-usage` | Cas d'usage, reference client anonymisee | Transcription temps reel Commission EU |
+
+### Recherche cross-type
+
+La recherche Fragmint fonctionne **independamment du type** : une requete sur "securite" retourne des fragments de types differents (argument, clause, engagement, reference-technique) provenant de domaines differents (lincloud, securite, produit).
+
+```bash
+# Recherche cross-type (pas de filtre type/domaine)
+curl -s -X POST http://localhost:3210/v1/collections/common/fragments/search \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "securite", "limit": 20}'
+```
+
+Cette diversite est verifiee automatiquement par le test E2E (step 11) qui cree 4 fragments de types differents partageant le meme theme et verifie que la recherche les retrouve tous.
+
+### Re-ranking et qualite cross-type
+
+Le moteur de re-ranking applique ses boosts (qualite, fraicheur, usage) **quelle que soit le type** du fragment. Un fragment `clause/securite` de qualite `approved` sera booste de la meme maniere qu'un fragment `argument/lincloud` de meme qualite.
+
+> **Note technique** : le re-ranking par qualite est pleinement operationnel en mode Milvus (ou les scores vectoriels sont non-nuls). En mode SQLite fallback, le score de base est 0 et le multiplicateur de qualite n'a pas d'effet (0 x 1.0 = 0 x 0.80). Le boost de fraicheur (+0.05) et d'usage (+0.02) restent actifs dans les deux modes.
+
+### Inventaire
+
+Le test E2E (step 13) verifie que l'inventaire contient au moins **5 types** et **3 domaines** differents, attestant d'une diversite suffisante pour les scenarios de composition multi-types.
+
+---
+
+## 13. Modes de recherche : Milvus vs SQLite
+
+Fragmint supporte deux modes de recherche, detectes automatiquement au demarrage :
+
+| Mode | Recherche | Re-ranking qualite | Pre-requis |
+|------|-----------|-------------------|------------|
+| **Milvus** | Semantique (embeddings vectoriels via nomic-embed-text-v2-moe) | Pleinement operationnel (scores non-nuls × multiplicateur qualite) | Milvus + Ollama |
+| **SQLite** | Textuelle (LIKE sur titre/body) | Partiel (scores = 0, seuls fraicheur et usage ont un effet) | Aucun |
+
+### Demarrer en mode Milvus (recherche semantique)
+
+```bash
+# 1. Demarrer Milvus + etcd + minio via Docker Compose
+docker compose up -d etcd minio milvus
+
+# 2. Attendre que Milvus soit pret (~30s)
+curl -s http://localhost:9091/healthz  # doit retourner "OK"
+
+# 3. S'assurer qu'Ollama tourne en local avec le modele d'embeddings
+ollama pull nomic-embed-text-v2-moe
+
+# 4. Demarrer le serveur avec Milvus active (chemin absolu recommande)
+FRAGMINT_STORE_PATH=$(pwd)/example-vault \
+FRAGMINT_MILVUS_ENABLED=true \
+FRAGMINT_MILVUS_ADDRESS=localhost:19530 \
+FRAGMINT_EMBEDDING_ENDPOINT=http://localhost:11434 \
+FRAGMINT_LLM_ENDPOINT=http://localhost:11434/v1 \
+FRAGMINT_LLM_MODEL=mistral-nemo:12b \
+pnpm --filter server exec tsx src/index.ts
+```
+
+> **Note** : le `FRAGMINT_STORE_PATH` doit etre un chemin absolu car `pnpm --filter server` change le CWD vers `packages/server/`.
+
+Le serveur indexe automatiquement tous les fragments dans Milvus au demarrage. L'endpoint `/v1/index/status` retourne le mode actif :
+
+```json
+{
+  "data": {
+    "status": "ok",
+    "mode": "milvus",
+    "milvus": true,
+    "embedding": true
+  }
+}
+```
+
+### Demarrer en mode SQLite (sans Docker)
+
+```bash
+# Pas besoin de Docker — SQLite est le fallback par defaut
+npx tsx packages/server/src/index.ts
+```
+
+### Impact sur les tests E2E
+
+Le script E2E detecte automatiquement le mode au step 1 et adapte ses assertions :
+
+- **Milvus** : verifie que les fragments `approved` se classent au-dessus des `draft` (re-ranking effectif)
+- **SQLite** : verifie que les differents niveaux de qualite existent dans les resultats (pas de tri strict)
+
+Le E2E passe dans les deux modes (58/58 tests).
+
+---
+
+## 14. Creer sa propre demo
 
 ### Etape 1 : Definir son cas d'usage
 
@@ -1253,7 +1378,7 @@ Copiez `e2e/demo/run-demo.sh` et modifiez :
 
 ---
 
-## 13. Resume des syntaxes par format
+## 15. Resume des syntaxes par format
 
 ### Tableau recapitulatif
 

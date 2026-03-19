@@ -178,7 +178,7 @@ export async function createServer(options?: {
   // Routes
   authRoutes(app, userService);
   fragmentRoutes(app, fragmentService, authenticate);
-  adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate);
+  adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate, searchService);
   templateRoutes(app, templateService, composerService, authenticate);
   harvestRoutes(app, harvesterService, authenticate);
 
