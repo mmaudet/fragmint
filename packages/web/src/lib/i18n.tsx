@@ -27,6 +27,8 @@ const translations = {
     uses: { fr: 'Utilisations', en: 'Uses' },
     file: { fr: 'Fichier', en: 'File' },
     download: { fr: 'Télécharger', en: 'Download' },
+    validFrom: { fr: 'Valide à partir du', en: 'Valid from' },
+    validUntil: { fr: "Valide jusqu'au", en: 'Valid until' },
   },
   login: {
     title: { fr: 'Fragmint', en: 'Fragmint' },
