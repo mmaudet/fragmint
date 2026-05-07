@@ -14,6 +14,17 @@ example-vault/.git/
 example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
-.claude/
+# Only ignore local/personal Claude settings, not the shared coding environment
+.claude/settings.local.json
+.claude/PRPs/reports/
+.claude/PRPs/debug/
 *.~lock.*
 e2e/demo/output/
+
+# Mission planning documents (local only)
+.claude/mission/
+
+# SQLite WAL files
+*.db-shm
+*.db-wal
+*.db-journal
