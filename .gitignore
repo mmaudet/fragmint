@@ -28,3 +28,5 @@ e2e/demo/output/
 *.db-shm
 *.db-wal
 *.db-journal
+# Personal notes and learning references (local only)
+.claude/notes/
