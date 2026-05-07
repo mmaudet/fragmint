@@ -350,10 +350,15 @@ FRAGMINT_PORT                # API port (default: 3333)
 ## Resources
 
 - Architecture reference: `docs/mission/system-architecture.md` (local only, gitignored)
+- System architecture reference: `.claude/external-docs/system-architecture.md` (detailed flows: search, compose, harvest)
 - Stack patterns: `.claude/external-docs/fragmint-stack.md`
 - API schema: `packages/server/src/schema/`
 - DB schema: `packages/server/src/db/schema.ts`
 - Config defaults: `packages/server/src/config.ts`
+- Mission context: `.claude/mission/MISSION.md` (scope, priorities, decisions log)
+- Bug tracking: `.claude/mission/BUGS.md` (all bugs with status — fix ALL before new features)
+- Execution plan: `.claude/mission/PLAN.md` (20-day plan, current day status)
+- Eval methodology: `.claude/mission/EVALS.md` (golden dataset + LLM-as-a-judge patterns)
 
 ---
 
