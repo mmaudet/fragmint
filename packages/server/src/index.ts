@@ -248,6 +248,12 @@ export async function createServer(options?: {
     console.log(`Indexed ${result.indexed} fragments on startup`);
   }
 
+  // Sync templates from vault on startup
+  const syncedTemplates = await templateService.syncFromVault();
+  if (syncedTemplates > 0) {
+    console.log(`Synced ${syncedTemplates} templates from vault on startup`);
+  }
+
   // Start periodic cleanup of expired composed outputs
   app.addHook('onReady', () => {
     const timer = composerService.startCleanupTimer();

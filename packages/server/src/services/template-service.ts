@@ -1,7 +1,7 @@
 // packages/server/src/services/template-service.ts
 import { eq, desc } from 'drizzle-orm';
 import { join, relative } from 'node:path';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
 import { templates } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
@@ -92,6 +92,50 @@ export class TemplateService {
     });
 
     return { id, template_path: relDocxPath, yaml_path: relYamlPath, commit_hash: commitHash };
+  }
+
+  async syncFromVault(): Promise<number> {
+    const templatesDir = join(this.storePath, 'templates');
+    if (!existsSync(templatesDir)) return 0;
+
+    const yamlFiles = readdirSync(templatesDir).filter(f => f.endsWith('.yaml'));
+    let synced = 0;
+
+    for (const filename of yamlFiles) {
+      const yamlPath = join(templatesDir, filename);
+      const yamlContent = readFileSync(yamlPath, 'utf-8');
+      const yaml = await import('js-yaml');
+      const parsed = yaml.load(yamlContent);
+      const result = TemplateYamlSchema.safeParse(parsed);
+      if (!result.success) continue;
+
+      const tpl = result.data;
+      const existing = await this.db.select({ id: templates.id }).from(templates).where(eq(templates.id, tpl.id));
+      if (existing.length > 0) continue;
+
+      const relYamlPath = join('templates', filename);
+      const relTemplatePath = join('templates', tpl.carbone_template);
+      const templateFilePath = join(this.storePath, relTemplatePath);
+      if (!existsSync(templateFilePath)) continue;
+
+      const now = new Date().toISOString();
+      await this.db.insert(templates).values({
+        id: tpl.id,
+        name: tpl.name,
+        description: tpl.description ?? null,
+        output_format: tpl.output_format,
+        version: tpl.version,
+        template_path: relTemplatePath,
+        yaml_path: relYamlPath,
+        author: 'system',
+        created_at: now,
+        updated_at: now,
+        git_hash: null,
+      });
+      synced++;
+    }
+
+    return synced;
   }
 
   async list(filters?: { output_format?: string; limit?: number; offset?: number }) {
