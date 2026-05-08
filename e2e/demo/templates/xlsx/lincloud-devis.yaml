@@ -16,19 +16,19 @@ context_schema:
 fragments:
   - key: introduction
     type: introduction
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: pricing
     type: pricing
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
   - key: conclusion
     type: conclusion
-    domain: cloud
+    domain: lincloud
     lang: fr
     count: 1
     fallback: skip
