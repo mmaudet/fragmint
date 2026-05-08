@@ -11,10 +11,11 @@ services:
       FRAGMINT_JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
       FRAGMINT_MILVUS_ENABLED: "true"
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
-      FRAGMINT_EMBEDDING_ENDPOINT: http://host.docker.internal:11434
+      FRAGMINT_EMBEDDING_ENDPOINT: http://host.docker.internal:11434/v1
       FRAGMINT_LLM_ENDPOINT: http://host.docker.internal:11434/v1
       FRAGMINT_LLM_MODEL: mistral-nemo:12b
       FRAGMINT_CORS_ORIGIN: http://localhost:3210
+      FRAGMINT_LLM_TIMEOUT: "300000"
     depends_on:
       milvus:
         condition: service_healthy
@@ -29,7 +30,7 @@ services:
       ETCD_SNAPSHOT_COUNT: "50000"
     volumes:
       - etcd-data:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 10s
