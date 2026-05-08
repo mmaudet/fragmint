@@ -66,7 +66,7 @@ export default function AppLayout() {
             <Select value={activeCollection} onValueChange={setActiveCollection}>
               <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-slate-200">
                 <div className="flex items-center gap-2">
-                  {isReadOnly && <Lock className="h-3 w-3 text-slate-400" />}
+                  {!!isReadOnly && <Lock className="h-3 w-3 text-slate-400" />}
                   <SelectValue placeholder={t('collections', 'select')} />
                 </div>
               </SelectTrigger>
@@ -75,13 +75,13 @@ export default function AppLayout() {
                   <SelectItem key={c.slug} value={c.slug}>
                     <span className="flex items-center gap-2">
                       {c.name}
-                      {c.read_only && <Lock className="h-3 w-3 text-muted-foreground" />}
+                      {!!c.read_only && <Lock className="h-3 w-3 text-muted-foreground" />}
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {isReadOnly && (
+            {!!isReadOnly && (
               <p className="text-xs text-slate-500 mt-1 px-1">{t('collections', 'readOnly')}</p>
             )}
           </div>
