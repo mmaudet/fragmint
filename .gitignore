@@ -3,6 +3,8 @@ dist/
 *.db
 *.sqlite
 .env
+.env.local
+.env.*.local
 .DS_Store
 data/
 # example-vault is managed by fragmint (has its own .git)
