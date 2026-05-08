@@ -249,7 +249,7 @@ export class ComposerService {
     const yaml = row.yaml;
 
     // 2. Validate output format
-    const requestedFormat = request.output?.format ?? 'docx';
+    const requestedFormat = request.output?.format ?? yaml.output_format;
     if (requestedFormat !== yaml.output_format) {
       throw new Error(
         `Output format mismatch: requested '${requestedFormat}' but template requires '${yaml.output_format}'`,
