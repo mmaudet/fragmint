@@ -1,6 +1,12 @@
 // packages/server/src/auth/hash.test.ts
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword, hashTokenScrypt, verifyTokenScrypt, hashTokenSha256 } from './hash.js';
+import {
+  hashPassword,
+  verifyPassword,
+  hashTokenScrypt,
+  verifyTokenScrypt,
+  hashTokenSha256,
+} from './hash.js';
 
 describe('password hashing', () => {
   it('hashes and verifies a password', async () => {

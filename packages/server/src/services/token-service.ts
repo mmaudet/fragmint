@@ -17,7 +17,13 @@ export class TokenService {
     const now = new Date().toISOString();
 
     await this.db.insert(apiTokens).values({
-      id, name, token_hash, token_lookup, role, owner, created_at: now,
+      id,
+      name,
+      token_hash,
+      token_lookup,
+      role,
+      owner,
+      created_at: now,
     });
 
     // Return raw token only once — never stored in plain text
@@ -25,21 +31,28 @@ export class TokenService {
   }
 
   async list() {
-    const rows = await this.db.select({
-      id: apiTokens.id, name: apiTokens.name, role: apiTokens.role,
-      owner: apiTokens.owner, created_at: apiTokens.created_at,
-      last_used: apiTokens.last_used, active: apiTokens.active,
-    }).from(apiTokens);
+    const rows = await this.db
+      .select({
+        id: apiTokens.id,
+        name: apiTokens.name,
+        role: apiTokens.role,
+        owner: apiTokens.owner,
+        created_at: apiTokens.created_at,
+        last_used: apiTokens.last_used,
+        active: apiTokens.active,
+      })
+      .from(apiTokens);
     return rows;
   }
 
   async revoke(id: string): Promise<boolean> {
-    const existing = await this.db.select({ id: apiTokens.id })
-      .from(apiTokens).where(eq(apiTokens.id, id)).limit(1);
+    const existing = await this.db
+      .select({ id: apiTokens.id })
+      .from(apiTokens)
+      .where(eq(apiTokens.id, id))
+      .limit(1);
     if (existing.length === 0) return false;
-    await this.db.update(apiTokens)
-      .set({ active: 0 })
-      .where(eq(apiTokens.id, id));
+    await this.db.update(apiTokens).set({ active: 0 }).where(eq(apiTokens.id, id));
     return true;
   }
 }

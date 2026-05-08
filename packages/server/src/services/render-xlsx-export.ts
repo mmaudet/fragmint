@@ -1,6 +1,8 @@
 import ExcelJS from 'exceljs';
 
-export async function exportFragmentsToXlsx(fragments: Array<Record<string, any>>): Promise<Buffer> {
+export async function exportFragmentsToXlsx(
+  fragments: Array<Record<string, any>>,
+): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Fragments');
 
@@ -17,8 +19,14 @@ export async function exportFragmentsToXlsx(fragments: Array<Record<string, any>
 
   for (const f of fragments) {
     sheet.addRow({
-      id: f.id, title: f.title, type: f.type, domain: f.domain,
-      lang: f.lang, quality: f.quality, author: f.author, created_at: f.created_at,
+      id: f.id,
+      title: f.title,
+      type: f.type,
+      domain: f.domain,
+      lang: f.lang,
+      quality: f.quality,
+      author: f.author,
+      created_at: f.created_at,
     });
   }
 

@@ -3,7 +3,10 @@ import { login } from './helpers';
 
 test('select template, fill context, and compose document', async ({ page }) => {
   await login(page);
-  await page.getByText(/Compositeur|Composer/i).first().click();
+  await page
+    .getByText(/Compositeur|Composer/i)
+    .first()
+    .click();
   await page.waitForURL('**/compose');
 
   // Select template — example-vault has proposition-commerciale and devis

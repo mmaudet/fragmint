@@ -73,9 +73,24 @@ Thank you for reading this document.`;
   describe('deduplicateBlocks', () => {
     it('removes blocks with same body prefix', () => {
       const blocks = [
-        { title: 'A', body: 'This is the first block with some content.', type: 'intro', lang: 'en' },
-        { title: 'B', body: 'This is the second block with different content.', type: 'arg', lang: 'en' },
-        { title: 'A dup', body: 'This is the first block with some content.', type: 'intro', lang: 'en' },
+        {
+          title: 'A',
+          body: 'This is the first block with some content.',
+          type: 'intro',
+          lang: 'en',
+        },
+        {
+          title: 'B',
+          body: 'This is the second block with different content.',
+          type: 'arg',
+          lang: 'en',
+        },
+        {
+          title: 'A dup',
+          body: 'This is the first block with some content.',
+          type: 'intro',
+          lang: 'en',
+        },
       ];
       const result = HarvesterService.deduplicateBlocks(blocks);
       expect(result).toHaveLength(2);
@@ -110,13 +125,7 @@ Thank you for reading this document.`;
   describe('getJob', () => {
     it('returns null for nonexistent job', async () => {
       const db = createDb(':memory:');
-      const service = new HarvesterService(
-        db,
-        {} as any,
-        {} as any,
-        {} as any,
-        '/tmp/test-store',
-      );
+      const service = new HarvesterService(db, {} as any, {} as any, {} as any, '/tmp/test-store');
 
       const result = await service.getJob('hrv-nonexistent');
       expect(result).toBeNull();
@@ -172,7 +181,12 @@ Thank you for reading this document.`;
 
       // Mock fragmentService
       const mockFragmentService = {
-        create: vi.fn().mockResolvedValue({ id: 'frag-created-001', file_path: 'fragments/testing/frag-created-001.md', commit_hash: 'abc123', quality: 'draft' }),
+        create: vi.fn().mockResolvedValue({
+          id: 'frag-created-001',
+          file_path: 'fragments/testing/frag-created-001.md',
+          commit_hash: 'abc123',
+          quality: 'draft',
+        }),
       };
 
       const service = new HarvesterService(

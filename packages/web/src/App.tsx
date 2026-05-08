@@ -29,7 +29,13 @@ export default function App() {
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/" element={<Navigate to="/fragments" replace />} />
-                <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
                   <Route path="/fragments" element={<FragmentsPage />} />
                   <Route path="/inventory" element={<InventoryPage />} />
                   <Route path="/compose" element={<ComposePage />} />

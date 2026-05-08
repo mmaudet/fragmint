@@ -21,14 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { QualityBadge } from '@/components/quality-badge';
 import { SlotPreview } from '@/components/slot-preview';
-import {
-  FileText,
-  Download,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-} from 'lucide-react';
+import { FileText, Download, Loader2, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 
 function resolveVars(str: string, ctx: Record<string, string>): string {
   return str.replace(/\{\{context\.(\w+)\}\}/g, (_, k) => ctx[k] ?? '');
@@ -91,7 +84,10 @@ export default function ComposePage() {
   const compose = useCompose(activeCollection);
 
   const yaml = (template as any)?.yaml as Template | undefined;
-  const contextSchema: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }> = yaml?.context_schema ?? template?.context_schema ?? {};
+  const contextSchema: Record<
+    string,
+    { type: string; required?: boolean; default?: any; enum?: string[] }
+  > = yaml?.context_schema ?? template?.context_schema ?? {};
   const slots: NonNullable<Template['fragments']> = yaml?.fragments ?? template?.fragments ?? [];
 
   // Check if all required context fields are filled
@@ -158,10 +154,7 @@ export default function ComposePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Select
-            value={selectedTemplateId}
-            onValueChange={handleTemplateSelect}
-          >
+          <Select value={selectedTemplateId} onValueChange={handleTemplateSelect}>
             <SelectTrigger className="w-full max-w-md">
               <SelectValue placeholder={t('compose', 'templatePlaceholder')} />
             </SelectTrigger>
@@ -197,9 +190,7 @@ export default function ComposePage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('compose', 'context')}</CardTitle>
-            <CardDescription>
-              {t('compose', 'contextDescription')}
-            </CardDescription>
+            <CardDescription>{t('compose', 'contextDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(contextSchema).map(([key, schema]) => (
@@ -244,9 +235,7 @@ export default function ComposePage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('compose', 'templateSlots')}</CardTitle>
-            <CardDescription>
-              {t('compose', 'resolvedFragments')}
-            </CardDescription>
+            <CardDescription>{t('compose', 'resolvedFragments')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {slots.map((slot) => (
@@ -281,9 +270,7 @@ export default function ComposePage() {
               )}
             </Button>
             {!allRequiredSlotsFilled && (
-              <p className="text-sm text-muted-foreground">
-                {t('compose', 'allSlotsRequired')}
-              </p>
+              <p className="text-sm text-muted-foreground">{t('compose', 'allSlotsRequired')}</p>
             )}
           </div>
 
@@ -297,9 +284,7 @@ export default function ComposePage() {
             </Card>
           )}
 
-          {compose.isSuccess && compose.data && (
-            <ComposeReport result={compose.data} />
-          )}
+          {compose.isSuccess && compose.data && <ComposeReport result={compose.data} />}
         </>
       )}
     </div>
@@ -331,9 +316,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
                   <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
                   <span className="font-mono text-xs">{r.key}</span>
                   <QualityBadge quality={r.quality as any} />
-                  <span className="text-muted-foreground text-xs">
-                    score: {r.score.toFixed(2)}
-                  </span>
+                  <span className="text-muted-foreground text-xs">score: {r.score.toFixed(2)}</span>
                 </div>
               ))}
             </div>

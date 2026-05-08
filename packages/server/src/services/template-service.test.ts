@@ -54,7 +54,11 @@ describe('TemplateService', () => {
     const yamlContent = makeYaml();
 
     const result = await service.create(
-      docxBuffer, yamlContent, 'test-template.docx', 'alice', 'admin',
+      docxBuffer,
+      yamlContent,
+      'test-template.docx',
+      'alice',
+      'admin',
     );
 
     expect(result.id).toBe('tpl-test0001');
@@ -69,7 +73,9 @@ describe('TemplateService', () => {
     await service.create(
       docxBuffer,
       makeYaml({ id: 'tpl-test0002', name: 'Second Template', version: '2.0.0' }),
-      'b.docx', 'bob', 'editor',
+      'b.docx',
+      'bob',
+      'editor',
     );
 
     const all = await service.list();
@@ -101,9 +107,7 @@ describe('TemplateService', () => {
     await service.create(docxBuffer, makeYaml(), 'tpl.docx', 'alice', 'admin');
 
     const updatedYaml = makeYaml({ version: '2.0.0', name: 'Updated Template' });
-    const result = await service.update(
-      'tpl-test0001', undefined, updatedYaml, 'alice', 'admin',
-    );
+    const result = await service.update('tpl-test0001', undefined, updatedYaml, 'alice', 'admin');
 
     expect(result.commit_hash).toMatch(/^[a-f0-9]+$/);
 

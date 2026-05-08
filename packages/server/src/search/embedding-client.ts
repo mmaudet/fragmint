@@ -47,10 +47,10 @@ export class EmbeddingClient {
       throw new Error(`Embedding API error: ${response.status}`);
     }
 
-    const json = await response.json() as {
+    const json = (await response.json()) as {
       data: Array<{ embedding: number[] }>;
     };
 
-    return json.data.map(d => d.embedding);
+    return json.data.map((d) => d.embedding);
   }
 }

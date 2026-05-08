@@ -3,10 +3,18 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { FragmentCard } from '../fragment-card';
 
 const fragment = {
-  id: 'frag-001', type: 'introduction', domain: 'test', lang: 'fr',
-  quality: 'approved' as const, author: 'test', title: 'Test Fragment',
-  body_excerpt: 'This is a test excerpt', created_at: '2026-01-01',
-  updated_at: '2026-01-01', uses: 0, file_path: 'test.md',
+  id: 'frag-001',
+  type: 'introduction',
+  domain: 'test',
+  lang: 'fr',
+  quality: 'approved' as const,
+  author: 'test',
+  title: 'Test Fragment',
+  body_excerpt: 'This is a test excerpt',
+  created_at: '2026-01-01',
+  updated_at: '2026-01-01',
+  uses: 0,
+  file_path: 'test.md',
 };
 
 describe('FragmentCard', () => {

@@ -28,7 +28,7 @@ const translations = {
     file: { fr: 'Fichier', en: 'File' },
     download: { fr: 'Télécharger', en: 'Download' },
     validFrom: { fr: 'Valide depuis', en: 'Valid from' },
-    validUntil: { fr: 'Valide jusqu\'au', en: 'Valid until' },
+    validUntil: { fr: "Valide jusqu'au", en: 'Valid until' },
   },
   login: {
     title: { fr: 'Fragmint', en: 'Fragmint' },
@@ -79,13 +79,22 @@ const translations = {
     templateChoice: { fr: 'Choix du template', en: 'Template selection' },
     templatePlaceholder: { fr: 'Choisir un template...', en: 'Choose a template...' },
     context: { fr: 'Contexte', en: 'Context' },
-    contextDescription: { fr: 'Renseignez les variables de contexte pour la composition', en: 'Fill in the context variables for composition' },
+    contextDescription: {
+      fr: 'Renseignez les variables de contexte pour la composition',
+      en: 'Fill in the context variables for composition',
+    },
     choosePlaceholder: { fr: 'Choisir', en: 'Choose' },
     templateSlots: { fr: 'Slots du template', en: 'Template slots' },
-    resolvedFragments: { fr: 'Fragments résolus pour chaque slot', en: 'Resolved fragments for each slot' },
+    resolvedFragments: {
+      fr: 'Fragments résolus pour chaque slot',
+      en: 'Resolved fragments for each slot',
+    },
     composing: { fr: 'Composition en cours...', en: 'Composing...' },
     composeDocument: { fr: 'Composer le document', en: 'Compose document' },
-    allSlotsRequired: { fr: 'Tous les slots requis doivent avoir au moins un fragment.', en: 'All required slots must have at least one fragment.' },
+    allSlotsRequired: {
+      fr: 'Tous les slots requis doivent avoir au moins un fragment.',
+      en: 'All required slots must have at least one fragment.',
+    },
     compositionComplete: { fr: 'Composition terminée', en: 'Composition complete' },
     resolvedFragmentsLabel: { fr: 'Fragments résolus', en: 'Resolved fragments' },
     skippedSlots: { fr: 'Slots ignorés', en: 'Skipped slots' },
@@ -94,7 +103,10 @@ const translations = {
   validation: {
     title: { fr: 'Validation', en: 'Validation' },
     pendingApproval: { fr: "Fragments en attente d'approbation", en: 'Fragments pending approval' },
-    noFragmentsPending: { fr: 'Aucun fragment en attente de validation', en: 'No fragments pending validation' },
+    noFragmentsPending: {
+      fr: 'Aucun fragment en attente de validation',
+      en: 'No fragments pending validation',
+    },
     gitHistory: { fr: 'Historique Git', en: 'Git history' },
     read: { fr: 'Lire', en: 'Read' },
     requestChange: { fr: 'Demander modification', en: 'Request change' },
@@ -105,7 +117,10 @@ const translations = {
   harvest: {
     title: { fr: 'Ingestion', en: 'Ingestion' },
     uploadTitle: { fr: 'Importer des documents', en: 'Import documents' },
-    dropzone: { fr: 'Glisser des fichiers ici ou cliquer pour sélectionner', en: 'Drop files here or click to select' },
+    dropzone: {
+      fr: 'Glisser des fichiers ici ou cliquer pour sélectionner',
+      en: 'Drop files here or click to select',
+    },
     formats: { fr: '.docx supporté', en: '.docx supported' },
     confidence: { fr: 'Confiance minimum', en: 'Minimum confidence' },
     analyze: { fr: 'Analyser les documents', en: 'Analyze documents' },
@@ -167,11 +182,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [lang],
   );
 
-  return (
-    <I18nContext.Provider value={{ lang, setLang, t }}>
-      {children}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {

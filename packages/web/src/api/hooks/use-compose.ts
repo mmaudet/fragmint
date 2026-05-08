@@ -12,6 +12,10 @@ interface ComposeParams {
 export function useCompose(collectionSlug: string) {
   return useMutation({
     mutationFn: ({ templateId, ...body }: ComposeParams) =>
-      apiRequest<ComposeResponse>('POST', collectionApiUrl(collectionSlug, `/templates/${templateId}/compose`), body),
+      apiRequest<ComposeResponse>(
+        'POST',
+        collectionApiUrl(collectionSlug, `/templates/${templateId}/compose`),
+        body,
+      ),
   });
 }

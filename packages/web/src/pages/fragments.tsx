@@ -16,7 +16,16 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE_SIZE = 20;
-const FRAGMENT_TYPES = ['introduction', 'argument', 'pricing', 'clause', 'faq', 'conclusion', 'bio', 'témoignage'];
+const FRAGMENT_TYPES = [
+  'introduction',
+  'argument',
+  'pricing',
+  'clause',
+  'faq',
+  'conclusion',
+  'bio',
+  'témoignage',
+];
 const QUALITY_VALUES = ['draft', 'reviewed', 'approved'];
 const LANG_VALUES = ['fr', 'en'];
 
@@ -67,7 +76,11 @@ export default function FragmentsPage() {
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-2xl font-bold">{t('fragments', 'title')}</h2>
         <div className="w-72">
-          <SearchInput value={search} onChange={handleSearch} placeholder={t('fragments', 'searchPlaceholder')} />
+          <SearchInput
+            value={search}
+            onChange={handleSearch}
+            placeholder={t('fragments', 'searchPlaceholder')}
+          />
         </div>
       </div>
 
@@ -80,7 +93,9 @@ export default function FragmentsPage() {
           <SelectContent>
             <SelectItem value="__all__">{t('fragments', 'allTypes')}</SelectItem>
             {FRAGMENT_TYPES.map((ft) => (
-              <SelectItem key={ft} value={ft}>{ft}</SelectItem>
+              <SelectItem key={ft} value={ft}>
+                {ft}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -92,7 +107,9 @@ export default function FragmentsPage() {
           <SelectContent>
             <SelectItem value="__all__">{t('fragments', 'allQualities')}</SelectItem>
             {QUALITY_VALUES.map((q) => (
-              <SelectItem key={q} value={q}>{q}</SelectItem>
+              <SelectItem key={q} value={q}>
+                {q}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -104,7 +121,9 @@ export default function FragmentsPage() {
           <SelectContent>
             <SelectItem value="__all__">{t('fragments', 'allLanguages')}</SelectItem>
             {LANG_VALUES.map((l) => (
-              <SelectItem key={l} value={l}>{l}</SelectItem>
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -157,7 +176,9 @@ export default function FragmentsPage() {
         >
           {t('common', 'previous')}
         </Button>
-        <span className="text-sm text-muted-foreground">{t('common', 'page')} {page}</span>
+        <span className="text-sm text-muted-foreground">
+          {t('common', 'page')} {page}
+        </span>
         <Button
           variant="outline"
           size="sm"

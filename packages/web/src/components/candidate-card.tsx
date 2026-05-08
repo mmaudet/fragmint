@@ -15,7 +15,8 @@ interface CandidateCardProps {
 
 function confidenceColor(confidence: number) {
   if (confidence >= 0.8) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-  if (confidence >= 0.65) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+  if (confidence >= 0.65)
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
   return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
 }
 
@@ -38,10 +39,16 @@ export function CandidateCard({ candidate, decision, onAccept, onReject }: Candi
           </Badge>
         </div>
         <div className="flex flex-wrap gap-1 mt-1">
-          <Badge variant="outline" className="text-xs">{candidate.type}</Badge>
-          <Badge variant="outline" className="text-xs">{candidate.lang}</Badge>
+          <Badge variant="outline" className="text-xs">
+            {candidate.type}
+          </Badge>
+          <Badge variant="outline" className="text-xs">
+            {candidate.lang}
+          </Badge>
           {candidate.domain && (
-            <Badge variant="outline" className="text-xs">{candidate.domain}</Badge>
+            <Badge variant="outline" className="text-xs">
+              {candidate.domain}
+            </Badge>
           )}
         </div>
       </CardHeader>

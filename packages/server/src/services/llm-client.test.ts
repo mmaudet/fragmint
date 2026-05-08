@@ -48,9 +48,7 @@ describe('LlmClient', () => {
   });
 
   it('segment() returns empty array on malformed response', async () => {
-    mockFetch.mockResolvedValueOnce(
-      makeChatResponse('This is not JSON at all, sorry!'),
-    );
+    mockFetch.mockResolvedValueOnce(makeChatResponse('This is not JSON at all, sorry!'));
 
     const result = await client.segment('# Doc');
 
@@ -64,9 +62,7 @@ describe('LlmClient', () => {
       tags: ['docker', 'setup'],
       confidence: 0.92,
     };
-    mockFetch.mockResolvedValueOnce(
-      makeChatResponse(JSON.stringify(classification)),
-    );
+    mockFetch.mockResolvedValueOnce(makeChatResponse(JSON.stringify(classification)));
 
     const result = await client.classify(
       'Install Docker on Ubuntu',
@@ -78,9 +74,7 @@ describe('LlmClient', () => {
   });
 
   it('classify() returns low-confidence fallback on parse error', async () => {
-    mockFetch.mockResolvedValueOnce(
-      makeChatResponse('I cannot classify this text properly'),
-    );
+    mockFetch.mockResolvedValueOnce(makeChatResponse('I cannot classify this text properly'));
 
     const result = await client.classify('Some text', ['procedure'], ['devops']);
 

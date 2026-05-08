@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { FragmentService } from './fragment-service.js';
-import type { TemplateYaml, ComposeRequest, ComposeResponse, FragmentSlot } from '../schema/template.js';
+import type {
+  TemplateYaml,
+  ComposeRequest,
+  ComposeResponse,
+  FragmentSlot,
+} from '../schema/template.js';
 import { renderDocument, type SupportedFormat } from './render-engine.js';
 import { toMilvusPartition } from '../db/schema.js';
 
@@ -264,13 +269,24 @@ export class ComposerService {
 
     // 4. Resolve fragment slots
     const resolved = new Map<string, ResolvedFragment[]>();
-    const resolvedList: Array<{ key: string; fragment_id: string; score: number; quality: string }> = [];
+    const resolvedList: Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+    }> = [];
     const skipped: string[] = [];
     const warnings: string[] = [];
 
     for (const slot of yaml.fragments) {
       try {
-        const items = await this.resolveSlot(slot, context, request.overrides, yaml, accessiblePartitions);
+        const items = await this.resolveSlot(
+          slot,
+          context,
+          request.overrides,
+          yaml,
+          accessiblePartitions,
+        );
         if (items.length === 0) {
           if (slot.fallback === 'skip') {
             skipped.push(slot.key);
@@ -352,9 +368,13 @@ export class ComposerService {
             unlinkSync(filePath);
             removed++;
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
-    } catch { /* dir missing */ }
+    } catch {
+      /* dir missing */
+    }
     return removed;
   }
 
@@ -398,7 +418,7 @@ export class ComposerService {
     // Intersect with accessible partitions when both are defined
     if (partitions && accessiblePartitions) {
       const accessibleSet = new Set(accessiblePartitions);
-      partitions = partitions.filter(p => accessibleSet.has(p));
+      partitions = partitions.filter((p) => accessibleSet.has(p));
     }
 
     return partitions;
@@ -414,15 +434,19 @@ export class ComposerService {
     if (overrides && overrides[slot.key]) {
       const frag = await this.fragmentService.getById(overrides[slot.key]);
       if (!frag) {
-        throw new Error(`Override fragment '${overrides[slot.key]}' not found for slot '${slot.key}'`);
+        throw new Error(
+          `Override fragment '${overrides[slot.key]}' not found for slot '${slot.key}'`,
+        );
       }
-      return [{
-        id: frag.id,
-        body: frag.body,
-        quality: frag.quality,
-        score: 1.0,
-        tags: frag.frontmatter?.tags ?? [],
-      }];
+      return [
+        {
+          id: frag.id,
+          body: frag.body,
+          quality: frag.quality,
+          score: 1.0,
+          tags: frag.frontmatter?.tags ?? [],
+        },
+      ];
     }
 
     const lang = ComposerService.resolveContextVars(slot.lang, context);
@@ -437,7 +461,8 @@ export class ComposerService {
     const collectionSlug = slot.collection ?? 'common';
 
     // Don't filter by quality when quality_min is 'draft' (accept everything)
-    const qualityFilter = slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
+    const qualityFilter =
+      slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
 
     const results = await this.fragmentService.list({
       type: slot.type,

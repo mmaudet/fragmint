@@ -15,16 +15,24 @@ const baseSlot = {
 };
 
 const fragment: Fragment = {
-  id: 'frag-001', type: 'introduction', domain: 'test', lang: 'fr',
-  quality: 'approved', author: 'test', title: 'Mon introduction',
-  body_excerpt: 'Excerpt', created_at: '2026-01-01',
-  updated_at: '2026-01-01', uses: 0, file_path: 'test.md',
+  id: 'frag-001',
+  type: 'introduction',
+  domain: 'test',
+  lang: 'fr',
+  quality: 'approved',
+  author: 'test',
+  title: 'Mon introduction',
+  body_excerpt: 'Excerpt',
+  created_at: '2026-01-01',
+  updated_at: '2026-01-01',
+  uses: 0,
+  file_path: 'test.md',
 };
 
 describe('SlotPreview', () => {
   it('renders loading skeleton when isLoading is true', () => {
     const { container } = render(
-      <SlotPreview slot={baseSlot} fragments={undefined} isLoading={true} onOverride={() => {}} />
+      <SlotPreview slot={baseSlot} fragments={undefined} isLoading={true} onOverride={() => {}} />,
     );
     // Skeleton elements are rendered as divs with Skeleton class
     const skeletons = container.querySelectorAll('[class*="animate-pulse"], [class*="skeleton"]');
@@ -34,7 +42,12 @@ describe('SlotPreview', () => {
 
   it('renders green state with fragment title when fragments found', () => {
     render(
-      <SlotPreview slot={baseSlot} fragments={[fragment]} isLoading={false} onOverride={() => {}} />
+      <SlotPreview
+        slot={baseSlot}
+        fragments={[fragment]}
+        isLoading={false}
+        onOverride={() => {}}
+      />,
     );
     expect(screen.getByText('intro')).toBeInTheDocument();
     expect(screen.getByText('Mon introduction')).toBeInTheDocument();
@@ -42,29 +55,30 @@ describe('SlotPreview', () => {
   });
 
   it('renders "Aucun fragment" when no fragments and required', () => {
-    render(
-      <SlotPreview slot={baseSlot} fragments={[]} isLoading={false} onOverride={() => {}} />
-    );
+    render(<SlotPreview slot={baseSlot} fragments={[]} isLoading={false} onOverride={() => {}} />);
     expect(screen.getByText('Aucun fragment')).toBeInTheDocument();
   });
 
   it('renders "Aucun fragment" when fragments is undefined', () => {
     render(
-      <SlotPreview slot={baseSlot} fragments={undefined} isLoading={false} onOverride={() => {}} />
+      <SlotPreview slot={baseSlot} fragments={undefined} isLoading={false} onOverride={() => {}} />,
     );
     expect(screen.getByText('Aucun fragment')).toBeInTheDocument();
   });
 
   it('shows "requis" label for required slots', () => {
-    render(
-      <SlotPreview slot={baseSlot} fragments={[]} isLoading={false} onOverride={() => {}} />
-    );
+    render(<SlotPreview slot={baseSlot} fragments={[]} isLoading={false} onOverride={() => {}} />);
     expect(screen.getByText('requis')).toBeInTheDocument();
   });
 
   it('does not show "requis" for optional slots', () => {
     render(
-      <SlotPreview slot={{ ...baseSlot, required: false }} fragments={[]} isLoading={false} onOverride={() => {}} />
+      <SlotPreview
+        slot={{ ...baseSlot, required: false }}
+        fragments={[]}
+        isLoading={false}
+        onOverride={() => {}}
+      />,
     );
     expect(screen.queryByText('requis')).not.toBeInTheDocument();
   });
@@ -76,7 +90,7 @@ describe('SlotPreview', () => {
         fragments={[]}
         isLoading={false}
         onOverride={() => {}}
-      />
+      />,
     );
     expect(screen.getByText('fallback: default-intro')).toBeInTheDocument();
   });
@@ -84,7 +98,12 @@ describe('SlotPreview', () => {
   it('calls onOverride with slot key when clicked', () => {
     const onOverride = vi.fn();
     render(
-      <SlotPreview slot={baseSlot} fragments={[fragment]} isLoading={false} onOverride={onOverride} />
+      <SlotPreview
+        slot={baseSlot}
+        fragments={[fragment]}
+        isLoading={false}
+        onOverride={onOverride}
+      />,
     );
     fireEvent.click(screen.getByText('intro'));
     expect(onOverride).toHaveBeenCalledWith('intro');
@@ -93,7 +112,7 @@ describe('SlotPreview', () => {
   it('shows fragment count when multiple fragments', () => {
     const fragments = [fragment, { ...fragment, id: 'frag-002', title: 'Second' }];
     render(
-      <SlotPreview slot={baseSlot} fragments={fragments} isLoading={false} onOverride={() => {}} />
+      <SlotPreview slot={baseSlot} fragments={fragments} isLoading={false} onOverride={() => {}} />,
     );
     expect(screen.getByText('2 fragments')).toBeInTheDocument();
   });

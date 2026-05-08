@@ -98,7 +98,7 @@ export class TemplateService {
     const templatesDir = join(this.storePath, 'templates');
     if (!existsSync(templatesDir)) return 0;
 
-    const yamlFiles = readdirSync(templatesDir).filter(f => f.endsWith('.yaml'));
+    const yamlFiles = readdirSync(templatesDir).filter((f) => f.endsWith('.yaml'));
     let synced = 0;
 
     for (const filename of yamlFiles) {
@@ -110,7 +110,10 @@ export class TemplateService {
       if (!result.success) continue;
 
       const tpl = result.data;
-      const existing = await this.db.select({ id: templates.id }).from(templates).where(eq(templates.id, tpl.id));
+      const existing = await this.db
+        .select({ id: templates.id })
+        .from(templates)
+        .where(eq(templates.id, tpl.id));
       if (existing.length > 0) continue;
 
       const relYamlPath = join('templates', filename);
@@ -159,11 +162,7 @@ export class TemplateService {
   }
 
   async getById(id: string) {
-    const rows = await this.db
-      .select()
-      .from(templates)
-      .where(eq(templates.id, id))
-      .limit(1);
+    const rows = await this.db.select().from(templates).where(eq(templates.id, id)).limit(1);
     if (rows.length === 0) return null;
 
     const row = rows[0];
@@ -189,11 +188,7 @@ export class TemplateService {
     authorRole: string,
     ip?: string,
   ) {
-    const existing = await this.db
-      .select()
-      .from(templates)
-      .where(eq(templates.id, id))
-      .limit(1);
+    const existing = await this.db.select().from(templates).where(eq(templates.id, id)).limit(1);
     if (existing.length === 0) throw new Error('Template not found');
 
     const row = existing[0];
@@ -247,11 +242,7 @@ export class TemplateService {
   }
 
   async delete(id: string, author: string, authorRole: string, ip?: string) {
-    const existing = await this.db
-      .select()
-      .from(templates)
-      .where(eq(templates.id, id))
-      .limit(1);
+    const existing = await this.db.select().from(templates).where(eq(templates.id, id)).limit(1);
     if (existing.length === 0) throw new Error('Template not found');
 
     const row = existing[0];

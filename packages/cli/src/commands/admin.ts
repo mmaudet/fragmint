@@ -42,7 +42,9 @@ export function registerAdminCommands(program: Command, getClient: () => Fragmin
           return;
         }
         for (const t of results) {
-          console.log(`[${t.id}] ${t.name} — role: ${t.role} — active: ${t.active} — last used: ${t.last_used ?? 'never'}`);
+          console.log(
+            `[${t.id}] ${t.name} — role: ${t.role} — active: ${t.active} — last used: ${t.last_used ?? 'never'}`,
+          );
         }
       }
     });
@@ -106,7 +108,9 @@ export function registerAdminCommands(program: Command, getClient: () => Fragmin
           return;
         }
         for (const log of results) {
-          console.log(`[${log.created_at}] ${log.actor} — ${log.action} on ${log.target_id} (${log.ip})`);
+          console.log(
+            `[${log.created_at}] ${log.actor} — ${log.action} on ${log.target_id} (${log.ip})`,
+          );
         }
       }
     });

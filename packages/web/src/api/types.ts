@@ -45,7 +45,10 @@ export interface Template {
     fallback: string;
     count: number;
   }>;
-  context_schema?: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }>;
+  context_schema?: Record<
+    string,
+    { type: string; required?: boolean; default?: any; enum?: string[] }
+  >;
 }
 
 export interface ComposeResponse {

@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const qualityStyles = {
   approved: 'bg-green-100 text-green-800 border-green-200',
@@ -17,5 +17,5 @@ export function QualityBadge({ quality }: QualityBadgeProps) {
     <Badge variant="outline" className={cn(qualityStyles[quality])}>
       {quality}
     </Badge>
-  )
+  );
 }

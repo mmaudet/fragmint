@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFragments, useFragment, useFragmentHistory, useApproveFragment } from '@/api/hooks/use-fragments';
+import {
+  useFragments,
+  useFragment,
+  useFragmentHistory,
+  useApproveFragment,
+} from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { FragmentCard } from '@/components/fragment-card';
@@ -106,7 +111,9 @@ export default function ValidationPage() {
             <>
               <SheetHeader>
                 <div className="flex items-center gap-2">
-                  <SheetTitle className="flex-1">{fragment.title || t('common', 'noTitle')}</SheetTitle>
+                  <SheetTitle className="flex-1">
+                    {fragment.title || t('common', 'noTitle')}
+                  </SheetTitle>
                   <QualityBadge quality={fragment.quality} />
                 </div>
                 <SheetDescription>
@@ -130,14 +137,22 @@ export default function ValidationPage() {
                   <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                   <table className="text-sm w-full">
                     <tbody>
-                      {([
-                        [t('common', 'author'), fragment.author],
-                        [t('common', 'domain'), fragment.domain],
-                        [t('common', 'type'), fragment.type],
-                        [t('common', 'language'), fragment.lang],
-                        [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                        [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
-                      ] as const).map(([label, value]) => (
+                      {(
+                        [
+                          [t('common', 'author'), fragment.author],
+                          [t('common', 'domain'), fragment.domain],
+                          [t('common', 'type'), fragment.type],
+                          [t('common', 'language'), fragment.lang],
+                          [
+                            t('common', 'createdAt'),
+                            new Date(fragment.created_at).toLocaleDateString('fr-FR'),
+                          ],
+                          [
+                            t('common', 'updatedAt'),
+                            new Date(fragment.updated_at).toLocaleDateString('fr-FR'),
+                          ],
+                        ] as const
+                      ).map(([label, value]) => (
                         <tr key={label} className="border-b last:border-0">
                           <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
                           <td className="py-1.5 break-all">{value}</td>

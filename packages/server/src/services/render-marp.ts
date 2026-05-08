@@ -45,16 +45,22 @@ export async function renderMarp(
     writeFileSync(tmpMd, resolvedMd);
 
     try {
-      await execFileAsync(
-        'npx',
-        ['--yes', '@marp-team/marp-cli', tmpMd, '--pptx', '-o', tmpPptx],
-        { timeout: 60_000 },
-      );
+      await execFileAsync('npx', ['--yes', '@marp-team/marp-cli', tmpMd, '--pptx', '-o', tmpPptx], {
+        timeout: 60_000,
+      });
       const buffer = readFileSync(tmpPptx);
       return { buffer, format: 'pptx' };
     } finally {
-      try { unlinkSync(tmpMd); } catch { /* ignore */ }
-      try { unlinkSync(tmpPptx); } catch { /* ignore */ }
+      try {
+        unlinkSync(tmpMd);
+      } catch {
+        /* ignore */
+      }
+      try {
+        unlinkSync(tmpPptx);
+      } catch {
+        /* ignore */
+      }
     }
   }
 

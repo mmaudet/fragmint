@@ -12,7 +12,8 @@ export function useTemplates(collectionSlug: string) {
 export function useTemplate(collectionSlug: string, id: string | null) {
   return useQuery({
     queryKey: ['template', collectionSlug, id],
-    queryFn: () => apiRequest<Template>('GET', collectionApiUrl(collectionSlug, `/templates/${id}`)),
+    queryFn: () =>
+      apiRequest<Template>('GET', collectionApiUrl(collectionSlug, `/templates/${id}`)),
     enabled: !!id,
   });
 }

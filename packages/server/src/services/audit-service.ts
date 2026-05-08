@@ -32,7 +32,9 @@ export class AuditService {
     if (options?.from) conditions.push(gte(auditLog.timestamp, options.from));
     if (options?.to) conditions.push(lte(auditLog.timestamp, options.to));
 
-    const rows = await this.db.select().from(auditLog)
+    const rows = await this.db
+      .select()
+      .from(auditLog)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(auditLog.id))
       .limit(limit);

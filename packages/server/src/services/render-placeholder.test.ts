@@ -31,7 +31,10 @@ describe('resolvePlaceholders', () => {
   it('accesses item properties via $var.field in FOR loop', () => {
     const template = '+++FOR row IN rows++++++INS $row.x+++ / +++INS $row.y+++\n+++END-FOR row+++';
     const data = {
-      rows: [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+      rows: [
+        { x: 1, y: 2 },
+        { x: 3, y: 4 },
+      ],
     };
     const result = resolvePlaceholders(template, data);
     expect(result).toBe('1 / 2\n3 / 4\n');

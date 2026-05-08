@@ -23,12 +23,22 @@ export function adminRoutes(
     return { data: users, meta: { count: users.length }, error: null };
   });
 
-  app.post('/v1/users', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {
-    const parsed = createUserSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    const user = await userService.create(parsed.data.login, parsed.data.password, parsed.data.display_name, parsed.data.role);
-    return reply.status(201).send({ data: user, meta: null, error: null });
-  });
+  app.post(
+    '/v1/users',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const parsed = createUserSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const user = await userService.create(
+        parsed.data.login,
+        parsed.data.password,
+        parsed.data.display_name,
+        parsed.data.role,
+      );
+      return reply.status(201).send({ data: user, meta: null, error: null });
+    },
+  );
 
   // Tokens
   app.get('/v1/tokens', { preHandler: [authenticate, requireRole('admin')] }, async () => {
@@ -36,18 +46,31 @@ export function adminRoutes(
     return { data: tokens, meta: { count: tokens.length }, error: null };
   });
 
-  app.post('/v1/tokens', { preHandler: [authenticate, requireRole('admin')] }, async (request, reply) => {
-    const parsed = createTokenSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    const token = await tokenService.create(parsed.data.name, parsed.data.role, request.user.login);
-    return reply.status(201).send({ data: token, meta: null, error: null });
-  });
+  app.post(
+    '/v1/tokens',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const parsed = createTokenSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const token = await tokenService.create(
+        parsed.data.name,
+        parsed.data.role,
+        request.user.login,
+      );
+      return reply.status(201).send({ data: token, meta: null, error: null });
+    },
+  );
 
-  app.delete('/v1/tokens/:id', { preHandler: [authenticate, requireRole('admin')] }, async (request) => {
-    const { id } = request.params as { id: string };
-    await tokenService.revoke(id);
-    return { data: { revoked: true }, meta: null, error: null };
-  });
+  app.delete(
+    '/v1/tokens/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      await tokenService.revoke(id);
+      return { data: { revoked: true }, meta: null, error: null };
+    },
+  );
 
   // Audit
   app.get('/v1/audit', { preHandler: [authenticate, requireRole('admin')] }, async (request) => {
@@ -72,8 +95,14 @@ export function adminRoutes(
         mode = status.mode;
         milvus = status.milvus;
         embedding = status.embedding;
-      } catch { /* fallback to defaults */ }
+      } catch {
+        /* fallback to defaults */
+      }
     }
-    return { data: { status: 'ok', mode, milvus, embedding, last_run: new Date().toISOString() }, meta: null, error: null };
+    return {
+      data: { status: 'ok', mode, milvus, embedding, last_run: new Date().toISOString() },
+      meta: null,
+      error: null,
+    };
   });
 }

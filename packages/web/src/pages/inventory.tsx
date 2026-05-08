@@ -5,7 +5,14 @@ import { useCollection } from '@/lib/collection-context';
 import { QualityBadge } from '@/components/quality-badge';
 import { CoverageBar } from '@/components/coverage-bar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -76,7 +83,9 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{t('inventory', 'totalFragments')}</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {t('inventory', 'totalFragments')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{total}</div>
@@ -164,7 +173,10 @@ export default function InventoryPage() {
                       {gap.status === 'no_approved' ? (
                         <Badge variant="destructive">no_approved</Badge>
                       ) : gap.status === 'missing_translation' ? (
-                        <Badge className="bg-amber-100 text-amber-800 border-amber-200" variant="outline">
+                        <Badge
+                          className="bg-amber-100 text-amber-800 border-amber-200"
+                          variant="outline"
+                        >
                           missing_translation
                         </Badge>
                       ) : (

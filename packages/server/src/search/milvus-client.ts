@@ -9,8 +9,8 @@ export interface MilvusFragment {
   lang: string;
   quality: string;
   author: string;
-  created_at: number;   // unix timestamp
-  updated_at: number;   // unix timestamp
+  created_at: number; // unix timestamp
+  updated_at: number; // unix timestamp
   tags: string[];
   access_read: string[];
   community_id: number;
@@ -35,11 +35,11 @@ function buildFilterExpr(filters: MilvusFilters): string {
   const parts: string[] = [];
 
   if (filters.type?.length) {
-    const vals = filters.type.map(t => `"${t}"`).join(', ');
+    const vals = filters.type.map((t) => `"${t}"`).join(', ');
     parts.push(`type in [${vals}]`);
   }
   if (filters.domain?.length) {
-    const vals = filters.domain.map(d => `"${d}"`).join(', ');
+    const vals = filters.domain.map((d) => `"${d}"`).join(', ');
     parts.push(`domain in [${vals}]`);
   }
   if (filters.lang) {
@@ -48,7 +48,9 @@ function buildFilterExpr(filters: MilvusFilters): string {
   if (filters.quality_min) {
     const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
     if (minIdx > 0) {
-      const allowed = QUALITY_ORDER.slice(minIdx).map(q => `"${q}"`).join(', ');
+      const allowed = QUALITY_ORDER.slice(minIdx)
+        .map((q) => `"${q}"`)
+        .join(', ');
       parts.push(`quality in [${allowed}]`);
     }
   }
@@ -112,7 +114,12 @@ export class FragmintMilvusClient {
     });
   }
 
-  async search(vector: number[], filters: MilvusFilters, limit: number, partitionNames?: string[]): Promise<MilvusSearchResult[]> {
+  async search(
+    vector: number[],
+    filters: MilvusFilters,
+    limit: number,
+    partitionNames?: string[],
+  ): Promise<MilvusSearchResult[]> {
     const filterExpr = buildFilterExpr(filters);
     const results = await this.sdk.search({
       collection_name: this.collectionName,

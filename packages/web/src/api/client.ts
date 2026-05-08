@@ -10,11 +10,7 @@ export function getToken(): string | null {
   return authToken;
 }
 
-export async function apiRequest<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<T> {
+export async function apiRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 

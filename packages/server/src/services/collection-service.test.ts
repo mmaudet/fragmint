@@ -49,22 +49,16 @@ describe('CollectionService', () => {
       service.create({ slug: 'my team', name: 'T', type: 'team' }, 'alice'),
     ).rejects.toThrow('lowercase');
 
-    await expect(
-      service.create({ slug: 'a', name: 'T', type: 'team' }, 'alice'),
-    ).rejects.toThrow('at least 2');
+    await expect(service.create({ slug: 'a', name: 'T', type: 'team' }, 'alice')).rejects.toThrow(
+      'at least 2',
+    );
   });
 
   it('listForUser returns collections with roles', async () => {
-    await service.create(
-      { slug: 'team-alpha', name: 'Alpha', type: 'team' },
-      'alice',
-    );
+    await service.create({ slug: 'team-alpha', name: 'Alpha', type: 'team' }, 'alice');
     await service.addMember('team-alpha', 'bob', 'contributor', 'alice');
 
-    await service.create(
-      { slug: 'team-beta', name: 'Beta', type: 'team' },
-      'alice',
-    );
+    await service.create({ slug: 'team-beta', name: 'Beta', type: 'team' }, 'alice');
     await service.addMember('team-beta', 'bob', 'reader', 'alice');
 
     const list = await service.listForUser('bob');
@@ -78,37 +72,23 @@ describe('CollectionService', () => {
   });
 
   it('addMember + checkAccess works for valid membership', async () => {
-    await service.create(
-      { slug: 'team-check', name: 'Check', type: 'team' },
-      'alice',
-    );
+    await service.create({ slug: 'team-check', name: 'Check', type: 'team' }, 'alice');
     await service.addMember('team-check', 'bob', 'expert', 'alice');
 
     // expert (2) >= contributor (1)
-    expect(
-      await service.checkAccess('bob', null, 'team-check', 'contributor'),
-    ).toBe(true);
+    expect(await service.checkAccess('bob', null, 'team-check', 'contributor')).toBe(true);
 
     // expert (2) >= expert (2)
-    expect(
-      await service.checkAccess('bob', null, 'team-check', 'expert'),
-    ).toBe(true);
+    expect(await service.checkAccess('bob', null, 'team-check', 'expert')).toBe(true);
 
     // expert (2) < manager (3)
-    expect(
-      await service.checkAccess('bob', null, 'team-check', 'manager'),
-    ).toBe(false);
+    expect(await service.checkAccess('bob', null, 'team-check', 'manager')).toBe(false);
   });
 
   it('checkAccess returns false for no membership', async () => {
-    await service.create(
-      { slug: 'team-noaccess', name: 'NoAccess', type: 'team' },
-      'alice',
-    );
+    await service.create({ slug: 'team-noaccess', name: 'NoAccess', type: 'team' }, 'alice');
 
-    expect(
-      await service.checkAccess('stranger', null, 'team-noaccess', 'reader'),
-    ).toBe(false);
+    expect(await service.checkAccess('stranger', null, 'team-noaccess', 'reader')).toBe(false);
   });
 
   it('ensurePersonalCollection creates on first call, returns existing on second', async () => {
@@ -120,12 +100,7 @@ describe('CollectionService', () => {
     expect(second.id).toBe(first.id);
 
     // Verify owner membership was set
-    const hasAccess = await service.checkAccess(
-      'user-1',
-      null,
-      'personal-johndoe',
-      'owner',
-    );
+    const hasAccess = await service.checkAccess('user-1', null, 'personal-johndoe', 'owner');
     expect(hasAccess).toBe(true);
   });
 });

@@ -47,7 +47,16 @@ describe('exportFragmentsToXlsx', () => {
     const headerRow = sheet.getRow(1);
     const headers = [];
     headerRow.eachCell((cell) => headers.push(cell.value));
-    expect(headers).toEqual(['ID', 'Titre', 'Type', 'Domaine', 'Langue', 'Qualité', 'Auteur', 'Créé le']);
+    expect(headers).toEqual([
+      'ID',
+      'Titre',
+      'Type',
+      'Domaine',
+      'Langue',
+      'Qualité',
+      'Auteur',
+      'Créé le',
+    ]);
   });
 
   it('should contain correct row data', async () => {

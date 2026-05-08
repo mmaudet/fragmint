@@ -72,23 +72,27 @@ export function harvestRoutes(
   });
 
   // POST /v1/harvest/:jobId/validate — validate harvest candidates
-  app.post(`${prefix}/harvest/:jobId/validate`, { preHandler: expertHandlers }, async (request, reply) => {
-    const { jobId } = request.params as { jobId: string };
-    const body = request.body as ValidationInput;
+  app.post(
+    `${prefix}/harvest/:jobId/validate`,
+    { preHandler: expertHandlers },
+    async (request, reply) => {
+      const { jobId } = request.params as { jobId: string };
+      const body = request.body as ValidationInput;
 
-    if (!body || (!body.accepted && !body.modified && !body.merged && !body.rejected)) {
-      return reply.status(400).send({ data: null, meta: null, error: 'Missing validation data' });
-    }
+      if (!body || (!body.accepted && !body.modified && !body.merged && !body.rejected)) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Missing validation data' });
+      }
 
-    const validation: ValidationInput = {
-      accepted: body.accepted ?? [],
-      modified: body.modified ?? [],
-      merged: body.merged ?? [],
-      rejected: body.rejected ?? [],
-    };
+      const validation: ValidationInput = {
+        accepted: body.accepted ?? [],
+        modified: body.modified ?? [],
+        merged: body.merged ?? [],
+        rejected: body.rejected ?? [],
+      };
 
-    const result = await harvesterService.validate(jobId, validation, request.user.login);
+      const result = await harvesterService.validate(jobId, validation, request.user.login);
 
-    return { data: result, meta: null, error: null };
-  });
+      return { data: result, meta: null, error: null };
+    },
+  );
 }

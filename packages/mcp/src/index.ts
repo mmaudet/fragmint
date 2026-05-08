@@ -2,10 +2,7 @@
 // packages/mcp/src/index.ts
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { FragmintApiClient } from './client.js';
 import type { ToolDefinition, ToolHandler } from './types.js';
 
@@ -43,18 +40,13 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: harvestDefinition, handler: harvestHandler(client) },
 ];
 
-const handlerMap = new Map<string, ToolHandler>(
-  tools.map(t => [t.definition.name, t.handler])
-);
+const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));
 
 // MCP Server
-const server = new Server(
-  { name: 'fragmint', version: '0.1.0' },
-  { capabilities: { tools: {} } }
-);
+const server = new Server({ name: 'fragmint', version: '0.1.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: tools.map(t => ({
+  tools: tools.map((t) => ({
     name: t.definition.name,
     description: t.definition.description,
     inputSchema: t.definition.inputSchema,

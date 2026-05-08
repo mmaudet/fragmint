@@ -18,14 +18,16 @@ export function useFragments(collectionSlug: string, filters: FragmentFilters = 
   }
   return useQuery({
     queryKey: ['fragments', collectionSlug, filters],
-    queryFn: () => apiRequest<Fragment[]>('GET', collectionApiUrl(collectionSlug, `/fragments?${params}`)),
+    queryFn: () =>
+      apiRequest<Fragment[]>('GET', collectionApiUrl(collectionSlug, `/fragments?${params}`)),
   });
 }
 
 export function useFragment(collectionSlug: string, id: string | null) {
   return useQuery({
     queryKey: ['fragment', collectionSlug, id],
-    queryFn: () => apiRequest<Fragment>('GET', collectionApiUrl(collectionSlug, `/fragments/${id}`)),
+    queryFn: () =>
+      apiRequest<Fragment>('GET', collectionApiUrl(collectionSlug, `/fragments/${id}`)),
     enabled: !!id,
   });
 }
@@ -33,15 +35,27 @@ export function useFragment(collectionSlug: string, id: string | null) {
 export function useFragmentHistory(collectionSlug: string, id: string | null) {
   return useQuery({
     queryKey: ['fragment-history', collectionSlug, id],
-    queryFn: () => apiRequest<GitLogEntry[]>('GET', collectionApiUrl(collectionSlug, `/fragments/${id}/history`)),
+    queryFn: () =>
+      apiRequest<GitLogEntry[]>(
+        'GET',
+        collectionApiUrl(collectionSlug, `/fragments/${id}/history`),
+      ),
     enabled: !!id,
   });
 }
 
-export function useSearchFragments(collectionSlug: string, query: string, filters?: Record<string, any>) {
+export function useSearchFragments(
+  collectionSlug: string,
+  query: string,
+  filters?: Record<string, any>,
+) {
   return useQuery({
     queryKey: ['fragment-search', collectionSlug, query, filters],
-    queryFn: () => apiRequest<Fragment[]>('POST', collectionApiUrl(collectionSlug, '/fragments/search'), { query, filters }),
+    queryFn: () =>
+      apiRequest<Fragment[]>('POST', collectionApiUrl(collectionSlug, '/fragments/search'), {
+        query,
+        filters,
+      }),
     enabled: query.length > 0,
   });
 }
@@ -49,7 +63,8 @@ export function useSearchFragments(collectionSlug: string, query: string, filter
 export function useReviewFragment(collectionSlug: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiRequest<void>('POST', collectionApiUrl(collectionSlug, `/fragments/${id}/review`)),
+    mutationFn: (id: string) =>
+      apiRequest<void>('POST', collectionApiUrl(collectionSlug, `/fragments/${id}/review`)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fragments'] });
       qc.invalidateQueries({ queryKey: ['fragment'] });
@@ -60,7 +75,8 @@ export function useReviewFragment(collectionSlug: string) {
 export function useApproveFragment(collectionSlug: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiRequest<void>('POST', collectionApiUrl(collectionSlug, `/fragments/${id}/approve`)),
+    mutationFn: (id: string) =>
+      apiRequest<void>('POST', collectionApiUrl(collectionSlug, `/fragments/${id}/approve`)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fragments'] });
       qc.invalidateQueries({ queryKey: ['fragment'] });

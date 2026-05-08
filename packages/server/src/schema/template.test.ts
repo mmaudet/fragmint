@@ -93,9 +93,7 @@ describe('ComposeResponseSchema', () => {
       expires_at: '2026-03-15T00:00:00Z',
       template: { id: 'tpl-proposal-001', name: 'Commercial Proposal', version: '1.0.0' },
       context: { client_name: 'LINAGORA' },
-      resolved: [
-        { key: 'intro', fragment_id: 'frag-abc123', score: 0.95, quality: 'approved' },
-      ],
+      resolved: [{ key: 'intro', fragment_id: 'frag-abc123', score: 0.95, quality: 'approved' }],
       skipped: [],
       generated: [],
       structured_data: { pricing: { total: 5000 } },

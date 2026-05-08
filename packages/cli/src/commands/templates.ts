@@ -3,7 +3,9 @@ import type { Command } from 'commander';
 import type { FragmintClient } from '../client.js';
 
 export function registerTemplateCommands(program: Command, getClient: () => FragmintClient) {
-  const tpl = program.command('templates').description('Template operations')
+  const tpl = program
+    .command('templates')
+    .description('Template operations')
     .option('--collection <slug>', 'Collection slug', 'common');
 
   tpl

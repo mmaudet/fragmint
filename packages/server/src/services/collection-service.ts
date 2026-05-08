@@ -93,18 +93,12 @@ export class CollectionService {
       });
     }
 
-    const rows = await this.db
-      .select()
-      .from(collections)
-      .where(eq(collections.id, id))
-      .limit(1);
+    const rows = await this.db.select().from(collections).where(eq(collections.id, id)).limit(1);
     return rows[0];
   }
 
   async listAll(): Promise<CollectionWithRole[]> {
-    const rows = await this.db
-      .select()
-      .from(collections);
+    const rows = await this.db.select().from(collections);
     return rows.map((r) => ({ ...r, role: 'owner' })) as CollectionWithRole[];
   }
 
@@ -127,10 +121,7 @@ export class CollectionService {
         role: collectionMemberships.role,
       })
       .from(collections)
-      .innerJoin(
-        collectionMemberships,
-        eq(collections.id, collectionMemberships.collection_id),
-      )
+      .innerJoin(collectionMemberships, eq(collections.id, collectionMemberships.collection_id))
       .where(eq(collectionMemberships.user_id, userId));
 
     return rows as CollectionWithRole[];
@@ -211,10 +202,7 @@ export class CollectionService {
     return userLevel >= requiredLevel;
   }
 
-  async ensurePersonalCollection(
-    userId: string,
-    login: string,
-  ): Promise<Collection> {
+  async ensurePersonalCollection(userId: string, login: string): Promise<Collection> {
     const slug = `personal-${login}`;
     const existing = await this.getBySlug(slug);
     if (existing) return existing;
@@ -267,10 +255,7 @@ export class CollectionService {
     const rows = await this.db
       .select({ slug: collections.slug })
       .from(collections)
-      .innerJoin(
-        collectionMemberships,
-        eq(collections.id, collectionMemberships.collection_id),
-      )
+      .innerJoin(collectionMemberships, eq(collections.id, collectionMemberships.collection_id))
       .where(eq(collectionMemberships.user_id, userId));
 
     return rows.map((r) => r.slug);
@@ -288,9 +273,7 @@ export class CollectionService {
       .limit(1);
 
     if (frags.length > 0 && !force) {
-      throw new Error(
-        'Collection is not empty. Use force=true to delete anyway.',
-      );
+      throw new Error('Collection is not empty. Use force=true to delete anyway.');
     }
 
     // Delete memberships

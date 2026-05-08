@@ -74,10 +74,14 @@ export class GitRepository {
     const { stdout } = await this.exec(...args);
     if (!stdout.trim()) return [];
 
-    return stdout.trim().split('\0').filter(Boolean).map((block) => {
-      const [commit, author, date, ...messageParts] = block.trim().split('\n');
-      return { commit, author, date, message: messageParts.join('\n') };
-    });
+    return stdout
+      .trim()
+      .split('\0')
+      .filter(Boolean)
+      .map((block) => {
+        const [commit, author, date, ...messageParts] = block.trim().split('\n');
+        return { commit, author, date, message: messageParts.join('\n') };
+      });
   }
 
   async diff(commit1: string, commit2: string, filePath?: string): Promise<string> {

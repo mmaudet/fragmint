@@ -47,10 +47,12 @@ export const ComposeRequestSchema = z.object({
   context: z.record(z.any()),
   overrides: z.record(z.string()).optional(),
   structured_data: z.record(z.any()).optional(),
-  output: z.object({
-    format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
-    filename: z.string().optional(),
-  }).optional(),
+  output: z
+    .object({
+      format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
+      filename: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type ComposeRequest = z.infer<typeof ComposeRequestSchema>;

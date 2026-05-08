@@ -25,13 +25,21 @@ function markdownToHtmlSync(md: string): string {
   // Convert Markdown tables
   const tableRegex = /\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g;
   html = html.replace(tableRegex, (_, header, rows) => {
-    const headers = header.split('|').map((h: string) => h.trim()).filter(Boolean);
+    const headers = header
+      .split('|')
+      .map((h: string) => h.trim())
+      .filter(Boolean);
     const headerHtml = headers.map((h: string) => `<th>${h}</th>`).join('');
     const rowLines = rows.trim().split('\n');
-    const rowsHtml = rowLines.map((row: string) => {
-      const cells = row.split('|').map((c: string) => c.trim()).filter(Boolean);
-      return `<tr>${cells.map((c: string) => `<td>${c}</td>`).join('')}</tr>`;
-    }).join('\n');
+    const rowsHtml = rowLines
+      .map((row: string) => {
+        const cells = row
+          .split('|')
+          .map((c: string) => c.trim())
+          .filter(Boolean);
+        return `<tr>${cells.map((c: string) => `<td>${c}</td>`).join('')}</tr>`;
+      })
+      .join('\n');
     return `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%">
 <thead><tr>${headerHtml}</tr></thead>
 <tbody>${rowsHtml}</tbody>
@@ -68,26 +76,28 @@ function resolveForLoops(template: string, data: Record<string, any>): string {
   return template.replace(forRegex, (_, varName, arrayPath, body) => {
     const array = getNestedValue(data, arrayPath.trim());
     if (!Array.isArray(array)) return '';
-    return array.map(item => {
-      // Handle +++HTML $var.field+++ (Markdown → HTML)
-      let resolved = body.replace(
-        new RegExp(`\\+\\+\\+HTML\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-        (__, field) => {
-          const val = item[field.trim()];
-          if (val === undefined || val === null) return '';
-          return markdownToHtmlSync(String(val));
-        }
-      );
-      // Handle +++INS $var.field+++
-      resolved = resolved.replace(
-        new RegExp(`\\+\\+\\+INS\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-        (__, field) => {
-          const val = item[field.trim()];
-          return val !== undefined && val !== null ? String(val) : '';
-        }
-      );
-      return resolved;
-    }).join('');
+    return array
+      .map((item) => {
+        // Handle +++HTML $var.field+++ (Markdown → HTML)
+        let resolved = body.replace(
+          new RegExp(`\\+\\+\\+HTML\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
+          (__, field) => {
+            const val = item[field.trim()];
+            if (val === undefined || val === null) return '';
+            return markdownToHtmlSync(String(val));
+          },
+        );
+        // Handle +++INS $var.field+++
+        resolved = resolved.replace(
+          new RegExp(`\\+\\+\\+INS\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
+          (__, field) => {
+            const val = item[field.trim()];
+            return val !== undefined && val !== null ? String(val) : '';
+          },
+        );
+        return resolved;
+      })
+      .join('');
   });
 }
 

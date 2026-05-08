@@ -54,10 +54,7 @@ export async function renderDocument(
  *
  * For table row loops, place FOR/END-FOR in the first/last cell of the row.
  */
-async function renderDocx(
-  templatePath: string,
-  data: Record<string, any>,
-): Promise<RenderResult> {
+async function renderDocx(templatePath: string, data: Record<string, any>): Promise<RenderResult> {
   const templateBuf = readFileSync(templatePath);
 
   const result = await createReport({

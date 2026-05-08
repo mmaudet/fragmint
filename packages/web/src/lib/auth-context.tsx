@@ -16,7 +16,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
 
   const login = useCallback(async (username: string, password: string) => {
-    const result = await apiRequest<LoginResponse>('POST', '/v1/auth/login', { username, password });
+    const result = await apiRequest<LoginResponse>('POST', '/v1/auth/login', {
+      username,
+      password,
+    });
     setToken(result.token);
     setTokenState(result.token);
     setUser(result.user);
@@ -29,9 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>
   );
 }
 

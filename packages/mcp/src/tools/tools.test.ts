@@ -53,7 +53,10 @@ describe('fragment_inventory', () => {
     const client = mockClient();
     const handler = inventoryHandler(client as any);
     const result = await handler({ topic: 'souveraineté' });
-    expect(client.post).toHaveBeenCalledWith('/v1/collections/common/fragments/inventory', { topic: 'souveraineté', lang: undefined });
+    expect(client.post).toHaveBeenCalledWith('/v1/collections/common/fragments/inventory', {
+      topic: 'souveraineté',
+      lang: undefined,
+    });
     expect(result.isError).toBeUndefined();
   });
 
@@ -61,7 +64,10 @@ describe('fragment_inventory', () => {
     const client = mockClient();
     const handler = inventoryHandler(client as any);
     await handler({ topic: 'test', collection_slug: 'anfsi' });
-    expect(client.post).toHaveBeenCalledWith('/v1/collections/anfsi/fragments/inventory', { topic: 'test', lang: undefined });
+    expect(client.post).toHaveBeenCalledWith('/v1/collections/anfsi/fragments/inventory', {
+      topic: 'test',
+      lang: undefined,
+    });
   });
 
   it('returns error on API failure', async () => {
@@ -85,7 +91,8 @@ describe('fragment_search', () => {
     const handler = searchHandler(client as any);
     const result = await handler({ query: 'test', type: 'argument', lang: 'fr' });
     expect(client.post).toHaveBeenCalledWith('/v1/collections/common/fragments/search', {
-      query: 'test', limit: 10,
+      query: 'test',
+      limit: 10,
       filters: { type: ['argument'], lang: 'fr' },
     });
     expect(result.isError).toBeUndefined();
@@ -96,7 +103,10 @@ describe('fragment_search', () => {
     client.post.mockResolvedValue([]);
     const handler = searchHandler(client as any);
     await handler({ query: 'test', collection_slugs: ['anfsi', 'common'] });
-    expect(client.post).toHaveBeenCalledWith('/v1/collections/anfsi/fragments/search', expect.any(Object));
+    expect(client.post).toHaveBeenCalledWith(
+      '/v1/collections/anfsi/fragments/search',
+      expect.any(Object),
+    );
   });
 });
 
@@ -118,8 +128,9 @@ describe('fragment_get', () => {
 
   it('fetches history when include_history is true', async () => {
     const client = mockClient();
-    client.get.mockResolvedValueOnce({ id: 'frag-test' })
-              .mockResolvedValueOnce([{ commit: 'abc' }]);
+    client.get
+      .mockResolvedValueOnce({ id: 'frag-test' })
+      .mockResolvedValueOnce([{ commit: 'abc' }]);
     const handler = getHandler(client as any);
     await handler({ id: 'frag-test', include_history: true, collection_slug: 'anfsi' });
     expect(client.get).toHaveBeenCalledTimes(2);
@@ -134,8 +145,12 @@ describe('fragment_create', () => {
     const handler = createHandler(client as any);
     const result = await handler({ type: 'argument', domain: 'test', lang: 'fr', body: '# Test' });
     expect(client.post).toHaveBeenCalledWith('/v1/collections/common/fragments', {
-      type: 'argument', domain: 'test', lang: 'fr', body: '# Test',
-      tags: [], parent_id: null,
+      type: 'argument',
+      domain: 'test',
+      lang: 'fr',
+      body: '# Test',
+      tags: [],
+      parent_id: null,
     });
     expect(result.isError).toBeUndefined();
   });
@@ -144,7 +159,13 @@ describe('fragment_create', () => {
     const client = mockClient();
     client.post.mockResolvedValue({ id: 'frag-new' });
     const handler = createHandler(client as any);
-    await handler({ type: 'argument', domain: 'test', lang: 'fr', body: '# Test', collection_slug: 'anfsi' });
+    await handler({
+      type: 'argument',
+      domain: 'test',
+      lang: 'fr',
+      body: '# Test',
+      collection_slug: 'anfsi',
+    });
     expect(client.post).toHaveBeenCalledWith('/v1/collections/anfsi/fragments', expect.any(Object));
   });
 });
@@ -154,7 +175,9 @@ describe('fragment_update', () => {
     const client = mockClient();
     const handler = updateHandler(client as any);
     const result = await handler({ id: 'frag-test', body: '# Updated' });
-    expect(client.put).toHaveBeenCalledWith('/v1/collections/common/fragments/frag-test', { body: '# Updated' });
+    expect(client.put).toHaveBeenCalledWith('/v1/collections/common/fragments/frag-test', {
+      body: '# Updated',
+    });
     expect(result.isError).toBeUndefined();
   });
 
@@ -162,7 +185,9 @@ describe('fragment_update', () => {
     const client = mockClient();
     const handler = updateHandler(client as any);
     await handler({ id: 'frag-test', body: '# Updated', collection_slug: 'anfsi' });
-    expect(client.put).toHaveBeenCalledWith('/v1/collections/anfsi/fragments/frag-test', { body: '# Updated' });
+    expect(client.put).toHaveBeenCalledWith('/v1/collections/anfsi/fragments/frag-test', {
+      body: '# Updated',
+    });
   });
 });
 
@@ -205,11 +230,14 @@ describe('document_compose', () => {
       template_id: 'tpl-proposition-001',
       context: { lang: 'fr', product: 'twake' },
     });
-    expect(client.post).toHaveBeenCalledWith('/v1/collections/common/templates/tpl-proposition-001/compose', {
-      context: { lang: 'fr', product: 'twake' },
-      overrides: undefined,
-      structured_data: undefined,
-    });
+    expect(client.post).toHaveBeenCalledWith(
+      '/v1/collections/common/templates/tpl-proposition-001/compose',
+      {
+        context: { lang: 'fr', product: 'twake' },
+        overrides: undefined,
+        structured_data: undefined,
+      },
+    );
     expect(result.isError).toBeUndefined();
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.download_url).toBe('/docs/out.pdf');
