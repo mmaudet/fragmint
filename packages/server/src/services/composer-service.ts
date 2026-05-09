@@ -108,6 +108,10 @@ export class ComposerService {
         }
       }
 
+      if (def.type === 'date' && context[field] === 'today') {
+        context[field] = new Date().toISOString().slice(0, 10);
+      }
+
       if (def.enum && context[field] !== undefined) {
         if (!def.enum.includes(String(context[field]))) {
           throw new Error(
@@ -147,10 +151,23 @@ export class ComposerService {
 
     const enrichFragment = (f: ResolvedFragment) => {
       const parsed = ComposerService.parseStructuredTags(f.tags ?? []);
+      let body = f.body.trim();
+      let autoTitle: string | undefined;
+
+      // Extract "Title — rest" format into separate title field when no explicit title: tag
+      if (!parsed.title) {
+        const dashIdx = body.indexOf(' — ');
+        if (dashIdx > 0 && dashIdx < 100) {
+          autoTitle = body.slice(0, dashIdx);
+          body = body.slice(dashIdx + 3).trim();
+        }
+      }
+
       const obj: Record<string, any> = {
-        body: f.body,
+        body,
         id: f.id,
         quality: f.quality,
+        ...(autoTitle ? { title: autoTitle } : {}),
         ...parsed,
       };
 
