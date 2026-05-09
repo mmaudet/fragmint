@@ -6,6 +6,8 @@ import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { downloadBlob } from '@/api/client';
 import type { Template, ComposeResponse, Fragment } from '@/api/types';
+import { StructuredDataEditor } from '@/components/structured-data-editor';
+import type { StructuredDataDef } from '@/components/structured-data-editor';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,6 +78,9 @@ export default function ComposePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [context, setContext] = useState<Record<string, string>>({});
   const [resolvedSlots, setResolvedSlots] = useState<Record<string, Fragment[]>>({});
+  const [structuredData, setStructuredData] = useState<Record<string, Array<Record<string, any>>>>(
+    {},
+  );
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
@@ -89,6 +94,7 @@ export default function ComposePage() {
     { type: string; required?: boolean; default?: any; enum?: string[] }
   > = yaml?.context_schema ?? template?.context_schema ?? {};
   const slots: NonNullable<Template['fragments']> = yaml?.fragments ?? template?.fragments ?? [];
+  const structDefs: StructuredDataDef[] = (yaml as any)?.structured_data ?? [];
 
   // Check if all required context fields are filled
   const requiredContextFilled = useMemo(() => {
@@ -108,6 +114,7 @@ export default function ComposePage() {
     setSelectedTemplateId(id);
     setContext({});
     setResolvedSlots({});
+    setStructuredData({});
     compose.reset();
   };
 
@@ -138,7 +145,7 @@ export default function ComposePage() {
         cleanContext[k] = String(schema.default);
       }
     }
-    compose.mutate({ templateId: selectedTemplateId, context: cleanContext });
+    compose.mutate({ templateId: selectedTemplateId, context: cleanContext, structured_data: structuredData });
   };
 
   return (
@@ -226,6 +233,23 @@ export default function ComposePage() {
                 )}
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Section 2.5 - Structured data tables */}
+      {template && structDefs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('compose', 'structuredData')}</CardTitle>
+            <CardDescription>{t('compose', 'structuredDataDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StructuredDataEditor
+              defs={structDefs}
+              value={structuredData}
+              onChange={(key, rows) => setStructuredData((prev) => ({ ...prev, [key]: rows }))}
+            />
           </CardContent>
         </Card>
       )}
@@ -361,12 +385,17 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
             {result.render_ms} ms
           </span>
           <Button
-            onClick={() =>
-              handleDownload(
-                result.document_url,
-                `${result.template.name}-${result.template.version}.docx`,
-              )
-            }
+            onClick={() => {
+              const ext = result.document_url.split('.').pop() ?? 'docx';
+              const safeName = result.template.name
+                .normalize('NFD')
+                .replace(/[̀-ͯ]/g, '')
+                .replace(/[^\w\s-]/g, '')
+                .trim()
+                .replace(/\s+/g, '_');
+              const filename = `${safeName}-${result.template.version}.${ext}`;
+              handleDownload(`${result.document_url}?name=${encodeURIComponent(filename)}`, filename);
+            }}
           >
             <Download className="mr-2 h-4 w-4" />
             {t('common', 'download')}

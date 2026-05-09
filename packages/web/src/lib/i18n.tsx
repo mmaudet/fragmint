@@ -99,6 +99,11 @@ const translations = {
     resolvedFragmentsLabel: { fr: 'Fragments résolus', en: 'Resolved fragments' },
     skippedSlots: { fr: 'Slots ignorés', en: 'Skipped slots' },
     warnings: { fr: 'Avertissements', en: 'Warnings' },
+    structuredData: { fr: 'Données tabulaires', en: 'Tabular data' },
+    structuredDataDescription: {
+      fr: 'Renseignez les lignes de données utilisées dans le template',
+      en: 'Fill in the data rows used in the template',
+    },
   },
   validation: {
     title: { fr: 'Validation', en: 'Validation' },
