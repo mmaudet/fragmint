@@ -166,6 +166,7 @@ export function templateRoutes(
   // Download generated output file
   app.get(`${prefix}/outputs/:filename`, { preHandler: readHandlers }, async (request, reply) => {
     const { filename } = request.params as { filename: string };
+    const { name } = request.query as { name?: string };
 
     // Prevent path traversal
     if (filename.includes('..') || filename.includes('/')) {
@@ -177,11 +178,17 @@ export function templateRoutes(
       return reply.status(404).send({ data: null, meta: null, error: 'Output file not found' });
     }
 
-    reply.header(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    );
-    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    const MIME: Record<string, string> = {
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      html: 'text/html; charset=utf-8',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+    const ext = filename.split('.').pop() ?? 'docx';
+    const displayName = name ?? filename;
+
+    reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream');
+    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`);
     return reply.send(createReadStream(outputPath));
   });
 }
