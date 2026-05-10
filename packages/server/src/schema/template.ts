@@ -5,7 +5,7 @@ export const FragmentSlotSchema = z.object({
   type: z.string(),
   domain: z.string(),
   lang: z.string(),
-  quality_min: z.enum(['draft', 'reviewed', 'approved']).default('draft'),
+  quality_min: z.enum(['draft', 'reviewed', 'approved']).default('approved'),
   required: z.boolean().default(true),
   fallback: z.enum(['skip', 'error', 'generate']).default('error'),
   count: z.number().int().positive().default(1),

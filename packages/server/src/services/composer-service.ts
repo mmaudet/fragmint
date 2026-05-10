@@ -313,7 +313,9 @@ export class ComposerService {
           } else if (slot.fallback === 'generate') {
             throw new Error(`Fragment generation not yet supported for slot '${slot.key}'`);
           } else {
-            throw new Error(`No fragment found for required slot '${slot.key}'`);
+            throw new Error(
+              `No ${slot.quality_min} fragment found for required slot '${slot.key}' (type: ${slot.type}, domain: ${slot.domain}, lang: ${slot.lang}) — create and approve fragments first`,
+            );
           }
         }
         resolved.set(slot.key, items);
