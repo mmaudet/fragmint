@@ -1,3 +1,49 @@
+FROM node:24-alpine AS dev
+WORKDIR /app
+RUN apk add --no-cache python3 make g++ git pandoc
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+COPY packages/cli/package.json packages/cli/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/obsidian/package.json packages/obsidian/
+RUN pnpm install --ignore-scripts && \
+    cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
+    npx node-gyp rebuild
+
+COPY packages/server/ packages/server/
+
+RUN mkdir -p /data/vault && \
+    git config --global user.email 'fragmint@localhost' && \
+    git config --global user.name 'Fragmint'
+
+EXPOSE 3210
+ENV NODE_ENV=development
+ENV FRAGMINT_STORE_PATH=/data/vault
+
+WORKDIR /app/packages/server
+CMD ["node_modules/.bin/tsx", "watch", "src/index.ts"]
+
+FROM node:24-alpine AS web-dev
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+COPY packages/cli/package.json packages/cli/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/obsidian/package.json packages/obsidian/
+RUN pnpm install --ignore-scripts
+
+COPY packages/web/ packages/web/
+
+EXPOSE 5173
+WORKDIR /app/packages/web
+CMD ["node_modules/.bin/vite", "--host"]
+
 FROM node:24-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache python3 make g++ pandoc

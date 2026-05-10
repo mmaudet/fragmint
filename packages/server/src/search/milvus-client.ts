@@ -74,33 +74,50 @@ export class FragmintMilvusClient {
 
   async ensureCollection(): Promise<void> {
     const exists = await this.sdk.hasCollection({ collection_name: this.collectionName });
-    if (exists.value) return;
 
-    await this.sdk.createCollection({
-      collection_name: this.collectionName,
-      fields: [
-        { name: 'id', data_type: DataType.VarChar, is_primary_key: true, max_length: 64 },
-        { name: 'vector', data_type: DataType.FloatVector, dim: this.dimensions },
-        { name: 'type', data_type: DataType.VarChar, max_length: 32 },
-        { name: 'domain', data_type: DataType.VarChar, max_length: 128 },
-        { name: 'lang', data_type: DataType.VarChar, max_length: 8 },
-        { name: 'quality', data_type: DataType.VarChar, max_length: 16 },
-        { name: 'author', data_type: DataType.VarChar, max_length: 128 },
-        { name: 'created_at', data_type: DataType.Int64 },
-        { name: 'updated_at', data_type: DataType.Int64 },
-        { name: 'tags', data_type: DataType.JSON },
-        { name: 'access_read', data_type: DataType.JSON },
-        { name: 'community_id', data_type: DataType.Int64 },
-      ],
-    });
+    if (!exists.value) {
+      await this.sdk.createCollection({
+        collection_name: this.collectionName,
+        fields: [
+          { name: 'id', data_type: DataType.VarChar, is_primary_key: true, max_length: 64 },
+          { name: 'vector', data_type: DataType.FloatVector, dim: this.dimensions },
+          { name: 'type', data_type: DataType.VarChar, max_length: 32 },
+          { name: 'domain', data_type: DataType.VarChar, max_length: 128 },
+          { name: 'lang', data_type: DataType.VarChar, max_length: 8 },
+          { name: 'quality', data_type: DataType.VarChar, max_length: 16 },
+          { name: 'author', data_type: DataType.VarChar, max_length: 128 },
+          { name: 'created_at', data_type: DataType.Int64 },
+          { name: 'updated_at', data_type: DataType.Int64 },
+          { name: 'tags', data_type: DataType.JSON },
+          { name: 'access_read', data_type: DataType.JSON },
+          { name: 'community_id', data_type: DataType.Int64 },
+        ],
+      });
+    }
 
-    await this.sdk.createIndex({
-      collection_name: this.collectionName,
-      field_name: 'vector',
-      index_type: 'IVF_FLAT',
-      metric_type: 'COSINE',
-      params: { nlist: 128 },
-    });
+    try {
+      await this.sdk.createIndex({
+        collection_name: this.collectionName,
+        field_name: 'vector',
+        index_type: 'IVF_FLAT',
+        metric_type: 'COSINE',
+        params: { nlist: 128 },
+      });
+    } catch {
+      /* already exists */
+    }
+
+    for (const field of ['domain', 'type', 'lang', 'quality'] as const) {
+      try {
+        await this.sdk.createIndex({
+          collection_name: this.collectionName,
+          field_name: field,
+          index_type: 'INVERTED',
+        });
+      } catch {
+        /* already exists */
+      }
+    }
 
     await this.sdk.loadCollection({ collection_name: this.collectionName });
   }

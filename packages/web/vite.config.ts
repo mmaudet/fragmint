@@ -13,8 +13,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
     proxy: {
-      '/v1': 'http://localhost:3210',
+      '/v1': process.env.API_HOST ?? 'http://localhost:3210',
     },
   },
   test: {

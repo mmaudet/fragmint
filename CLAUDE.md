@@ -83,6 +83,33 @@ pnpm e2e
 
 ---
 
+## Local Development Workflow
+
+Full Docker stack with hot reload — server restarts automatically on code changes, no rebuild needed.
+
+```bash
+# First time only — build the dev image
+docker compose -f docker/docker-compose.dev.yml build
+
+# Start everything (Milvus + server with hot reload)
+docker compose -f docker/docker-compose.dev.yml up
+
+# Frontend (separate terminal — Vite HMR on port 5173)
+pnpm --filter @fragmint/web dev
+```
+
+- Server: http://localhost:3210
+- Frontend (Vite): http://localhost:5173
+
+Only `packages/server/src/` is mounted — node_modules stays intact inside the image (Linux binaries compiled for Alpine). Changes to `src/` files trigger automatic server restart via tsx watch.
+
+If you add a new dependency (`pnpm add ...`), rebuild the image:
+```bash
+docker compose -f docker/docker-compose.dev.yml build --no-cache
+```
+
+---
+
 ## Key Service Patterns
 
 ### Fastify Route Registration
