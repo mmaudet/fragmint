@@ -65,12 +65,18 @@ export class LlmClient {
   }
 
   async segment(markdown: string): Promise<SegmentBlock[]> {
-    const prompt = `You are a content segmentation assistant. Analyze the following markdown document and identify reusable content blocks. Return a JSON array where each element has: title (string), body (string), type (string), lang (string).
+    const prompt = `You are a content segmentation assistant. Extract reusable content blocks from the following document.
+
+Rules:
+- body: copy the EXACT original text verbatim. Do NOT translate, paraphrase, or summarize. Preserve the source language.
+- title: a short label (3-8 words) in the SAME language as the body. Do NOT write an English title for French content. Do NOT write a French title for English content.
+- type: one of introduction, argument, description, pricing, clause, methodology, conclusion, other.
+- lang: ISO 639-1 code (fr, en, de, ...).
 
 Document:
 ${markdown}
 
-Return ONLY a JSON array.`;
+Return ONLY a JSON array where each element has: title (string), body (string), type (string), lang (string).`;
 
     try {
       const response = await this.chat(prompt);

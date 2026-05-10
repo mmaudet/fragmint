@@ -164,10 +164,8 @@ export class HarvesterService {
         const blocks = HarvesterService.deduplicateBlocks(allBlocks);
 
         for (const block of blocks) {
-          // The LLM returns the full block text in body — use it directly
           const text = block.body;
 
-          // Classify
           let classification;
           try {
             classification = await this.llmClient.classify(text, existingTypes, existingDomains);
@@ -184,11 +182,9 @@ export class HarvesterService {
             lowConfidenceCount++;
           }
 
-          // Filter blocks below threshold — still insert but track
           let duplicateOf: string | null = null;
           let duplicateScore: number | null = null;
 
-          // Check for duplicates via Milvus if available
           try {
             const searchResults = await this.searchService.search(text, undefined, 1);
             if (searchResults.length > 0) {
