@@ -20,7 +20,7 @@ export function harvestRoutes(
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('expert')];
 
-  // POST /v1/harvest — upload .docx files for harvesting
+  // POST /v1/harvest — upload documents for harvesting (docx only)
   app.post(`${prefix}/harvest`, { preHandler: expertHandlers }, async (request, reply) => {
     const files: Buffer[] = [];
     const filenames: string[] = [];
@@ -47,7 +47,11 @@ export function harvestRoutes(
     }
 
     if (files.length === 0) {
-      return reply.status(400).send({ data: null, meta: null, error: 'No .docx files provided' });
+      return reply.status(400).send({
+        data: null,
+        meta: null,
+        error: 'No .docx files provided',
+      });
     }
 
     const jobId = await harvesterService.harvest(files, filenames, options, request.user.login);

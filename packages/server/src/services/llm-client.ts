@@ -89,7 +89,11 @@ Return ONLY a JSON array.`;
     existingTypes: string[],
     existingDomains: string[],
   ): Promise<Classification> {
-    const prompt = `You are a content classification assistant. Classify the following text block. Available types: ${JSON.stringify(existingTypes)}. Available domains: ${JSON.stringify(existingDomains)}.
+    const prompt = `You are a content classification assistant. Classify the following text block.
+
+Choose the BEST matching type from this closed list: ${JSON.stringify(existingTypes)}.
+Choose the BEST matching domain from this closed list: ${JSON.stringify(existingDomains)}.
+If the text does not fit any option, use "other". Do not invent new values outside these lists.
 
 Text:
 ${blockText}
