@@ -180,7 +180,12 @@ export async function createServer(options?: {
   const tokenService = new TokenService(db);
   const fragmentService = new FragmentService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
-  const composerService = new ComposerService(fragmentService, templateService, storePath);
+  const composerService = new ComposerService(
+    fragmentService,
+    searchService,
+    templateService,
+    storePath,
+  );
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
@@ -316,6 +321,18 @@ export type { FragmintConfig } from './config.js';
 // Auto-start when run directly (not imported as a module)
 const isMain = process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js');
 if (isMain) {
+  // gRPC background reconnections can throw unhandled rejections when Milvus is unreachable.
+  // Log them as warnings instead of crashing the process.
+  process.on('unhandledRejection', (reason) => {
+    const msg = String(reason);
+    if (msg.includes('UNAVAILABLE') || msg.includes('Name resolution failed')) {
+      console.warn('[Milvus] Background gRPC error (ignored):', msg.split('\n')[0]);
+    } else {
+      console.error('Unhandled rejection:', reason);
+      process.exit(1);
+    }
+  });
+
   startServer({ dev: process.env.NODE_ENV !== 'production' }).catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);

@@ -163,6 +163,31 @@ export function templateRoutes(
     },
   );
 
+  // Resolve slots without rendering (preview what compose would pick)
+  app.post(
+    `${prefix}/templates/:id/resolve`,
+    { preHandler: readHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        context?: Record<string, any>;
+        overrides?: Record<string, string>;
+      };
+      try {
+        const result = await composerService.resolveSlots(
+          id,
+          { context: body.context ?? {}, overrides: body.overrides },
+          request.user.role,
+        );
+        return { data: result, meta: null, error: null };
+      } catch (err: any) {
+        const msg = err.message ?? 'Resolution failed';
+        const status = msg.includes('not found') ? 404 : 400;
+        return reply.status(status).send({ data: null, meta: null, error: msg });
+      }
+    },
+  );
+
   // Download generated output file
   app.get(`${prefix}/outputs/:filename`, { preHandler: readHandlers }, async (request, reply) => {
     const { filename } = request.params as { filename: string };

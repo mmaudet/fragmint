@@ -14,6 +14,7 @@ import type {
 } from '../schema/template.js';
 import { renderDocument, type SupportedFormat } from './render-engine.js';
 import { toMilvusPartition } from '../db/schema.js';
+import type { SearchService } from '../search/index.js';
 
 /** Result shape returned by TemplateService.getById(). */
 export interface TemplateRow {
@@ -65,6 +66,7 @@ export class ComposerService {
 
   constructor(
     private fragmentService: FragmentService,
+    private searchService: SearchService,
     private templateService: TemplateServiceLike,
     private basePath: string,
   ) {
@@ -255,7 +257,7 @@ export class ComposerService {
   async compose(
     templateId: string,
     request: ComposeRequest,
-    callerRole: string,
+    _callerRole: string,
     accessiblePartitions?: string[],
   ): Promise<ComposeResponse> {
     const startMs = Date.now();
@@ -333,12 +335,14 @@ export class ComposerService {
       }
     }
 
-    // 5. Build template data
-    const templateData = ComposerService.buildTemplateData(
-      resolved,
-      context,
-      request.structured_data,
-    );
+    // 5. Build template data — default missing structured_data keys to [] so FOR loops don't throw
+    const structuredData: Record<string, any> = { ...(request.structured_data ?? {}) };
+    for (const def of yaml.structured_data ?? []) {
+      if (!Array.isArray(structuredData[def.key])) {
+        structuredData[def.key] = [];
+      }
+    }
+    const templateData = ComposerService.buildTemplateData(resolved, context, structuredData);
 
     // 6. Render with unified engine
     const templatePath = this.templateService.getTemplatePath(row);
@@ -349,9 +353,12 @@ export class ComposerService {
     );
 
     // 7. Save output
+    const FORMAT_EXT: Record<string, string> = {
+      docx: 'docx', xlsx: 'xlsx', slides: 'html', reveal: 'html', pptx: 'pptx',
+    };
     const outputFilename = request.output?.filename
       ? `${randomUUID()}-${request.output.filename}`
-      : `${randomUUID()}.${requestedFormat}`;
+      : `${randomUUID()}.${FORMAT_EXT[requestedFormat] ?? requestedFormat}`;
     const outputPath = join(this.outputsDir, outputFilename);
     writeFileSync(outputPath, buffer);
 
@@ -371,6 +378,89 @@ export class ComposerService {
       warnings,
       render_ms: renderMs,
     };
+  }
+
+  async resolveSlots(
+    templateId: string,
+    request: Pick<ComposeRequest, 'context' | 'overrides'>,
+    _callerRole: string,
+    accessiblePartitions?: string[],
+  ): Promise<
+    Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+      title: string | null;
+      body_excerpt: string | null;
+      skipped: boolean;
+    }>
+  > {
+    const row = await this.templateService.getById(templateId);
+    if (!row || !row.yaml) throw new Error(`Template not found: ${templateId}`);
+    const yaml = row.yaml;
+
+    const context = { ...request.context };
+    if (yaml.context_schema) {
+      ComposerService.validateContext(context, yaml.context_schema);
+    }
+
+    const result: Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+      title: string | null;
+      body_excerpt: string | null;
+      skipped: boolean;
+    }> = [];
+
+    for (const slot of yaml.fragments) {
+      try {
+        const items = await this.resolveSlot(
+          slot,
+          context,
+          request.overrides,
+          yaml,
+          accessiblePartitions,
+        );
+        if (items.length === 0) {
+          result.push({
+            key: slot.key,
+            fragment_id: '',
+            score: 0,
+            quality: '',
+            title: null,
+            body_excerpt: null,
+            skipped: slot.fallback === 'skip',
+          });
+        } else {
+          const first = items[0];
+          const full = await this.fragmentService.getById(first.id);
+          result.push({
+            key: slot.key,
+            fragment_id: first.id,
+            score: first.score,
+            quality: first.quality,
+            title: full?.title ?? null,
+            body_excerpt: full?.body?.slice(0, 120) ?? null,
+            skipped: false,
+          });
+        }
+      } catch {
+        result.push({
+          key: slot.key,
+          fragment_id: '',
+          score: 0,
+          quality: '',
+          title: null,
+          body_excerpt: null,
+          skipped: false,
+        });
+      }
+    }
+
+    return result;
   }
 
   /** Purge output files older than TTL. */
@@ -469,39 +559,67 @@ export class ComposerService {
     const lang = ComposerService.resolveContextVars(slot.lang, context);
     const domain = ComposerService.resolveContextVars(slot.domain, context);
 
-    const partitionNames = yaml
-      ? ComposerService.resolvePartitions(slot, yaml, accessiblePartitions)
-      : accessiblePartitions;
-
-    // Use list() instead of search() for slot resolution — search() does a LIKE
-    // match on title/body which may miss fragments. list() filters by exact metadata.
     const collectionSlug = slot.collection ?? 'common';
 
     // Don't filter by quality when quality_min is 'draft' (accept everything)
     const qualityFilter =
       slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
 
-    const results = await this.fragmentService.list({
-      type: slot.type,
-      domain,
-      lang,
-      quality: qualityFilter,
-      limit: slot.count,
-      collectionSlug,
-      valid_at: new Date().toISOString().slice(0, 10),
-    });
+    const today = new Date().toISOString().slice(0, 10);
+    const query = [slot.type, domain].filter(Boolean).join(' ');
+
+    // Try semantic search first (Milvus) — picks the most relevant fragment for this slot.
+    // Fall back to list() (exact metadata match) if Milvus returns 0 results.
+    const searchResults = await this.searchService.search(
+      query,
+      {
+        type: slot.type ? [slot.type] : undefined,
+        domain: domain ? [domain] : undefined,
+        lang,
+        quality_min: qualityFilter,
+        collectionSlug,
+        valid_at: today,
+      },
+      slot.count,
+    );
 
     const items: ResolvedFragment[] = [];
-    for (const result of results) {
-      const full = await this.fragmentService.getById(result.id);
-      if (full) {
-        items.push({
-          id: full.id,
-          body: full.body,
-          quality: full.quality,
-          score: (result as any).score ?? 0,
-          tags: full.frontmatter?.tags ?? [],
-        });
+
+    if (searchResults.length > 0) {
+      for (const result of searchResults) {
+        const full = await this.fragmentService.getById(result.id);
+        if (full) {
+          items.push({
+            id: full.id,
+            body: full.body,
+            quality: full.quality,
+            score: result.score,
+            tags: full.frontmatter?.tags ?? [],
+          });
+        }
+      }
+    } else {
+      // Fallback: exact metadata match
+      const listResults = await this.fragmentService.list({
+        type: slot.type,
+        domain,
+        lang,
+        quality: qualityFilter,
+        limit: slot.count,
+        collectionSlug,
+        valid_at: today,
+      });
+      for (const result of listResults) {
+        const full = await this.fragmentService.getById(result.id);
+        if (full) {
+          items.push({
+            id: full.id,
+            body: full.body,
+            quality: full.quality,
+            score: 0,
+            tags: full.frontmatter?.tags ?? [],
+          });
+        }
       }
     }
 
