@@ -103,9 +103,8 @@ export async function createServer(options?: {
   const config = loadConfig(options?.configPath, options?.dev ?? false);
   const storePath = resolve(config.store_path);
 
-  // Database
-  // createDb handles table creation on the same connection (critical for :memory:)
-  const dbPath = options?.dbPath ?? (config.dev ? ':memory:' : resolve(storePath, '.fragmint.db'));
+  // Database — always file-based; tests pass ':memory:' explicitly via options.dbPath
+  const dbPath = options?.dbPath ?? resolve(storePath, '.fragmint.db');
   const db = createDb(dbPath);
 
   // Auto-migrate collections

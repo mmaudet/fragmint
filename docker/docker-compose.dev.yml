@@ -16,6 +16,7 @@ services:
       - ../example-vault:/data/vault
     environment:
       FRAGMINT_JWT_SECRET: changeme-dev
+      FRAGMINT_STORE_PATH: /data/vault
       FRAGMINT_MILVUS_ENABLED: "true"
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
       FRAGMINT_EMBEDDING_ENDPOINT: http://host.docker.internal:11434/v1
