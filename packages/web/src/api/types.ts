@@ -136,3 +136,71 @@ export interface CollectionWithRole {
   description: string | null;
   tags?: string[];
 }
+
+export type PlanStatus = 'draft' | 'plan_validated' | 'fragments_validated' | 'completed';
+
+export interface PlanFilters {
+  domain?: string;
+  lang?: string;
+  type?: string;
+  tags?: string[];
+}
+
+export interface FragmentCandidate {
+  fragment_id: string;
+  score: number;
+  title: string | null;
+  body_excerpt: string | null;
+  quality: string;
+}
+
+export interface SectionFragmentSelection {
+  fragment_id: string;
+  body: string;
+  edited: boolean;
+  propose_to_library: boolean;
+  proposed_fragment_id?: string;
+}
+
+export interface PlanSection {
+  id: string;
+  title: string;
+  description: string;
+  candidates: FragmentCandidate[];
+  selected: SectionFragmentSelection[];
+  generated_markdown?: string;
+  filters_override?: PlanFilters;
+}
+
+export interface PlanState {
+  spec_prompt: string;
+  filters: PlanFilters;
+  plan_markdown: string;
+  writer_prompt_override?: string;
+  sections: PlanSection[];
+  draft_markdown?: string;
+  draft_dirty?: boolean;
+  export_style_template_id?: string;
+}
+
+export interface Plan {
+  id: string;
+  title: string;
+  owner: string;
+  collection_slug: string | null;
+  status: PlanStatus;
+  state: PlanState;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StyleTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  template_path: string;
+  kind: 'composer' | 'style_reference';
+  output_format: string;
+  created_at: string;
+  updated_at: string;
+}
