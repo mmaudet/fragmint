@@ -8,7 +8,6 @@
  * ExcelJS reads the template, replaces placeholders, expands table rows, and writes output.
  */
 import ExcelJS from 'exceljs';
-import { readFileSync } from 'node:fs';
 import type { RenderResult } from './render-engine.js';
 
 export async function renderXlsx(
@@ -16,7 +15,7 @@ export async function renderXlsx(
   data: Record<string, any>,
 ): Promise<RenderResult> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(readFileSync(templatePath));
+  await workbook.xlsx.readFile(templatePath);
 
   const sheet = workbook.getWorksheet(1);
   if (!sheet) throw new Error('XLSX template has no worksheets');

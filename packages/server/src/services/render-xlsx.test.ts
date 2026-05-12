@@ -40,7 +40,9 @@ describe('renderXlsx', () => {
 
     // Parse the output and verify substitution
     const outputWorkbook = new ExcelJS.Workbook();
-    await outputWorkbook.xlsx.load(result.buffer);
+    // exceljs types xlsx.load's param as `interface Buffer extends ArrayBuffer`,
+    // which a Node Buffer doesn't structurally satisfy.
+    await outputWorkbook.xlsx.load(result.buffer as unknown as ArrayBuffer);
 
     const sheet = outputWorkbook.getWorksheet('Sheet1');
     expect(sheet).toBeDefined();
@@ -53,7 +55,9 @@ describe('renderXlsx', () => {
     const result = await renderXlsx(templatePath, { client: 'TestCorp' });
 
     const outputWorkbook = new ExcelJS.Workbook();
-    await outputWorkbook.xlsx.load(result.buffer);
+    // exceljs types xlsx.load's param as `interface Buffer extends ArrayBuffer`,
+    // which a Node Buffer doesn't structurally satisfy.
+    await outputWorkbook.xlsx.load(result.buffer as unknown as ArrayBuffer);
 
     const sheet = outputWorkbook.getWorksheet('Sheet1')!;
     expect(sheet.getCell('B1').value).toBe('Static text');
