@@ -13,7 +13,6 @@ import type {
   FragmentSlot,
 } from '../schema/template.js';
 import { renderDocument, type SupportedFormat } from './render-engine.js';
-import { toMilvusPartition } from '../db/schema.js';
 import type { SearchService } from '../search/index.js';
 
 /** Result shape returned by TemplateService.getById(). */
@@ -37,6 +36,14 @@ export interface TemplateServiceLike {
   getById(id: string): Promise<TemplateRow | null>;
   getTemplatePath(row: { template_path: string }): string;
 }
+
+/** Minimal interface matching CollectionService — used to gate slot-pinned collections. */
+export interface CollectionAccessChecker {
+  getAccessibleSlugs(userId: string): Promise<string[]>;
+}
+
+/** System collection that every authenticated caller can read by default. */
+const COMMON_COLLECTION = 'common';
 
 interface ResolvedFragment {
   id: string;
@@ -69,9 +76,24 @@ export class ComposerService {
     private searchService: SearchService,
     private templateService: TemplateServiceLike,
     private basePath: string,
+    private collectionAccess?: CollectionAccessChecker,
   ) {
     this.outputsDir = join(basePath, 'outputs');
     mkdirSync(this.outputsDir, { recursive: true });
+  }
+
+  /**
+   * Build the set of collection slugs the caller may read fragments from, or
+   * `undefined` when no restriction applies (admin, or no caller id / access
+   * service available — preserves the existing unrestricted behavior).
+   */
+  private async accessibleCollectionSet(
+    callerRole: string,
+    callerId?: string,
+  ): Promise<Set<string> | undefined> {
+    if (callerRole === 'admin' || !callerId || !this.collectionAccess) return undefined;
+    const slugs = await this.collectionAccess.getAccessibleSlugs(callerId);
+    return new Set([COMMON_COLLECTION, ...slugs]);
   }
 
   // ---------------------------------------------------------------------------
@@ -274,8 +296,8 @@ export class ComposerService {
   async compose(
     templateId: string,
     request: ComposeRequest,
-    _callerRole: string,
-    accessiblePartitions?: string[],
+    callerRole: string,
+    callerId?: string,
   ): Promise<ComposeResponse> {
     const startMs = Date.now();
 
@@ -288,6 +310,7 @@ export class ComposerService {
       throw new Error(`Template YAML not found for: ${templateId}`);
     }
     const yaml = row.yaml;
+    const accessibleCollections = await this.accessibleCollectionSet(callerRole, callerId);
 
     // 2. Validate output format
     const requestedFormat = request.output?.format ?? yaml.output_format;
@@ -321,7 +344,7 @@ export class ComposerService {
           context,
           request.overrides,
           yaml,
-          accessiblePartitions,
+          accessibleCollections,
         );
         if (items.length === 0) {
           if (slot.fallback === 'skip') {
@@ -406,8 +429,8 @@ export class ComposerService {
   async resolveSlots(
     templateId: string,
     request: Pick<ComposeRequest, 'context' | 'overrides'>,
-    _callerRole: string,
-    accessiblePartitions?: string[],
+    callerRole: string,
+    callerId?: string,
   ): Promise<
     Array<{
       key: string;
@@ -422,6 +445,7 @@ export class ComposerService {
     const row = await this.templateService.getById(templateId);
     if (!row || !row.yaml) throw new Error(`Template not found: ${templateId}`);
     const yaml = row.yaml;
+    const accessibleCollections = await this.accessibleCollectionSet(callerRole, callerId);
 
     const context = { ...request.context };
     if (yaml.context_schema) {
@@ -445,7 +469,7 @@ export class ComposerService {
           context,
           request.overrides,
           yaml,
-          accessiblePartitions,
+          accessibleCollections,
         );
         if (items.length === 0) {
           result.push({
@@ -531,43 +555,12 @@ export class ComposerService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Determine the Milvus partition names to search for a given slot.
-   * Priority: slot.collection > slot.collections > yaml.collections > accessiblePartitions.
-   * All results are intersected with accessiblePartitions when provided.
-   */
-  private static resolvePartitions(
-    slot: FragmentSlot,
-    yaml: TemplateYaml,
-    accessiblePartitions?: string[],
-  ): string[] | undefined {
-    let partitions: string[] | undefined;
-
-    if (slot.collection) {
-      partitions = [toMilvusPartition(slot.collection)];
-    } else if (slot.collections?.length) {
-      partitions = slot.collections.map(toMilvusPartition);
-    } else if (yaml.collections?.length) {
-      partitions = yaml.collections.map(toMilvusPartition);
-    } else {
-      partitions = accessiblePartitions;
-    }
-
-    // Intersect with accessible partitions when both are defined
-    if (partitions && accessiblePartitions) {
-      const accessibleSet = new Set(accessiblePartitions);
-      partitions = partitions.filter((p) => accessibleSet.has(p));
-    }
-
-    return partitions;
-  }
-
   private async resolveSlot(
     slot: FragmentSlot,
     context: Record<string, any>,
     overrides?: Record<string, string>,
-    yaml?: TemplateYaml,
-    accessiblePartitions?: string[],
+    _yaml?: TemplateYaml,
+    accessibleCollections?: Set<string>,
   ): Promise<ResolvedFragment[]> {
     if (overrides && overrides[slot.key]) {
       const frag = await this.fragmentService.getById(overrides[slot.key]);
@@ -590,7 +583,16 @@ export class ComposerService {
     const lang = ComposerService.resolveContextVars(slot.lang, context);
     const domain = ComposerService.resolveContextVars(slot.domain, context);
 
-    const collectionSlug = slot.collection ?? 'common';
+    const collectionSlug = slot.collection ?? COMMON_COLLECTION;
+
+    // A template may pin a slot to a specific collection; a caller that can read
+    // the template but not that collection must not get its fragments. (Skipped
+    // for admins / when no caller context is available — see accessibleCollectionSet.)
+    if (accessibleCollections && !accessibleCollections.has(collectionSlug)) {
+      throw new Error(
+        `Slot '${slot.key}' references collection '${collectionSlug}', which the caller cannot access`,
+      );
+    }
 
     // Don't filter by quality when quality_min is 'draft' (accept everything)
     const qualityFilter =

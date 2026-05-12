@@ -153,7 +153,12 @@ export function templateRoutes(
         return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
       }
       try {
-        const result = await composerService.compose(id, parsed.data, request.user.role);
+        const result = await composerService.compose(
+          id,
+          parsed.data,
+          request.user.role,
+          request.user.id,
+        );
         return { data: result, meta: null, error: null };
       } catch (err: any) {
         const msg = err.message ?? 'Composition failed';
@@ -178,6 +183,7 @@ export function templateRoutes(
           id,
           { context: parsed.data.context ?? {}, overrides: parsed.data.overrides },
           request.user.role,
+          request.user.id,
         );
         return { data: result, meta: null, error: null };
       } catch (err: any) {

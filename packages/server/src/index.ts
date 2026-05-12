@@ -179,20 +179,21 @@ export async function createServer(options?: {
   const tokenService = new TokenService(db);
   const fragmentService = new FragmentService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
+  const collectionService = new CollectionService(db, {
+    collections_path: config.collections_path,
+  });
   const composerService = new ComposerService(
     fragmentService,
     searchService,
     templateService,
     storePath,
+    collectionService,
   );
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
 
-  // Collection service and middleware
-  const collectionService = new CollectionService(db, {
-    collections_path: config.collections_path,
-  });
+  // Collection middleware
   const requireCollRole = buildCollectionMiddleware(db);
 
   // Harvester

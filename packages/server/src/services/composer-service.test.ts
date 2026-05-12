@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ComposerService, formatFrenchNumber } from './composer-service.js';
 
 describe('ComposerService.resolveContextVars', () => {
@@ -467,5 +470,79 @@ describe('ComposerService.validateContext', () => {
     };
 
     expect(() => ComposerService.validateContext(context, schema)).not.toThrow();
+  });
+});
+
+describe('ComposerService — collection access gating', () => {
+  function makeService(accessibleSlugs: string[]) {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'composer-test-'));
+    const templateService = {
+      getById: async (id: string) => ({
+        id,
+        name: 'T',
+        description: null,
+        output_format: 'docx',
+        version: '1',
+        template_path: 't.docx',
+        yaml_path: 't.yaml',
+        author: 'sys',
+        created_at: '',
+        updated_at: '',
+        git_hash: null,
+        yaml: {
+          id,
+          name: 'T',
+          output_format: 'docx',
+          carbone_template: 't.docx',
+          version: '1',
+          fragments: [
+            {
+              key: 'sec',
+              type: 'argument',
+              domain: 'd',
+              lang: 'fr',
+              quality_min: 'approved',
+              required: true,
+              fallback: 'error',
+              count: 1,
+              collection: 'team-secret',
+            },
+          ],
+        },
+      }),
+      getTemplatePath: () => 't.docx',
+    };
+    const searchService = { search: async () => [] } as any;
+    const fragmentService = { getById: async () => null, list: async () => [] } as any;
+    const collectionAccess = { getAccessibleSlugs: async () => accessibleSlugs };
+    return new ComposerService(
+      fragmentService,
+      searchService,
+      templateService as any,
+      tmpBase,
+      collectionAccess,
+    );
+  }
+
+  it('rejects composing a slot pinned to a collection the caller cannot access', async () => {
+    const svc = makeService([]); // caller is a member of no collections
+    await expect(svc.compose('tpl-x', { context: {} }, 'reader', 'user-1')).rejects.toThrow(
+      /cannot access/,
+    );
+  });
+
+  it('lets a member of the pinned collection through to fragment resolution', async () => {
+    const svc = makeService(['team-secret']);
+    // Gate passes; the slot is still required and search returns nothing → not-found error.
+    await expect(svc.compose('tpl-x', { context: {} }, 'reader', 'user-1')).rejects.toThrow(
+      /No approved fragment found/,
+    );
+  });
+
+  it('does not gate admins (no caller restriction)', async () => {
+    const svc = makeService([]);
+    await expect(svc.compose('tpl-x', { context: {} }, 'admin', 'admin-1')).rejects.toThrow(
+      /No approved fragment found/,
+    );
   });
 });
