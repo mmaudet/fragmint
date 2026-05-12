@@ -14,9 +14,18 @@ export interface AuthUser {
   tokenCollectionSlug?: string;
 }
 
+// @fastify/jwt already augments FastifyRequest with `user`; redeclaring it on
+// FastifyRequest here collides with that. Instead, tell @fastify/jwt what our
+// payload/user shapes are so `request.user` resolves to AuthUser everywhere.
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: { sub: string; role: string; display_name: string };
+    user: AuthUser;
+  }
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
-    user: AuthUser;
     collection?: any;
     collectionRole?: string;
   }
