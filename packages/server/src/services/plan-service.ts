@@ -13,10 +13,25 @@ import { parsePlanSections } from './plan-section-parser.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx } from './pandoc-render.js';
 import type { LlmClient } from './llm-client.js';
-import type { SearchService } from '../search/search-service.js';
+import type { SearchResult, SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
+
+function toCandidate(r: SearchResult): FragmentCandidate {
+  return {
+    fragment_id: r.id,
+    score: r.score,
+    title: r.title,
+    body_excerpt: r.body_excerpt,
+    quality: r.quality,
+  };
+}
+
+function normalizeTitle(raw: string | undefined, fallback: string): string {
+  const t = raw?.trim();
+  return t ? t : fallback;
+}
 
 export interface PlanServiceConfig {
   fragmentMaxChars: number;
@@ -90,7 +105,7 @@ export class PlanService {
     });
     await this.db.insert(plans).values({
       id,
-      title: input.title?.trim() && input.title.trim() !== '' ? input.title.trim() : 'Untitled plan',
+      title: normalizeTitle(input.title, 'Untitled plan'),
       owner: input.owner,
       collection_slug: input.collection_slug,
       status: 'draft',
@@ -142,7 +157,7 @@ export class PlanService {
     await this.db
       .update(plans)
       .set({
-        title: input.title?.trim() && input.title.trim() !== '' ? input.title.trim() : existing.title,
+        title: normalizeTitle(input.title, existing.title),
         status: input.status ?? existing.status,
         state_json: JSON.stringify(newState),
         updated_at: now,
@@ -169,6 +184,25 @@ export class PlanService {
     return this.config.fragments;
   }
 
+  private async runSectionSearch(
+    section: { title: string; description: string },
+    filters: PlanFilters,
+    collectionSlug: string | null,
+  ): Promise<FragmentCandidate[]> {
+    const results = await this.requireSearch().search(
+      `${section.title}\n${section.description}`,
+      {
+        domain: filters.domain ? [filters.domain] : undefined,
+        type: filters.type ? [filters.type] : undefined,
+        lang: filters.lang,
+        tags: filters.tags,
+        collectionSlug: collectionSlug ?? undefined,
+      },
+      5,
+    );
+    return results.map(toCandidate);
+  }
+
   async generatePlan(
     id: string,
     args: { extra_instructions?: string },
@@ -191,30 +225,12 @@ export class PlanService {
     const parsed = parsePlanSections(p.state.plan_markdown);
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
-    const search = this.requireSearch();
     const newSections = await Promise.all(parsed.map(async (ps) => {
       const previous = oldById.get(ps.id);
       const filters = previous?.filters_override ?? p.state.filters;
       let candidates: FragmentCandidate[] = [];
       try {
-        const results = await search.search(
-          `${ps.title}\n${ps.description}`,
-          {
-            domain: filters.domain ? [filters.domain] : undefined,
-            type: filters.type ? [filters.type] : undefined,
-            lang: filters.lang,
-            tags: filters.tags,
-            collectionSlug: p.collection_slug ?? undefined,
-          },
-          5,
-        );
-        candidates = results.map((r: any) => ({
-          fragment_id: r.id,
-          score: r.score,
-          title: r.title,
-          body_excerpt: r.body_excerpt,
-          quality: r.quality,
-        }));
+        candidates = await this.runSectionSearch(ps, filters, p.collection_slug);
       } catch (err) {
         console.error(`Section "${ps.title}" search failed:`, err);
         candidates = [];
@@ -243,24 +259,7 @@ export class PlanService {
     const section = p.state.sections.find((s) => s.id === sectionId);
     if (!section) return null;
     const filters = args.filters_override ?? section.filters_override ?? p.state.filters;
-    const results = await this.requireSearch().search(
-      `${section.title}\n${section.description}`,
-      {
-        domain: filters.domain ? [filters.domain] : undefined,
-        type: filters.type ? [filters.type] : undefined,
-        lang: filters.lang,
-        tags: filters.tags,
-        collectionSlug: p.collection_slug ?? undefined,
-      },
-      5,
-    );
-    const candidates = results.map((r: any) => ({
-      fragment_id: r.id,
-      score: r.score,
-      title: r.title,
-      body_excerpt: r.body_excerpt,
-      quality: r.quality,
-    }));
+    const candidates = await this.runSectionSearch(section, filters, p.collection_slug);
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId ? { ...s, candidates, filters_override: args.filters_override ?? s.filters_override } : s,
     );
@@ -276,33 +275,26 @@ export class PlanService {
       const newSelected = await Promise.all(s.selected.map(async (sel) => {
         if (!sel.propose_to_library || sel.proposed_fragment_id) return sel;
         const original = await fragments.getById(sel.fragment_id);
-        const originalAny = original as any;
 
-        // Type: use original if it's in FRAGMENT_TYPES, else fallback to 'argument'.
-        const originalType = originalAny?.type;
-        const type = (FRAGMENT_TYPES as readonly string[]).includes(originalType)
+        const originalType = original?.type;
+        const type = originalType && (FRAGMENT_TYPES as readonly string[]).includes(originalType)
           ? (originalType as CreateFragmentInput['type'])
           : 'argument';
 
-        // Domain: use original if non-empty, else 'general'.
         const domain: string =
-          typeof originalAny?.domain === 'string' && originalAny.domain.length > 0
-            ? originalAny.domain
-            : 'general';
+          original?.domain && original.domain.length > 0 ? original.domain : 'general';
 
-        // Language: original, then plan filters, then 'fr'.
         const candidateLang: string =
-          (typeof originalAny?.lang === 'string' && originalAny.lang.length > 0
-            ? originalAny.lang
-            : null) ??
+          (original?.lang && original.lang.length > 0 ? original.lang : null) ??
           p.state.filters.lang ??
           'fr';
         const lang: string = /^[a-z]{2}$/.test(candidateLang) ? candidateLang : 'fr';
 
-        // Tags: SQLite row stores tags as serialized JSON string (or null).
-        // Frontmatter tags would already be an array. Handle both.
+        // Tags may come from the SQLite row (serialized JSON string) or the
+        // parsed frontmatter (already an array). Handle both shapes.
         let tags: string[] = [];
-        const rawTags = originalAny?.tags ?? originalAny?.frontmatter?.tags;
+        const frontmatterTags = original?.frontmatter?.tags as unknown;
+        const rawTags: unknown = original?.tags ?? frontmatterTags;
         if (Array.isArray(rawTags)) {
           tags = rawTags.filter((t): t is string => typeof t === 'string');
         } else if (typeof rawTags === 'string' && rawTags.length > 0) {
@@ -365,7 +357,7 @@ export class PlanService {
       section.selected.map(async (sel) => {
         if (sel.edited || !fragmentsService) return { body: sel.body };
         const original = await fragmentsService.getById(sel.fragment_id);
-        return { body: (original as any)?.body ?? sel.body };
+        return { body: original?.body ?? sel.body };
       }),
     );
 

@@ -45,9 +45,11 @@ export function useUpdatePlan(id: string) {
         export_style_template_id: string | null;
       }>,
     ) => apiRequest<Plan>('PATCH', `/v1/plans/${id}`, patch),
-    onSuccess: () => {
+    onSuccess: (_data, patch) => {
       qc.invalidateQueries({ queryKey: [...KEY, id] });
-      qc.invalidateQueries({ queryKey: KEY });
+      if (patch.title !== undefined) {
+        qc.invalidateQueries({ queryKey: KEY });
+      }
     },
   });
 }

@@ -1,11 +1,5 @@
 import type { ChatMessage } from './llm-client.js';
-
-export interface PlanFilters {
-  domain?: string;
-  lang?: string;
-  type?: string;
-  tags?: string[];
-}
+import type { PlanFilters } from '../schema/plan.js';
 
 export interface BuildPlanArgs {
   spec_prompt: string;

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
 import type { PlanService } from '../services/plan-service.js';
 import type { TemplateService } from '../services/template-service.js';
@@ -26,6 +26,25 @@ export function planRoutes(
   const writeHandlers = options?.collectionMiddleware
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('contributor')];
+
+  // Helper: enforce that the caller is the plan owner or an admin.
+  // Returns the plan if access is allowed, or null after sending an error response.
+  async function requireOwnership(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    id: string,
+  ) {
+    const plan = await planService.get(id);
+    if (!plan) {
+      reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
+      return null;
+    }
+    if (plan.owner !== request.user.login && request.user.role !== 'admin') {
+      reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
+      return null;
+    }
+    return plan;
+  }
 
   // CREATE
   app.post(`${prefix}/plans`, { preHandler: writeHandlers }, async (request, reply) => {
@@ -55,11 +74,8 @@ export function planRoutes(
   // GET
   app.get(`${prefix}/plans/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const plan = await planService.get(id);
-    if (!plan) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
-    if (plan.owner !== request.user.login && request.user.role !== 'admin') {
-      return reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
-    }
+    const plan = await requireOwnership(request, reply, id);
+    if (!plan) return;
     return { data: plan, meta: null, error: null };
   });
 
@@ -70,11 +86,7 @@ export function planRoutes(
     if (!parsed.success) {
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     }
-    const existing = await planService.get(id);
-    if (!existing) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
-    if (existing.owner !== request.user.login && request.user.role !== 'admin') {
-      return reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
-    }
+    if (!(await requireOwnership(request, reply, id))) return;
     const updated = await planService.update(id, parsed.data);
     return { data: updated, meta: null, error: null };
   });
@@ -82,29 +94,10 @@ export function planRoutes(
   // DELETE
   app.delete(`${prefix}/plans/:id`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const existing = await planService.get(id);
-    if (!existing) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
-    if (existing.owner !== request.user.login && request.user.role !== 'admin') {
-      return reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
-    }
+    if (!(await requireOwnership(request, reply, id))) return;
     await planService.remove(id);
     return reply.status(204).send();
   });
-
-  // Helper: enforce that the caller is the plan owner or an admin.
-  // Returns null if access is allowed, or a sent error response otherwise.
-  async function requireOwnership(request: any, reply: any, id: string) {
-    const plan = await planService.get(id);
-    if (!plan) {
-      reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
-      return null;
-    }
-    if (plan.owner !== request.user.login && request.user.role !== 'admin') {
-      reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
-      return null;
-    }
-    return plan;
-  }
 
   // ACTIONS
   app.post(`${prefix}/plans/:id/generate-plan`, { preHandler: writeHandlers }, async (request, reply) => {
@@ -179,11 +172,8 @@ export function planRoutes(
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     }
 
-    const plan = await planService.get(id);
-    if (!plan) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
-    if (plan.owner !== request.user.login && request.user.role !== 'admin') {
-      return reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
-    }
+    const plan = await requireOwnership(request, reply, id);
+    if (!plan) return;
 
     if (parsed.data.format === 'md') {
       const { content, filename } = await planService.exportMarkdown(id);
@@ -200,10 +190,10 @@ export function planRoutes(
       if (!tpl) {
         return reply.status(400).send({ data: null, meta: null, error: 'Style template not found' });
       }
-      if ((tpl as any).kind !== 'style_reference') {
+      if (tpl.kind !== 'style_reference') {
         return reply.status(400).send({ data: null, meta: null, error: 'Template is not a style reference' });
       }
-      stylePath = join(storePath, (tpl as any).template_path);
+      stylePath = join(storePath, tpl.template_path);
     }
     const { content, filename } = await planService.exportDocx(id, { styleTemplatePath: stylePath });
     return reply

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Plan, PlanSection } from '@/api/types';
 import { useGenerateSection, useUpdatePlan, useAssemble } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function DraftsStep({ plan }: { plan: Plan }) {
@@ -18,6 +19,28 @@ export function DraftsStep({ plan }: { plan: Plan }) {
 
   const sections = plan.state.sections;
   const active = sections[activeIdx];
+
+  // Local state for the active section's markdown, with debounced PATCH.
+  const [activeMarkdown, setActiveMarkdown] = useState(active?.generated_markdown ?? '');
+  const saveTimer = useRef<number | null>(null);
+
+  // When the active section changes (user clicks another section, or generate
+  // produces a new body), reset local state to the upstream value.
+  useEffect(() => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    setActiveMarkdown(active?.generated_markdown ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.generated_markdown]);
+
+  // Cleanup pending save on unmount.
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
 
   async function generateOne(sectionId: string) {
     try {
@@ -42,9 +65,14 @@ export function DraftsStep({ plan }: { plan: Plan }) {
   }
 
   function saveSectionMarkdown(s: PlanSection, md: string) {
-    update.mutate({
-      sections: sections.map((x) => (x.id === s.id ? { ...x, generated_markdown: md } : x)),
-    });
+    setActiveMarkdown(md);
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    const targetId = s.id;
+    saveTimer.current = window.setTimeout(() => {
+      update.mutate({
+        sections: sections.map((x) => (x.id === targetId ? { ...x, generated_markdown: md } : x)),
+      });
+    }, 500);
   }
 
   return (
@@ -54,10 +82,10 @@ export function DraftsStep({ plan }: { plan: Plan }) {
           <button
             key={s.id}
             onClick={() => setActiveIdx(i)}
-            className={
-              'w-full text-left px-2 py-1.5 rounded text-sm flex items-center justify-between ' +
-              (i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted')
-            }
+            className={cn(
+              'w-full text-left px-2 py-1.5 rounded text-sm flex items-center justify-between',
+              i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
+            )}
           >
             <span className="truncate">{i + 1}. {s.title}</span>
             {s.generated_markdown && <span className="text-primary text-xs">✓</span>}
@@ -110,7 +138,7 @@ export function DraftsStep({ plan }: { plan: Plan }) {
                 <Textarea
                   rows={18}
                   className="font-mono text-sm"
-                  value={active.generated_markdown ?? ''}
+                  value={activeMarkdown}
                   onChange={(e) => saveSectionMarkdown(active, e.target.value)}
                 />
               </CardContent>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Plan } from '@/api/types';
 import { useAssemble, useUpdatePlan, exportPlan } from '@/api/hooks/use-plans';
 import { useStyleTemplates } from '@/api/hooks/use-style-templates';
@@ -33,6 +33,13 @@ export function ExportStep({ plan }: { plan: Plan }) {
   const [draft, setDraft] = useState(plan.state.draft_markdown ?? '');
   const [uploadOpen, setUploadOpen] = useState(false);
   const styleId = plan.state.export_style_template_id ?? '';
+  const saveTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
 
   async function handleReassemble() {
     if (plan.state.draft_dirty && !confirm('This will overwrite your manual edits. Continue?')) return;
@@ -56,7 +63,10 @@ export function ExportStep({ plan }: { plan: Plan }) {
 
   function onDraftChange(v: string) {
     setDraft(v);
-    update.mutate({ draft_markdown: v, draft_dirty: true });
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      update.mutate({ draft_markdown: v, draft_dirty: true });
+    }, 500);
   }
 
   return (
