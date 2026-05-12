@@ -99,43 +99,47 @@ export class TemplateService {
     if (!existsSync(templatesDir)) return 0;
 
     const yamlFiles = readdirSync(templatesDir).filter((f) => f.endsWith('.yaml'));
+    const yaml = await import('js-yaml');
     let synced = 0;
 
     for (const filename of yamlFiles) {
-      const yamlPath = join(templatesDir, filename);
-      const yamlContent = readFileSync(yamlPath, 'utf-8');
-      const yaml = await import('js-yaml');
-      const parsed = yaml.load(yamlContent);
-      const result = TemplateYamlSchema.safeParse(parsed);
-      if (!result.success) continue;
+      try {
+        const yamlPath = join(templatesDir, filename);
+        const yamlContent = readFileSync(yamlPath, 'utf-8');
+        const parsed = yaml.load(yamlContent);
+        const result = TemplateYamlSchema.safeParse(parsed);
+        if (!result.success) continue;
 
-      const tpl = result.data;
-      const existing = await this.db
-        .select({ id: templates.id })
-        .from(templates)
-        .where(eq(templates.id, tpl.id));
-      if (existing.length > 0) continue;
+        const tpl = result.data;
+        const existing = await this.db
+          .select({ id: templates.id })
+          .from(templates)
+          .where(eq(templates.id, tpl.id));
+        if (existing.length > 0) continue;
 
-      const relYamlPath = join('templates', filename);
-      const relTemplatePath = join('templates', tpl.carbone_template);
-      const templateFilePath = join(this.storePath, relTemplatePath);
-      if (!existsSync(templateFilePath)) continue;
+        const relYamlPath = join('templates', filename);
+        const relTemplatePath = join('templates', tpl.carbone_template);
+        const templateFilePath = join(this.storePath, relTemplatePath);
+        if (!existsSync(templateFilePath)) continue;
 
-      const now = new Date().toISOString();
-      await this.db.insert(templates).values({
-        id: tpl.id,
-        name: tpl.name,
-        description: tpl.description ?? null,
-        output_format: tpl.output_format,
-        version: tpl.version,
-        template_path: relTemplatePath,
-        yaml_path: relYamlPath,
-        author: 'system',
-        created_at: now,
-        updated_at: now,
-        git_hash: null,
-      });
-      synced++;
+        const now = new Date().toISOString();
+        await this.db.insert(templates).values({
+          id: tpl.id,
+          name: tpl.name,
+          description: tpl.description ?? null,
+          output_format: tpl.output_format,
+          version: tpl.version,
+          template_path: relTemplatePath,
+          yaml_path: relYamlPath,
+          author: 'system',
+          created_at: now,
+          updated_at: now,
+          git_hash: null,
+        });
+        synced++;
+      } catch (err) {
+        console.error(`Failed to sync template '${filename}' from vault:`, err);
+      }
     }
 
     return synced;

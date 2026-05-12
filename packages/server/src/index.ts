@@ -292,9 +292,13 @@ export async function createServer(options?: {
   }
 
   // Sync templates from vault on startup
-  const syncedTemplates = await templateService.syncFromVault();
-  if (syncedTemplates > 0) {
-    console.log(`Synced ${syncedTemplates} templates from vault on startup`);
+  try {
+    const syncedTemplates = await templateService.syncFromVault();
+    if (syncedTemplates > 0) {
+      console.log(`Synced ${syncedTemplates} templates from vault on startup`);
+    }
+  } catch (err) {
+    console.error('Template vault sync failed on startup:', err);
   }
 
   // Start periodic cleanup of expired composed outputs
