@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
 import type { TemplateService } from '../services/template-service.js';
 import type { ComposerService } from '../services/composer-service.js';
-import { ComposeRequestSchema } from '../schema/template.js';
+import { ComposeRequestSchema, ResolveRequestSchema } from '../schema/template.js';
 
 export function templateRoutes(
   app: FastifyInstance,
@@ -169,14 +169,14 @@ export function templateRoutes(
     { preHandler: readHandlers },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
-        context?: Record<string, any>;
-        overrides?: Record<string, string>;
-      };
+      const parsed = ResolveRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      }
       try {
         const result = await composerService.resolveSlots(
           id,
-          { context: body.context ?? {}, overrides: body.overrides },
+          { context: parsed.data.context ?? {}, overrides: parsed.data.overrides },
           request.user.role,
         );
         return { data: result, meta: null, error: null };
