@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFragments, useFragment, useFragmentHistory, useApproveFragment } from '@/api/hooks/use-fragments';
+import {
+  useFragments,
+  useFragment,
+  useFragmentHistory,
+  useReviewFragment,
+  useApproveFragment,
+} from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { FragmentCard } from '@/components/fragment-card';
@@ -18,18 +24,44 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { CheckCircle, Eye, MessageSquare } from 'lucide-react';
+import { CheckCircle, Eye, MessageSquare, BookOpen } from 'lucide-react';
+
+type ActionMode = 'review' | 'approve';
 
 export default function ValidationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [actionMode, setActionMode] = useState<ActionMode>('review');
   const navigate = useNavigate();
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
-  const { data: fragments, isLoading } = useFragments(activeCollection, { quality: 'reviewed' });
+  const { data: draftFragments, isLoading: isLoadingDraft } = useFragments(activeCollection, {
+    quality: 'draft',
+  });
+  const { data: reviewedFragments, isLoading: isLoadingReviewed } = useFragments(activeCollection, {
+    quality: 'reviewed',
+  });
   const { data: fragment, isLoading: isLoadingDetail } = useFragment(activeCollection, selectedId);
   const { data: history } = useFragmentHistory(activeCollection, selectedId);
+
+  const reviewMutation = useReviewFragment(activeCollection);
   const approveMutation = useApproveFragment(activeCollection);
+
+  const openSheet = (id: string, mode: ActionMode) => {
+    setSelectedId(id);
+    setActionMode(mode);
+  };
+
+  const handleReview = () => {
+    if (!selectedId) return;
+    reviewMutation.mutate(selectedId, {
+      onSuccess: () => {
+        toast.success(t('fragments', 'reviewSuccess'));
+        setSelectedId(null);
+      },
+      onError: () => toast.error(t('fragments', 'reviewError')),
+    });
+  };
 
   const handleApprove = () => {
     if (!selectedId) return;
@@ -53,44 +85,77 @@ export default function ValidationPage() {
     navigate('/fragments', { state: { fragmentId: selectedId } });
   };
 
+  const isLoading = isLoadingDraft || isLoadingReviewed;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="p-6 space-y-10">
       <div>
         <h2 className="text-2xl font-bold">{t('validation', 'title')}</h2>
-        <p className="text-muted-foreground mt-1">
-          {t('validation', 'pendingApproval')}{' '}
-          {fragments && (
-            <Badge variant="secondary" className="ml-1">
-              {fragments.length}
-            </Badge>
-          )}
-        </p>
       </div>
 
-      {/* Queue */}
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-lg" />
-          ))}
+      {/* Section 1 — À reviewer (draft) */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold">{t('validation', 'toReview')}</h3>
+          {draftFragments && <Badge variant="secondary">{draftFragments.length}</Badge>}
         </div>
-      ) : fragments && fragments.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {fragments.map((f) => (
-            <FragmentCard
-              key={f.id}
-              fragment={f}
-              onClick={() => setSelectedId(f.id)}
-              selected={f.id === selectedId}
-            />
-          ))}
+        <p className="text-sm text-muted-foreground">{t('validation', 'toReviewDescription')}</p>
+        {isLoadingDraft ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : draftFragments && draftFragments.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {draftFragments.map((f) => (
+              <FragmentCard
+                key={f.id}
+                fragment={f}
+                onClick={() => openSheet(f.id, 'review')}
+                selected={f.id === selectedId}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4">
+            {t('validation', 'noFragmentsToReview')}
+          </p>
+        )}
+      </section>
+
+      <Separator />
+
+      {/* Section 2 — À approuver (reviewed) */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold">{t('validation', 'pendingApproval')}</h3>
+          {reviewedFragments && <Badge variant="secondary">{reviewedFragments.length}</Badge>}
         </div>
-      ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          {t('validation', 'noFragmentsPending')}
-        </div>
-      )}
+        <p className="text-sm text-muted-foreground">{t('validation', 'readyForApproval')}</p>
+        {isLoadingReviewed ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : reviewedFragments && reviewedFragments.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {reviewedFragments.map((f) => (
+              <FragmentCard
+                key={f.id}
+                fragment={f}
+                onClick={() => openSheet(f.id, 'approve')}
+                selected={f.id === selectedId}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4">
+            {t('validation', 'noFragmentsPending')}
+          </p>
+        )}
+      </section>
 
       {/* Detail Drawer */}
       <Sheet open={!!selectedId} onOpenChange={(v) => !v && setSelectedId(null)}>
@@ -106,7 +171,9 @@ export default function ValidationPage() {
             <>
               <SheetHeader>
                 <div className="flex items-center gap-2">
-                  <SheetTitle className="flex-1">{fragment.title || t('common', 'noTitle')}</SheetTitle>
+                  <SheetTitle className="flex-1">
+                    {fragment.title || t('common', 'noTitle')}
+                  </SheetTitle>
                   <QualityBadge quality={fragment.quality} />
                 </div>
                 <SheetDescription>
@@ -115,29 +182,35 @@ export default function ValidationPage() {
               </SheetHeader>
 
               <div className="mt-6 space-y-6">
-                {/* Body */}
                 <div>
                   <h4 className="text-sm font-medium mb-2">{t('common', 'content')}</h4>
                   <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
-                    {fragment.body || fragment.body_excerpt || '\u2014'}
+                    {fragment.body || fragment.body_excerpt || '—'}
                   </pre>
                 </div>
 
                 <Separator />
 
-                {/* Metadata */}
                 <div>
                   <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                   <table className="text-sm w-full">
                     <tbody>
-                      {([
-                        [t('common', 'author'), fragment.author],
-                        [t('common', 'domain'), fragment.domain],
-                        [t('common', 'type'), fragment.type],
-                        [t('common', 'language'), fragment.lang],
-                        [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                        [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
-                      ] as const).map(([label, value]) => (
+                      {(
+                        [
+                          [t('common', 'author'), fragment.author],
+                          [t('common', 'domain'), fragment.domain],
+                          [t('common', 'type'), fragment.type],
+                          [t('common', 'language'), fragment.lang],
+                          [
+                            t('common', 'createdAt'),
+                            new Date(fragment.created_at).toLocaleDateString('fr-FR'),
+                          ],
+                          [
+                            t('common', 'updatedAt'),
+                            new Date(fragment.updated_at).toLocaleDateString('fr-FR'),
+                          ],
+                        ] as const
+                      ).map(([label, value]) => (
                         <tr key={label} className="border-b last:border-0">
                           <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
                           <td className="py-1.5 break-all">{value}</td>
@@ -147,7 +220,6 @@ export default function ValidationPage() {
                   </table>
                 </div>
 
-                {/* History */}
                 {history && history.length > 0 && (
                   <>
                     <Separator />
@@ -169,7 +241,6 @@ export default function ValidationPage() {
                 )}
               </div>
 
-              {/* Actions */}
               <SheetFooter className="mt-6 flex gap-2">
                 <Button variant="outline" onClick={handleRead}>
                   <Eye className="mr-2 h-4 w-4" />
@@ -179,10 +250,19 @@ export default function ValidationPage() {
                   <MessageSquare className="mr-2 h-4 w-4" />
                   {t('validation', 'requestChange')}
                 </Button>
-                <Button onClick={handleApprove} disabled={approveMutation.isPending}>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
-                </Button>
+                {actionMode === 'review' ? (
+                  <Button onClick={handleReview} disabled={reviewMutation.isPending}>
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    {reviewMutation.isPending
+                      ? t('common', 'inProgress')
+                      : t('fragments', 'markReviewed')}
+                  </Button>
+                ) : (
+                  <Button onClick={handleApprove} disabled={approveMutation.isPending}>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
+                  </Button>
+                )}
               </SheetFooter>
             </>
           ) : (

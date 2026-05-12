@@ -6,9 +6,14 @@ import { join } from 'node:path';
 import { existsSync, readdirSync, statSync, unlinkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { FragmentService } from './fragment-service.js';
-import type { TemplateYaml, ComposeRequest, ComposeResponse, FragmentSlot } from '../schema/template.js';
+import type {
+  TemplateYaml,
+  ComposeRequest,
+  ComposeResponse,
+  FragmentSlot,
+} from '../schema/template.js';
 import { renderDocument, type SupportedFormat } from './render-engine.js';
-import { toMilvusPartition } from '../db/schema.js';
+import type { SearchService } from '../search/index.js';
 
 /** Result shape returned by TemplateService.getById(). */
 export interface TemplateRow {
@@ -31,6 +36,14 @@ export interface TemplateServiceLike {
   getById(id: string): Promise<TemplateRow | null>;
   getTemplatePath(row: { template_path: string }): string;
 }
+
+/** Minimal interface matching CollectionService — used to gate slot-pinned collections. */
+export interface CollectionAccessChecker {
+  getAccessibleSlugs(userId: string): Promise<string[]>;
+}
+
+/** System collection that every authenticated caller can read by default. */
+const COMMON_COLLECTION = 'common';
 
 interface ResolvedFragment {
   id: string;
@@ -60,11 +73,27 @@ export class ComposerService {
 
   constructor(
     private fragmentService: FragmentService,
+    private searchService: SearchService,
     private templateService: TemplateServiceLike,
     private basePath: string,
+    private collectionAccess?: CollectionAccessChecker,
   ) {
     this.outputsDir = join(basePath, 'outputs');
     mkdirSync(this.outputsDir, { recursive: true });
+  }
+
+  /**
+   * Build the set of collection slugs the caller may read fragments from, or
+   * `undefined` when no restriction applies (admin, or no caller id / access
+   * service available — preserves the existing unrestricted behavior).
+   */
+  private async accessibleCollectionSet(
+    callerRole: string,
+    callerId?: string,
+  ): Promise<Set<string> | undefined> {
+    if (callerRole === 'admin' || !callerId || !this.collectionAccess) return undefined;
+    const slugs = await this.collectionAccess.getAccessibleSlugs(callerId);
+    return new Set([COMMON_COLLECTION, ...slugs]);
   }
 
   // ---------------------------------------------------------------------------
@@ -103,6 +132,10 @@ export class ComposerService {
         }
       }
 
+      if (def.type === 'date' && context[field] === 'today') {
+        context[field] = new Date().toISOString().slice(0, 10);
+      }
+
       if (def.enum && context[field] !== undefined) {
         if (!def.enum.includes(String(context[field]))) {
           throw new Error(
@@ -129,6 +162,25 @@ export class ComposerService {
   }
 
   /**
+   * Split a card-style body ("Title — rest") into a title and the remaining body.
+   * Only treats the prefix as a title when it's short and free of sentence
+   * punctuation, so prose that merely contains an em-dash isn't truncated.
+   * Used by both compose (enrichFragment) and the /resolve preview so the two stay
+   * in sync — a fragment with no explicit `title:` tag previews exactly as it renders.
+   */
+  static splitTitleFromBody(body: string): { title?: string; body: string } {
+    const trimmed = body.trim();
+    const dashIdx = trimmed.indexOf(' — ');
+    if (dashIdx > 0 && dashIdx <= 60) {
+      const candidate = trimmed.slice(0, dashIdx).trim();
+      if (candidate.length > 0 && !/[.!?:;\n]/.test(candidate)) {
+        return { title: candidate, body: trimmed.slice(dashIdx + 3).trim() };
+      }
+    }
+    return { body: trimmed };
+  }
+
+  /**
    * Build the data object for the rendering engine.
    * docx-templates uses flat data access: {fieldName} or +++FOR row IN rows+++
    */
@@ -142,10 +194,21 @@ export class ComposerService {
 
     const enrichFragment = (f: ResolvedFragment) => {
       const parsed = ComposerService.parseStructuredTags(f.tags ?? []);
+      let body = f.body.trim();
+      let autoTitle: string | undefined;
+
+      // Extract "Title — rest" format into separate title field when no explicit title: tag
+      if (!parsed.title) {
+        const split = ComposerService.splitTitleFromBody(body);
+        body = split.body;
+        autoTitle = split.title;
+      }
+
       const obj: Record<string, any> = {
-        body: f.body,
+        body,
         id: f.id,
         quality: f.quality,
+        ...(autoTitle ? { title: autoTitle } : {}),
         ...parsed,
       };
 
@@ -234,7 +297,7 @@ export class ComposerService {
     templateId: string,
     request: ComposeRequest,
     callerRole: string,
-    accessiblePartitions?: string[],
+    callerId?: string,
   ): Promise<ComposeResponse> {
     const startMs = Date.now();
 
@@ -247,9 +310,10 @@ export class ComposerService {
       throw new Error(`Template YAML not found for: ${templateId}`);
     }
     const yaml = row.yaml;
+    const accessibleCollections = await this.accessibleCollectionSet(callerRole, callerId);
 
     // 2. Validate output format
-    const requestedFormat = request.output?.format ?? 'docx';
+    const requestedFormat = request.output?.format ?? yaml.output_format;
     if (requestedFormat !== yaml.output_format) {
       throw new Error(
         `Output format mismatch: requested '${requestedFormat}' but template requires '${yaml.output_format}'`,
@@ -264,13 +328,24 @@ export class ComposerService {
 
     // 4. Resolve fragment slots
     const resolved = new Map<string, ResolvedFragment[]>();
-    const resolvedList: Array<{ key: string; fragment_id: string; score: number; quality: string }> = [];
+    const resolvedList: Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+    }> = [];
     const skipped: string[] = [];
     const warnings: string[] = [];
 
     for (const slot of yaml.fragments) {
       try {
-        const items = await this.resolveSlot(slot, context, request.overrides, yaml, accessiblePartitions);
+        const items = await this.resolveSlot(
+          slot,
+          context,
+          request.overrides,
+          yaml,
+          accessibleCollections,
+        );
         if (items.length === 0) {
           if (slot.fallback === 'skip') {
             skipped.push(slot.key);
@@ -278,7 +353,9 @@ export class ComposerService {
           } else if (slot.fallback === 'generate') {
             throw new Error(`Fragment generation not yet supported for slot '${slot.key}'`);
           } else {
-            throw new Error(`No fragment found for required slot '${slot.key}'`);
+            throw new Error(
+              `No ${slot.quality_min} fragment found for required slot '${slot.key}' (type: ${slot.type}, domain: ${slot.domain}, lang: ${slot.lang}) — create and approve fragments first`,
+            );
           }
         }
         resolved.set(slot.key, items);
@@ -300,12 +377,14 @@ export class ComposerService {
       }
     }
 
-    // 5. Build template data
-    const templateData = ComposerService.buildTemplateData(
-      resolved,
-      context,
-      request.structured_data,
-    );
+    // 5. Build template data — default missing structured_data keys to [] so FOR loops don't throw
+    const structuredData: Record<string, any> = { ...(request.structured_data ?? {}) };
+    for (const def of yaml.structured_data ?? []) {
+      if (!Array.isArray(structuredData[def.key])) {
+        structuredData[def.key] = [];
+      }
+    }
+    const templateData = ComposerService.buildTemplateData(resolved, context, structuredData);
 
     // 6. Render with unified engine
     const templatePath = this.templateService.getTemplatePath(row);
@@ -316,9 +395,16 @@ export class ComposerService {
     );
 
     // 7. Save output
+    const FORMAT_EXT: Record<string, string> = {
+      docx: 'docx',
+      xlsx: 'xlsx',
+      slides: 'html',
+      reveal: 'html',
+      pptx: 'pptx',
+    };
     const outputFilename = request.output?.filename
       ? `${randomUUID()}-${request.output.filename}`
-      : `${randomUUID()}.${requestedFormat}`;
+      : `${randomUUID()}.${FORMAT_EXT[requestedFormat] ?? requestedFormat}`;
     const outputPath = join(this.outputsDir, outputFilename);
     writeFileSync(outputPath, buffer);
 
@@ -340,6 +426,98 @@ export class ComposerService {
     };
   }
 
+  async resolveSlots(
+    templateId: string,
+    request: Pick<ComposeRequest, 'context' | 'overrides'>,
+    callerRole: string,
+    callerId?: string,
+  ): Promise<
+    Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+      title: string | null;
+      body_excerpt: string | null;
+      skipped: boolean;
+    }>
+  > {
+    const row = await this.templateService.getById(templateId);
+    if (!row || !row.yaml) throw new Error(`Template not found: ${templateId}`);
+    const yaml = row.yaml;
+    const accessibleCollections = await this.accessibleCollectionSet(callerRole, callerId);
+
+    const context = { ...request.context };
+    if (yaml.context_schema) {
+      ComposerService.validateContext(context, yaml.context_schema);
+    }
+
+    const result: Array<{
+      key: string;
+      fragment_id: string;
+      score: number;
+      quality: string;
+      title: string | null;
+      body_excerpt: string | null;
+      skipped: boolean;
+    }> = [];
+
+    for (const slot of yaml.fragments) {
+      try {
+        const items = await this.resolveSlot(
+          slot,
+          context,
+          request.overrides,
+          yaml,
+          accessibleCollections,
+        );
+        if (items.length === 0) {
+          result.push({
+            key: slot.key,
+            fragment_id: '',
+            score: 0,
+            quality: '',
+            title: null,
+            body_excerpt: null,
+            skipped: slot.fallback === 'skip',
+          });
+        } else {
+          const first = items[0];
+          // Mirror enrichFragment so the preview matches what compose will render.
+          const parsed = ComposerService.parseStructuredTags(first.tags ?? []);
+          let title: string | null = parsed.title ?? null;
+          let previewBody = first.body.trim();
+          if (!title) {
+            const split = ComposerService.splitTitleFromBody(previewBody);
+            title = split.title ?? null;
+            previewBody = split.body;
+          }
+          result.push({
+            key: slot.key,
+            fragment_id: first.id,
+            score: first.score,
+            quality: first.quality,
+            title,
+            body_excerpt: previewBody.slice(0, 120) || null,
+            skipped: false,
+          });
+        }
+      } catch {
+        result.push({
+          key: slot.key,
+          fragment_id: '',
+          score: 0,
+          quality: '',
+          title: null,
+          body_excerpt: null,
+          skipped: false,
+        });
+      }
+    }
+
+    return result;
+  }
+
   /** Purge output files older than TTL. */
   cleanupOutputs(): number {
     let removed = 0;
@@ -352,9 +530,13 @@ export class ComposerService {
             unlinkSync(filePath);
             removed++;
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
-    } catch { /* dir missing */ }
+    } catch {
+      /* dir missing */
+    }
     return removed;
   }
 
@@ -373,93 +555,104 @@ export class ComposerService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Determine the Milvus partition names to search for a given slot.
-   * Priority: slot.collection > slot.collections > yaml.collections > accessiblePartitions.
-   * All results are intersected with accessiblePartitions when provided.
-   */
-  private static resolvePartitions(
-    slot: FragmentSlot,
-    yaml: TemplateYaml,
-    accessiblePartitions?: string[],
-  ): string[] | undefined {
-    let partitions: string[] | undefined;
-
-    if (slot.collection) {
-      partitions = [toMilvusPartition(slot.collection)];
-    } else if (slot.collections?.length) {
-      partitions = slot.collections.map(toMilvusPartition);
-    } else if (yaml.collections?.length) {
-      partitions = yaml.collections.map(toMilvusPartition);
-    } else {
-      partitions = accessiblePartitions;
-    }
-
-    // Intersect with accessible partitions when both are defined
-    if (partitions && accessiblePartitions) {
-      const accessibleSet = new Set(accessiblePartitions);
-      partitions = partitions.filter(p => accessibleSet.has(p));
-    }
-
-    return partitions;
-  }
-
   private async resolveSlot(
     slot: FragmentSlot,
     context: Record<string, any>,
     overrides?: Record<string, string>,
-    yaml?: TemplateYaml,
-    accessiblePartitions?: string[],
+    _yaml?: TemplateYaml,
+    accessibleCollections?: Set<string>,
   ): Promise<ResolvedFragment[]> {
     if (overrides && overrides[slot.key]) {
       const frag = await this.fragmentService.getById(overrides[slot.key]);
       if (!frag) {
-        throw new Error(`Override fragment '${overrides[slot.key]}' not found for slot '${slot.key}'`);
+        throw new Error(
+          `Override fragment '${overrides[slot.key]}' not found for slot '${slot.key}'`,
+        );
       }
-      return [{
-        id: frag.id,
-        body: frag.body,
-        quality: frag.quality,
-        score: 1.0,
-        tags: frag.frontmatter?.tags ?? [],
-      }];
+      return [
+        {
+          id: frag.id,
+          body: frag.body,
+          quality: frag.quality,
+          score: 1.0,
+          tags: frag.frontmatter?.tags ?? [],
+        },
+      ];
     }
 
     const lang = ComposerService.resolveContextVars(slot.lang, context);
     const domain = ComposerService.resolveContextVars(slot.domain, context);
 
-    const partitionNames = yaml
-      ? ComposerService.resolvePartitions(slot, yaml, accessiblePartitions)
-      : accessiblePartitions;
+    const collectionSlug = slot.collection ?? COMMON_COLLECTION;
 
-    // Use list() instead of search() for slot resolution — search() does a LIKE
-    // match on title/body which may miss fragments. list() filters by exact metadata.
-    const collectionSlug = slot.collection ?? 'common';
+    // A template may pin a slot to a specific collection; a caller that can read
+    // the template but not that collection must not get its fragments. (Skipped
+    // for admins / when no caller context is available — see accessibleCollectionSet.)
+    if (accessibleCollections && !accessibleCollections.has(collectionSlug)) {
+      throw new Error(
+        `Slot '${slot.key}' references collection '${collectionSlug}', which the caller cannot access`,
+      );
+    }
 
     // Don't filter by quality when quality_min is 'draft' (accept everything)
-    const qualityFilter = slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
+    const qualityFilter =
+      slot.quality_min && slot.quality_min !== 'draft' ? slot.quality_min : undefined;
 
-    const results = await this.fragmentService.list({
-      type: slot.type,
-      domain,
-      lang,
-      quality: qualityFilter,
-      limit: slot.count,
-      collectionSlug,
-      valid_at: new Date().toISOString().slice(0, 10),
-    });
+    const today = new Date().toISOString().slice(0, 10);
+    const query = [slot.type, domain].filter(Boolean).join(' ');
+
+    // Try semantic search first (Milvus) — picks the most relevant fragment for this slot.
+    // Fall back to list() (exact metadata match) if Milvus returns 0 results.
+    const searchResults = await this.searchService.search(
+      query,
+      {
+        type: slot.type ? [slot.type] : undefined,
+        domain: domain ? [domain] : undefined,
+        lang,
+        quality_min: qualityFilter,
+        collectionSlug,
+        valid_at: today,
+      },
+      slot.count,
+    );
 
     const items: ResolvedFragment[] = [];
-    for (const result of results) {
-      const full = await this.fragmentService.getById(result.id);
-      if (full) {
-        items.push({
-          id: full.id,
-          body: full.body,
-          quality: full.quality,
-          score: (result as any).score ?? 0,
-          tags: full.frontmatter?.tags ?? [],
-        });
+
+    if (searchResults.length > 0) {
+      for (const result of searchResults) {
+        const full = await this.fragmentService.getById(result.id);
+        if (full) {
+          items.push({
+            id: full.id,
+            body: full.body,
+            quality: full.quality,
+            score: result.score,
+            tags: full.frontmatter?.tags ?? [],
+          });
+        }
+      }
+    } else {
+      // Fallback: exact metadata match
+      const listResults = await this.fragmentService.list({
+        type: slot.type,
+        domain,
+        lang,
+        quality: qualityFilter,
+        limit: slot.count,
+        collectionSlug,
+        valid_at: today,
+      });
+      for (const result of listResults) {
+        const full = await this.fragmentService.getById(result.id);
+        if (full) {
+          items.push({
+            id: full.id,
+            body: full.body,
+            quality: full.quality,
+            score: 0,
+            tags: full.frontmatter?.tags ?? [],
+          });
+        }
       }
     }
 

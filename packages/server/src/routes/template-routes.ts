@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
 import type { TemplateService } from '../services/template-service.js';
 import type { ComposerService } from '../services/composer-service.js';
-import { ComposeRequestSchema } from '../schema/template.js';
+import { ComposeRequestSchema, ResolveRequestSchema } from '../schema/template.js';
 
 export function templateRoutes(
   app: FastifyInstance,
@@ -42,7 +42,8 @@ export function templateRoutes(
   app.get(`${prefix}/templates/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const template = await templateService.getById(id);
-    if (!template) return reply.status(404).send({ data: null, meta: null, error: 'Template not found' });
+    if (!template)
+      return reply.status(404).send({ data: null, meta: null, error: 'Template not found' });
     return { data: template, meta: null, error: null };
   });
 
@@ -79,8 +80,12 @@ export function templateRoutes(
     }
 
     const result = await templateService.create(
-      docxBuffer, yamlContent, docxFilename,
-      request.user.login, request.user.role, request.ip,
+      docxBuffer,
+      yamlContent,
+      docxFilename,
+      request.user.login,
+      request.user.role,
+      request.ip,
     );
     return reply.status(201).send({ data: result, meta: null, error: null });
   });
@@ -109,12 +114,18 @@ export function templateRoutes(
     }
 
     if (!docxBuffer && !yamlContent) {
-      return reply.status(400).send({ data: null, meta: null, error: 'No files provided for update' });
+      return reply
+        .status(400)
+        .send({ data: null, meta: null, error: 'No files provided for update' });
     }
 
     const result = await templateService.update(
-      id, docxBuffer, yamlContent,
-      request.user.login, request.user.role, request.ip,
+      id,
+      docxBuffer,
+      yamlContent,
+      request.user.login,
+      request.user.role,
+      request.ip,
     );
     return { data: result, meta: null, error: null };
   });
@@ -122,30 +133,71 @@ export function templateRoutes(
   // Delete template
   app.delete(`${prefix}/templates/:id`, { preHandler: adminHandlers }, async (request) => {
     const { id } = request.params as { id: string };
-    const result = await templateService.delete(id, request.user.login, request.user.role, request.ip);
+    const result = await templateService.delete(
+      id,
+      request.user.login,
+      request.user.role,
+      request.ip,
+    );
     return { data: result, meta: null, error: null };
   });
 
   // Compose document from template
-  app.post(`${prefix}/templates/:id/compose`, { preHandler: readHandlers }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const parsed = ComposeRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    }
-    try {
-      const result = await composerService.compose(id, parsed.data, request.user.role);
-      return { data: result, meta: null, error: null };
-    } catch (err: any) {
-      const msg = err.message ?? 'Composition failed';
-      const status = msg.includes('not found') ? 404 : 400;
-      return reply.status(status).send({ data: null, meta: null, error: msg });
-    }
-  });
+  app.post(
+    `${prefix}/templates/:id/compose`,
+    { preHandler: readHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = ComposeRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      }
+      try {
+        const result = await composerService.compose(
+          id,
+          parsed.data,
+          request.user.role,
+          request.user.id,
+        );
+        return { data: result, meta: null, error: null };
+      } catch (err: any) {
+        const msg = err.message ?? 'Composition failed';
+        const status = msg.includes('not found') ? 404 : 400;
+        return reply.status(status).send({ data: null, meta: null, error: msg });
+      }
+    },
+  );
+
+  // Resolve slots without rendering (preview what compose would pick)
+  app.post(
+    `${prefix}/templates/:id/resolve`,
+    { preHandler: readHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = ResolveRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      }
+      try {
+        const result = await composerService.resolveSlots(
+          id,
+          { context: parsed.data.context ?? {}, overrides: parsed.data.overrides },
+          request.user.role,
+          request.user.id,
+        );
+        return { data: result, meta: null, error: null };
+      } catch (err: any) {
+        const msg = err.message ?? 'Resolution failed';
+        const status = msg.includes('not found') ? 404 : 400;
+        return reply.status(status).send({ data: null, meta: null, error: msg });
+      }
+    },
+  );
 
   // Download generated output file
   app.get(`${prefix}/outputs/:filename`, { preHandler: readHandlers }, async (request, reply) => {
     const { filename } = request.params as { filename: string };
+    const { name } = request.query as { name?: string };
 
     // Prevent path traversal
     if (filename.includes('..') || filename.includes('/')) {
@@ -157,8 +209,20 @@ export function templateRoutes(
       return reply.status(404).send({ data: null, meta: null, error: 'Output file not found' });
     }
 
-    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    const MIME: Record<string, string> = {
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      html: 'text/html; charset=utf-8',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+    const ext = filename.split('.').pop() ?? 'docx';
+    const displayName = name ?? filename;
+
+    reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream');
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+    );
     return reply.send(createReadStream(outputPath));
   });
 }

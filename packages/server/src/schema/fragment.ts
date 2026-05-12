@@ -1,9 +1,18 @@
 import { z } from 'zod';
 
 export const FRAGMENT_TYPES = [
-  'introduction', 'argument', 'pricing', 'clause',
-  'faq', 'conclusion', 'bio', 'témoignage',
-  'reference-technique', 'methodology', 'engagement', 'cas-usage',
+  'introduction',
+  'argument',
+  'pricing',
+  'clause',
+  'faq',
+  'conclusion',
+  'bio',
+  'témoignage',
+  'reference-technique',
+  'methodology',
+  'engagement',
+  'cas-usage',
 ] as const;
 
 export const QUALITY_VALUES = ['draft', 'reviewed', 'approved', 'deprecated'] as const;
@@ -20,7 +29,10 @@ export const QUALITY_TRANSITIONS: Record<string, string[]> = {
 export const ROLES = ['reader', 'contributor', 'expert', 'admin'] as const;
 
 export const ROLE_HIERARCHY: Record<string, number> = {
-  reader: 0, contributor: 1, expert: 2, admin: 3,
+  reader: 0,
+  contributor: 1,
+  expert: 2,
+  admin: 3,
 };
 
 export const fragmentFrontmatterSchema = z.object({
@@ -69,11 +81,13 @@ export const createFragmentSchema = z.object({
   valid_from: z.string().nullable().default(null),
   valid_until: z.string().nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
-  access: z.object({
-    read: z.array(z.string()),
-    write: z.array(z.string()),
-    approve: z.array(z.string()),
-  }).default({ read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] }),
+  access: z
+    .object({
+      read: z.array(z.string()),
+      write: z.array(z.string()),
+      approve: z.array(z.string()),
+    })
+    .default({ read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] }),
 });
 
 export type CreateFragmentInput = z.infer<typeof createFragmentSchema>;
@@ -83,11 +97,13 @@ export const updateFragmentSchema = z.object({
   tags: z.array(z.string()).optional(),
   domain: z.string().min(1).optional(),
   quality: z.enum(QUALITY_VALUES).optional(),
-  access: z.object({
-    read: z.array(z.string()),
-    write: z.array(z.string()),
-    approve: z.array(z.string()),
-  }).optional(),
+  access: z
+    .object({
+      read: z.array(z.string()),
+      write: z.array(z.string()),
+      approve: z.array(z.string()),
+    })
+    .optional(),
 });
 
 export type UpdateFragmentInput = z.infer<typeof updateFragmentSchema>;

@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useTemplates, useTemplate } from '@/api/hooks/use-templates';
+import { useTemplates, useTemplate, useResolveSlots } from '@/api/hooks/use-templates';
 import { useCompose } from '@/api/hooks/use-compose';
-import { useSearchFragments } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { downloadBlob } from '@/api/client';
-import type { Template, ComposeResponse, Fragment } from '@/api/types';
+import type { Template, ComposeResponse } from '@/api/types';
+import { StructuredDataEditor } from '@/components/structured-data-editor';
+import type { StructuredDataDef } from '@/components/structured-data-editor';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,53 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { QualityBadge } from '@/components/quality-badge';
 import { SlotPreview } from '@/components/slot-preview';
-import {
-  FileText,
-  Download,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-} from 'lucide-react';
-
-function resolveVars(str: string, ctx: Record<string, string>): string {
-  return str.replace(/\{\{context\.(\w+)\}\}/g, (_, k) => ctx[k] ?? '');
-}
-
-type TemplateSlot = NonNullable<Template['fragments']>[number];
-
-interface SlotResolverProps {
-  slot: TemplateSlot;
-  context: Record<string, string>;
-  collectionSlug: string;
-  onResolved: (key: string, fragments: Fragment[]) => void;
-}
-
-function SlotResolver({ slot, context, collectionSlug, onResolved }: SlotResolverProps) {
-  const resolvedLang = resolveVars(slot.lang, context);
-  const resolvedDomain = resolveVars(slot.domain, context);
-  const { data, isLoading } = useSearchFragments(collectionSlug, slot.key, {
-    type: [slot.type],
-    domain: [resolvedDomain],
-    lang: resolvedLang,
-  });
-
-  // Report resolved fragments up to parent
-  useMemo(() => {
-    if (data) {
-      onResolved(slot.key, data);
-    }
-  }, [data, slot.key, onResolved]);
-
-  return (
-    <SlotPreview
-      slot={slot}
-      fragments={data ?? undefined}
-      isLoading={isLoading}
-      onOverride={() => {}}
-    />
-  );
-}
+import { FileText, Download, Loader2, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 
 async function handleDownload(url: string, filename: string) {
   const blob = await downloadBlob(url);
@@ -82,7 +37,9 @@ async function handleDownload(url: string, filename: string) {
 export default function ComposePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [context, setContext] = useState<Record<string, string>>({});
-  const [resolvedSlots, setResolvedSlots] = useState<Record<string, Fragment[]>>({});
+  const [structuredData, setStructuredData] = useState<Record<string, Array<Record<string, any>>>>(
+    {},
+  );
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
@@ -91,43 +48,46 @@ export default function ComposePage() {
   const compose = useCompose(activeCollection);
 
   const yaml = (template as any)?.yaml as Template | undefined;
-  const contextSchema: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }> = yaml?.context_schema ?? template?.context_schema ?? {};
+  const contextSchema: Record<
+    string,
+    { type: string; required?: boolean; default?: any; enum?: string[] }
+  > = yaml?.context_schema ?? template?.context_schema ?? {};
   const slots: NonNullable<Template['fragments']> = yaml?.fragments ?? template?.fragments ?? [];
+  const structDefs: StructuredDataDef[] = (yaml as any)?.structured_data ?? [];
 
-  // Check if all required context fields are filled
   const requiredContextFilled = useMemo(() => {
     return Object.entries(contextSchema).every(
       ([key, schema]) => !schema.required || (context[key] && context[key].length > 0),
     );
   }, [contextSchema, context]);
 
-  // Check if all required slots have fragments
+  const { data: resolvedSlots, isLoading: resolveLoading } = useResolveSlots(
+    activeCollection,
+    selectedTemplateId || null,
+    context,
+    requiredContextFilled,
+  );
+
   const allRequiredSlotsFilled = useMemo(() => {
+    if (!resolvedSlots) return false;
     return slots
       .filter((s) => s.required)
-      .every((s) => resolvedSlots[s.key] && resolvedSlots[s.key].length > 0);
-  }, [slots, resolvedSlots]);
+      .every((s) => {
+        const resolved = resolvedSlots.find((r) => r.key === s.key);
+        return resolved && !resolved.skipped && resolved.fragment_id !== '';
+      });
+  }, [resolvedSlots, slots]);
 
   const handleTemplateSelect = (id: string) => {
     setSelectedTemplateId(id);
     setContext({});
-    setResolvedSlots({});
+    setStructuredData({});
     compose.reset();
   };
 
   const handleContextChange = (key: string, value: string) => {
     setContext((prev) => ({ ...prev, [key]: value }));
   };
-
-  const handleSlotResolved = useMemo(
-    () => (key: string, fragments: Fragment[]) => {
-      setResolvedSlots((prev) => {
-        if (prev[key] === fragments) return prev;
-        return { ...prev, [key]: fragments };
-      });
-    },
-    [],
-  );
 
   const handleCompose = () => {
     if (!selectedTemplateId) return;
@@ -142,7 +102,11 @@ export default function ComposePage() {
         cleanContext[k] = String(schema.default);
       }
     }
-    compose.mutate({ templateId: selectedTemplateId, context: cleanContext });
+    compose.mutate({
+      templateId: selectedTemplateId,
+      context: cleanContext,
+      structured_data: structuredData,
+    });
   };
 
   return (
@@ -158,10 +122,7 @@ export default function ComposePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Select
-            value={selectedTemplateId}
-            onValueChange={handleTemplateSelect}
-          >
+          <Select value={selectedTemplateId} onValueChange={handleTemplateSelect}>
             <SelectTrigger className="w-full max-w-md">
               <SelectValue placeholder={t('compose', 'templatePlaceholder')} />
             </SelectTrigger>
@@ -197,9 +158,7 @@ export default function ComposePage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('compose', 'context')}</CardTitle>
-            <CardDescription>
-              {t('compose', 'contextDescription')}
-            </CardDescription>
+            <CardDescription>{t('compose', 'contextDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(contextSchema).map(([key, schema]) => (
@@ -239,25 +198,53 @@ export default function ComposePage() {
         </Card>
       )}
 
+      {/* Section 2.5 - Structured data tables */}
+      {template && structDefs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('compose', 'structuredData')}</CardTitle>
+            <CardDescription>{t('compose', 'structuredDataDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StructuredDataEditor
+              defs={structDefs}
+              value={structuredData}
+              onChange={(key, rows) => setStructuredData((prev) => ({ ...prev, [key]: rows }))}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Section 3 - Slot preview */}
       {template && requiredContextFilled && slots.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>{t('compose', 'templateSlots')}</CardTitle>
-            <CardDescription>
-              {t('compose', 'resolvedFragments')}
-            </CardDescription>
+            <CardDescription>{t('compose', 'resolvedFragments')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {slots.map((slot) => (
-              <SlotResolver
-                key={slot.key}
-                slot={slot}
-                context={context}
-                collectionSlug={activeCollection}
-                onResolved={handleSlotResolved}
-              />
-            ))}
+            {slots.map((slot) => {
+              const resolved = resolvedSlots?.find((r) => r.key === slot.key);
+              return (
+                <SlotPreview
+                  key={slot.key}
+                  slot={slot}
+                  fragments={
+                    resolved && !resolved.skipped && resolved.fragment_id
+                      ? [
+                          {
+                            id: resolved.fragment_id,
+                            title: resolved.title ?? resolved.fragment_id,
+                            quality: resolved.quality as any,
+                          } as any,
+                        ]
+                      : []
+                  }
+                  isLoading={resolveLoading}
+                  onOverride={() => {}}
+                />
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -281,9 +268,7 @@ export default function ComposePage() {
               )}
             </Button>
             {!allRequiredSlotsFilled && (
-              <p className="text-sm text-muted-foreground">
-                {t('compose', 'allSlotsRequired')}
-              </p>
+              <p className="text-sm text-muted-foreground">{t('compose', 'allSlotsRequired')}</p>
             )}
           </div>
 
@@ -297,9 +282,7 @@ export default function ComposePage() {
             </Card>
           )}
 
-          {compose.isSuccess && compose.data && (
-            <ComposeReport result={compose.data} />
-          )}
+          {compose.isSuccess && compose.data && <ComposeReport result={compose.data} />}
         </>
       )}
     </div>
@@ -331,9 +314,7 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
                   <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
                   <span className="font-mono text-xs">{r.key}</span>
                   <QualityBadge quality={r.quality as any} />
-                  <span className="text-muted-foreground text-xs">
-                    score: {r.score.toFixed(2)}
-                  </span>
+                  <span className="text-muted-foreground text-xs">score: {r.score.toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -378,12 +359,20 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
             {result.render_ms} ms
           </span>
           <Button
-            onClick={() =>
+            onClick={() => {
+              const ext = result.document_url.split('.').pop() ?? 'docx';
+              const safeName = result.template.name
+                .normalize('NFD')
+                .replace(/[̀-ͯ]/g, '')
+                .replace(/[^\w\s-]/g, '')
+                .trim()
+                .replace(/\s+/g, '_');
+              const filename = `${safeName}-${result.template.version}.${ext}`;
               handleDownload(
-                result.document_url,
-                `${result.template.name}-${result.template.version}.docx`,
-              )
-            }
+                `${result.document_url}?name=${encodeURIComponent(filename)}`,
+                filename,
+              );
+            }}
           >
             <Download className="mr-2 h-4 w-4" />
             {t('common', 'download')}

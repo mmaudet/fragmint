@@ -23,7 +23,7 @@ export function registerHarvestCommand(program: Command, getClient: () => Fragmi
         job = await client.collectionRequest('GET', `/harvest/${job_id}`, opts.collection);
         if (job.status === 'done' || job.status === 'error') break;
         process.stdout.write('.');
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
       console.log('');
 

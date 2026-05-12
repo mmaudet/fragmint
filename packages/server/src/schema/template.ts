@@ -5,7 +5,7 @@ export const FragmentSlotSchema = z.object({
   type: z.string(),
   domain: z.string(),
   lang: z.string(),
-  quality_min: z.enum(['draft', 'reviewed', 'approved']).default('draft'),
+  quality_min: z.enum(['draft', 'reviewed', 'approved']).default('approved'),
   required: z.boolean().default(true),
   fallback: z.enum(['skip', 'error', 'generate']).default('error'),
   count: z.number().int().positive().default(1),
@@ -47,13 +47,22 @@ export const ComposeRequestSchema = z.object({
   context: z.record(z.any()),
   overrides: z.record(z.string()).optional(),
   structured_data: z.record(z.any()).optional(),
-  output: z.object({
-    format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
-    filename: z.string().optional(),
-  }).optional(),
+  output: z
+    .object({
+      format: z.enum(['docx', 'xlsx', 'slides', 'pptx', 'reveal']),
+      filename: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type ComposeRequest = z.infer<typeof ComposeRequestSchema>;
+
+export const ResolveRequestSchema = z.object({
+  context: z.record(z.any()).optional(),
+  overrides: z.record(z.string()).optional(),
+});
+
+export type ResolveRequest = z.infer<typeof ResolveRequestSchema>;
 
 export const ResolvedFragmentSchema = z.object({
   key: z.string(),

@@ -13,9 +13,22 @@ import { randomUUID } from 'node:crypto';
 import { eq, count, isNull } from 'drizzle-orm';
 import { loadConfig, type FragmintConfig } from './config.js';
 import { createDb, type FragmintDb } from './db/index.js';
-import { collections, collectionMemberships, users, fragments, toMilvusPartition } from './db/schema.js';
+import {
+  collections,
+  collectionMemberships,
+  users,
+  fragments,
+  toMilvusPartition,
+} from './db/schema.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
-import { UserService, TokenService, AuditService, FragmentService, TemplateService, ComposerService } from './services/index.js';
+import {
+  UserService,
+  TokenService,
+  AuditService,
+  FragmentService,
+  TemplateService,
+  ComposerService,
+} from './services/index.js';
 import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
@@ -69,12 +82,15 @@ async function ensureCollections(db: FragmintDb, config: FragmintConfig) {
     });
   }
 
-  console.log(`Collections migration: created 'common' collection, assigned ${allUsers.length} user(s)`);
+  console.log(
+    `Collections migration: created 'common' collection, assigned ${allUsers.length} user(s)`,
+  );
 }
 
 async function migrateFragmentCollectionSlug(db: FragmintDb) {
   // Set collection_slug = 'common' for any fragments that don't have one yet
-  await db.update(fragments)
+  await db
+    .update(fragments)
     .set({ collection_slug: 'common' })
     .where(isNull(fragments.collection_slug));
 }
@@ -87,9 +103,8 @@ export async function createServer(options?: {
   const config = loadConfig(options?.configPath, options?.dev ?? false);
   const storePath = resolve(config.store_path);
 
-  // Database
-  // createDb handles table creation on the same connection (critical for :memory:)
-  const dbPath = options?.dbPath ?? (config.dev ? ':memory:' : resolve(storePath, '.fragmint.db'));
+  // Database — always file-based; tests pass ':memory:' explicitly via options.dbPath
+  const dbPath = options?.dbPath ?? resolve(storePath, '.fragmint.db');
   const db = createDb(dbPath);
 
   // Auto-migrate collections
@@ -105,7 +120,10 @@ export async function createServer(options?: {
   // Fastify
   const app = Fastify({ logger: { level: config.log_level }, trustProxy: config.trust_proxy });
 
-  await app.register(fastifyJwt, { secret: config.jwt_secret, sign: { expiresIn: config.jwt_ttl } });
+  await app.register(fastifyJwt, {
+    secret: config.jwt_secret,
+    sign: { expiresIn: config.jwt_ttl },
+  });
   await app.register(fastifyCors, {
     origin: config.cors_origin,
     credentials: true,
@@ -125,14 +143,18 @@ export async function createServer(options?: {
 
   // Search infrastructure
   const embeddingClient = new EmbeddingClient(
-    config.embedding_endpoint, config.embedding_model, config.embedding_dimensions
+    config.embedding_endpoint,
+    config.embedding_model,
+    config.embedding_dimensions,
   );
 
   let milvusClient: FragmintMilvusClient | null = null;
   if (config.milvus_enabled) {
     try {
       milvusClient = new FragmintMilvusClient(
-        config.milvus_address, config.milvus_collection, config.embedding_dimensions
+        config.milvus_address,
+        config.milvus_collection,
+        config.embedding_dimensions,
       );
       await milvusClient.ensureCollection();
       console.log('Milvus connected and collection ready');
@@ -157,13 +179,21 @@ export async function createServer(options?: {
   const tokenService = new TokenService(db);
   const fragmentService = new FragmentService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
-  const composerService = new ComposerService(fragmentService, templateService, storePath);
+  const collectionService = new CollectionService(db, {
+    collections_path: config.collections_path,
+  });
+  const composerService = new ComposerService(
+    fragmentService,
+    searchService,
+    templateService,
+    storePath,
+    collectionService,
+  );
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
 
-  // Collection service and middleware
-  const collectionService = new CollectionService(db, { collections_path: config.collections_path });
+  // Collection middleware
   const requireCollRole = buildCollectionMiddleware(db);
 
   // Harvester
@@ -173,12 +203,26 @@ export async function createServer(options?: {
     temperature: config.llm_temperature,
     timeout: config.llm_timeout,
   });
-  const harvesterService = new HarvesterService(db, llmClient, searchService, fragmentService, storePath);
+  const harvesterService = new HarvesterService(
+    db,
+    llmClient,
+    searchService,
+    fragmentService,
+    storePath,
+  );
 
   // Routes
   authRoutes(app, userService);
   fragmentRoutes(app, fragmentService, authenticate);
-  adminRoutes(app, userService, tokenService, auditService, fragmentService, authenticate, searchService);
+  adminRoutes(
+    app,
+    userService,
+    tokenService,
+    auditService,
+    fragmentService,
+    authenticate,
+    searchService,
+  );
   templateRoutes(app, templateService, composerService, authenticate);
   harvestRoutes(app, harvesterService, authenticate);
 
@@ -248,6 +292,16 @@ export async function createServer(options?: {
     console.log(`Indexed ${result.indexed} fragments on startup`);
   }
 
+  // Sync templates from vault on startup
+  try {
+    const syncedTemplates = await templateService.syncFromVault();
+    if (syncedTemplates > 0) {
+      console.log(`Synced ${syncedTemplates} templates from vault on startup`);
+    }
+  } catch (err) {
+    console.error('Template vault sync failed on startup:', err);
+  }
+
   // Start periodic cleanup of expired composed outputs
   app.addHook('onReady', () => {
     const timer = composerService.startCleanupTimer();
@@ -257,10 +311,7 @@ export async function createServer(options?: {
   return { app, config, db };
 }
 
-export async function startServer(options?: {
-  configPath?: string;
-  dev?: boolean;
-}) {
+export async function startServer(options?: { configPath?: string; dev?: boolean }) {
   const { app, config } = await createServer(options);
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`Fragmint server listening on http://localhost:${config.port}`);
@@ -274,6 +325,18 @@ export type { FragmintConfig } from './config.js';
 // Auto-start when run directly (not imported as a module)
 const isMain = process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js');
 if (isMain) {
+  // gRPC background reconnections can throw unhandled rejections when Milvus is unreachable.
+  // Log them as warnings instead of crashing the process.
+  process.on('unhandledRejection', (reason) => {
+    const msg = String(reason);
+    if (msg.includes('UNAVAILABLE') || msg.includes('Name resolution failed')) {
+      console.warn('[Milvus] Background gRPC error (ignored):', msg.split('\n')[0]);
+    } else {
+      console.error('Unhandled rejection:', reason);
+      process.exit(1);
+    }
+  });
+
   startServer({ dev: process.env.NODE_ENV !== 'production' }).catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);

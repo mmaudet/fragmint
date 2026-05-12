@@ -20,7 +20,12 @@ export function registerComposeCommand(program: Command, getClient: () => Fragmi
       if (opts.overrides) body.overrides = JSON.parse(opts.overrides);
       if (opts.structuredData) body.structured_data = JSON.parse(opts.structuredData);
 
-      const result = await client.collectionRequest<any>('POST', `/templates/${templateId}/compose`, opts.collection, body);
+      const result = await client.collectionRequest<any>(
+        'POST',
+        `/templates/${templateId}/compose`,
+        opts.collection,
+        body,
+      );
 
       console.log(`Document generated: ${result.document_url}`);
       console.log(`Resolved: ${result.resolved.length} fragments`);

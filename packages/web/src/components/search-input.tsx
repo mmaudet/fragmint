@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 
 interface SearchInputProps {
   value: string;
@@ -9,10 +9,17 @@ interface SearchInputProps {
   debounceMs?: number;
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Rechercher...', debounceMs = 300 }: SearchInputProps) {
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Rechercher...',
+  debounceMs = 300,
+}: SearchInputProps) {
   const [local, setLocal] = useState(value);
 
-  useEffect(() => { setLocal(value) }, [value]);
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
 
   useEffect(() => {
     const timer = setTimeout(() => onChange(local), debounceMs);
@@ -29,5 +36,5 @@ export function SearchInput({ value, onChange, placeholder = 'Rechercher...', de
         className="pl-9"
       />
     </div>
-  )
+  );
 }

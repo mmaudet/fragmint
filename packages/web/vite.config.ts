@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
@@ -13,8 +13,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
     proxy: {
-      '/v1': 'http://localhost:3210',
+      '/v1': process.env.API_HOST ?? 'http://localhost:3210',
     },
   },
   test: {
@@ -24,4 +25,4 @@ export default defineConfig({
     css: true,
     exclude: ['e2e/**', 'node_modules/**'],
   },
-})
+});

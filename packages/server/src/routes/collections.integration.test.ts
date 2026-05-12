@@ -20,13 +20,16 @@ describe('Collection routes', () => {
     // In test mode the dev user is created after the collections migration,
     // so we add the membership explicitly to simulate auto-assign behavior.
     await server.app.inject({
-      method: 'POST', url: '/v1/collections/common/members',
+      method: 'POST',
+      url: '/v1/collections/common/members',
       headers: auth(),
       payload: { user_id: 'mmaudet', role: 'reader' },
     });
 
     const res = await server.app.inject({
-      method: 'GET', url: '/v1/collections', headers: auth(),
+      method: 'GET',
+      url: '/v1/collections',
+      headers: auth(),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -38,7 +41,8 @@ describe('Collection routes', () => {
 
   it('POST /v1/collections creates a team collection', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/collections',
+      method: 'POST',
+      url: '/v1/collections',
       headers: auth(),
       payload: { slug: 'test-team', name: 'Test Team', type: 'team' },
     });
@@ -48,7 +52,9 @@ describe('Collection routes', () => {
 
     // Verify it appears via GET /v1/collections/:slug (admin has implicit access)
     const detailRes = await server.app.inject({
-      method: 'GET', url: '/v1/collections/test-team', headers: auth(),
+      method: 'GET',
+      url: '/v1/collections/test-team',
+      headers: auth(),
     });
     expect(detailRes.statusCode).toBe(200);
     const detailBody = JSON.parse(detailRes.body);
@@ -58,7 +64,8 @@ describe('Collection routes', () => {
 
   it('POST /v1/collections/:slug/members adds a member', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/collections/test-team/members',
+      method: 'POST',
+      url: '/v1/collections/test-team/members',
       headers: auth(),
       payload: { user_id: 'some-user-id', role: 'reader' },
     });
@@ -69,7 +76,9 @@ describe('Collection routes', () => {
 
   it('GET /v1/collections/:slug returns collection detail', async () => {
     const res = await server.app.inject({
-      method: 'GET', url: '/v1/collections/common', headers: auth(),
+      method: 'GET',
+      url: '/v1/collections/common',
+      headers: auth(),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -78,9 +87,46 @@ describe('Collection routes', () => {
     expect(body.data.type).toBe('system');
   });
 
+  it('PUT /v1/collections/:slug persists updates', async () => {
+    const res = await server.app.inject({
+      method: 'PUT',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+      payload: { name: 'Renamed Team', description: 'Updated description', read_only: 1 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.data.name).toBe('Renamed Team');
+    expect(body.data.description).toBe('Updated description');
+    expect(body.data.read_only).toBe(1);
+
+    // Re-fetch to confirm the change was actually written, not just echoed back.
+    const detailRes = await server.app.inject({
+      method: 'GET',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+    });
+    const detailBody = JSON.parse(detailRes.body);
+    expect(detailBody.data.name).toBe('Renamed Team');
+    expect(detailBody.data.description).toBe('Updated description');
+    expect(detailBody.data.read_only).toBe(1);
+  });
+
+  it('PUT /v1/collections/:slug with no fields returns 400', async () => {
+    const res = await server.app.inject({
+      method: 'PUT',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('Backward compat: /v1/fragments returns fragments', async () => {
     const res = await server.app.inject({
-      method: 'GET', url: '/v1/fragments', headers: auth(),
+      method: 'GET',
+      url: '/v1/fragments',
+      headers: auth(),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -89,7 +135,9 @@ describe('Collection routes', () => {
 
   it('GET /v1/collections/nonexistent returns 404', async () => {
     const res = await server.app.inject({
-      method: 'GET', url: '/v1/collections/nonexistent', headers: auth(),
+      method: 'GET',
+      url: '/v1/collections/nonexistent',
+      headers: auth(),
     });
     expect(res.statusCode).toBe(404);
   });

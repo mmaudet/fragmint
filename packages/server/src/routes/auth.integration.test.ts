@@ -14,7 +14,8 @@ describe('Auth routes', () => {
 
   it('POST /v1/auth/login returns JWT for valid credentials', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/auth/login',
+      method: 'POST',
+      url: '/v1/auth/login',
       payload: { username: 'mmaudet', password: 'fragmint-dev' },
     });
     expect(res.statusCode).toBe(200);
@@ -25,7 +26,8 @@ describe('Auth routes', () => {
 
   it('POST /v1/auth/login rejects invalid password', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/auth/login',
+      method: 'POST',
+      url: '/v1/auth/login',
       payload: { username: 'mmaudet', password: 'wrong' },
     });
     expect(res.statusCode).toBe(401);

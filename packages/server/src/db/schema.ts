@@ -79,7 +79,7 @@ export const collections = sqliteTable('collections', {
   id: text('id').primaryKey(),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
-  type: text('type').notNull(),              // 'system' | 'team' | 'personal'
+  type: text('type').notNull(), // 'system' | 'team' | 'personal'
   read_only: integer('read_only').notNull().default(0),
   auto_assign: integer('auto_assign').notNull().default(0),
   git_path: text('git_path').notNull(),

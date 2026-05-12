@@ -33,7 +33,10 @@ export function fragmentRoutes(
     const query = request.query as Record<string, string>;
     const collection = request.collection;
     const rows = await fragmentService.list({
-      type: query.type, domain: query.domain, lang: query.lang, quality: query.quality,
+      type: query.type,
+      domain: query.domain,
+      lang: query.lang,
+      quality: query.quality,
       limit: query.limit ? parseInt(query.limit) : undefined,
       collectionSlug: collection?.slug,
     });
@@ -45,7 +48,10 @@ export function fragmentRoutes(
     const query = request.query as Record<string, string>;
     const collection = request.collection;
     const rows = await fragmentService.list({
-      type: query.type, domain: query.domain, lang: query.lang, quality: query.quality,
+      type: query.type,
+      domain: query.domain,
+      lang: query.lang,
+      quality: query.quality,
       collectionSlug: collection?.slug,
     });
 
@@ -62,7 +68,8 @@ export function fragmentRoutes(
   app.get(`${prefix}/fragments/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const frag = await fragmentService.getById(id);
-    if (!frag) return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
+    if (!frag)
+      return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
     return { data: frag, meta: null, error: null };
   });
 
@@ -83,13 +90,17 @@ export function fragmentRoutes(
   });
 
   // Version at commit
-  app.get(`${prefix}/fragments/:id/version/:commit`, { preHandler: readHandlers }, async (request) => {
-    const { id, commit } = request.params as { id: string; commit: string };
-    const frag = await fragmentService.getById(id);
-    if (!frag) throw new Error('Fragment not found');
-    const content = await fragmentService.getGit().show(commit, frag.file_path);
-    return { data: { content, commit }, meta: null, error: null };
-  });
+  app.get(
+    `${prefix}/fragments/:id/version/:commit`,
+    { preHandler: readHandlers },
+    async (request) => {
+      const { id, commit } = request.params as { id: string; commit: string };
+      const frag = await fragmentService.getById(id);
+      if (!frag) throw new Error('Fragment not found');
+      const content = await fragmentService.getGit().show(commit, frag.file_path);
+      return { data: { content, commit }, meta: null, error: null };
+    },
+  );
 
   // Search
   app.post(`${prefix}/fragments/search`, { preHandler: readHandlers }, async (request) => {
@@ -115,9 +126,17 @@ export function fragmentRoutes(
   // Create
   app.post(`${prefix}/fragments`, { preHandler: writeHandlers }, async (request, reply) => {
     const parsed = createFragmentSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+    if (!parsed.success)
+      return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     const collection = (request as any).collection;
-    const result = await fragmentService.create(parsed.data, request.user.login, request.user.role, request.ip, collection?.git_path, collection?.slug);
+    const result = await fragmentService.create(
+      parsed.data,
+      request.user.login,
+      request.user.role,
+      request.ip,
+      collection?.git_path,
+      collection?.slug,
+    );
     return reply.status(201).send({ data: result, meta: null, error: null });
   });
 
@@ -125,15 +144,28 @@ export function fragmentRoutes(
   app.put(`${prefix}/fragments/:id`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateFragmentSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-    const result = await fragmentService.update(id, parsed.data, request.user.login, request.user.role, request.ip);
+    if (!parsed.success)
+      return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+    const result = await fragmentService.update(
+      id,
+      parsed.data,
+      request.user.login,
+      request.user.role,
+      request.ip,
+    );
     return { data: result, meta: null, error: null };
   });
 
   // Review
   app.post(`${prefix}/fragments/:id/review`, { preHandler: writeHandlers }, async (request) => {
     const { id } = request.params as { id: string };
-    const result = await fragmentService.update(id, { quality: 'reviewed' }, request.user.login, request.user.role, request.ip);
+    const result = await fragmentService.update(
+      id,
+      { quality: 'reviewed' },
+      request.user.login,
+      request.user.role,
+      request.ip,
+    );
     return { data: result, meta: null, error: null };
   });
 
@@ -159,11 +191,15 @@ export function fragmentRoutes(
   });
 
   // Restore
-  app.post(`${prefix}/fragments/:id/restore/:commit`, { preHandler: adminHandlers }, async (request) => {
-    const { id, commit } = request.params as { id: string; commit: string };
-    const frag = await fragmentService.getById(id);
-    if (!frag) throw new Error('Fragment not found');
-    await fragmentService.getGit().restore(commit, frag.file_path);
-    return { data: { restored: true, commit }, meta: null, error: null };
-  });
+  app.post(
+    `${prefix}/fragments/:id/restore/:commit`,
+    { preHandler: adminHandlers },
+    async (request) => {
+      const { id, commit } = request.params as { id: string; commit: string };
+      const frag = await fragmentService.getById(id);
+      if (!frag) throw new Error('Fragment not found');
+      await fragmentService.getGit().restore(commit, frag.file_path);
+      return { data: { restored: true, commit }, meta: null, error: null };
+    },
+  );
 }

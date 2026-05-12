@@ -22,6 +22,8 @@ export interface Fragment {
   parent_id?: string | null;
   translation_of?: string | null;
   frontmatter?: Record<string, any>;
+  valid_from?: string | null;
+  valid_until?: string | null;
 }
 
 export interface Template {
@@ -43,7 +45,10 @@ export interface Template {
     fallback: string;
     count: number;
   }>;
-  context_schema?: Record<string, { type: string; required?: boolean; default?: any; enum?: string[] }>;
+  context_schema?: Record<
+    string,
+    { type: string; required?: boolean; default?: any; enum?: string[] }
+  >;
 }
 
 export interface ComposeResponse {

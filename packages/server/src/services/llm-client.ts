@@ -65,12 +65,18 @@ export class LlmClient {
   }
 
   async segment(markdown: string): Promise<SegmentBlock[]> {
-    const prompt = `You are a content segmentation assistant. Analyze the following markdown document and identify reusable content blocks. Return a JSON array where each element has: title (string), body (string), type (string), lang (string).
+    const prompt = `You are a content segmentation assistant. Extract reusable content blocks from the following document.
+
+Rules:
+- body: copy the EXACT original text verbatim. Do NOT translate, paraphrase, or summarize. Preserve the source language.
+- title: a short label (3-8 words) in the SAME language as the body. Do NOT write an English title for French content. Do NOT write a French title for English content.
+- type: the closest match among introduction, argument, pricing, clause, faq, conclusion, bio, témoignage, reference-technique, methodology, engagement, cas-usage. Pick one of these exactly; do not invent other values.
+- lang: ISO 639-1 code (fr, en, de, ...).
 
 Document:
 ${markdown}
 
-Return ONLY a JSON array.`;
+Return ONLY a JSON array where each element has: title (string), body (string), type (string), lang (string).`;
 
     try {
       const response = await this.chat(prompt);
@@ -89,7 +95,11 @@ Return ONLY a JSON array.`;
     existingTypes: string[],
     existingDomains: string[],
   ): Promise<Classification> {
-    const prompt = `You are a content classification assistant. Classify the following text block. Available types: ${JSON.stringify(existingTypes)}. Available domains: ${JSON.stringify(existingDomains)}.
+    const prompt = `You are a content classification assistant. Classify the following text block.
+
+Choose the BEST matching type from this closed list: ${JSON.stringify(existingTypes)}.
+Choose the BEST matching domain from this closed list: ${JSON.stringify(existingDomains)}.
+Always return one value from each list verbatim — do not invent new values. The type list has no catch-all, so pick the closest type even if the fit is imperfect; the domain list contains "other" for content that fits no domain.
 
 Text:
 ${blockText}

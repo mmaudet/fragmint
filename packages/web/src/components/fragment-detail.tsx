@@ -1,4 +1,9 @@
-import { useFragment, useFragmentHistory, useReviewFragment, useApproveFragment } from '@/api/hooks/use-fragments';
+import {
+  useFragment,
+  useFragmentHistory,
+  useReviewFragment,
+  useApproveFragment,
+} from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { QualityBadge } from '@/components/quality-badge';
@@ -60,7 +65,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
           <>
             <SheetHeader>
               <div className="flex items-center gap-2">
-                <SheetTitle className="flex-1">{fragment.title || t('common', 'noTitle')}</SheetTitle>
+                <SheetTitle className="flex-1">
+                  {fragment.title || t('common', 'noTitle')}
+                </SheetTitle>
                 <QualityBadge quality={fragment.quality} />
               </div>
               <SheetDescription>
@@ -84,18 +91,30 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                 <table className="text-sm w-full">
                   <tbody>
-                    {([
-                      [t('common', 'domain'), fragment.domain],
-                      [t('common', 'type'), fragment.type],
-                      [t('common', 'language'), fragment.lang],
-                      [t('common', 'author'), fragment.author],
-                      [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                      [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
-                      [t('common', 'uses'), String(fragment.uses)],
-                      [t('common', 'file'), fragment.file_path],
-                      ...(fragment.valid_from ? [[t('common', 'validFrom'), fragment.valid_from] as const] : []),
-                      ...(fragment.valid_until ? [[t('common', 'validUntil'), fragment.valid_until] as const] : []),
-                    ] as const).map(([label, value]) => (
+                    {(
+                      [
+                        [t('common', 'domain'), fragment.domain],
+                        [t('common', 'type'), fragment.type],
+                        [t('common', 'language'), fragment.lang],
+                        [t('common', 'author'), fragment.author],
+                        [
+                          t('common', 'createdAt'),
+                          new Date(fragment.created_at).toLocaleDateString('fr-FR'),
+                        ],
+                        [
+                          t('common', 'updatedAt'),
+                          new Date(fragment.updated_at).toLocaleDateString('fr-FR'),
+                        ],
+                        [t('common', 'uses'), String(fragment.uses)],
+                        [t('common', 'file'), fragment.file_path],
+                        ...(fragment.valid_from
+                          ? [[t('common', 'validFrom'), fragment.valid_from] as const]
+                          : []),
+                        ...(fragment.valid_until
+                          ? [[t('common', 'validUntil'), fragment.valid_until] as const]
+                          : []),
+                      ] as const
+                    ).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
                         <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
                         <td className="py-1.5 break-all">{value}</td>
@@ -113,7 +132,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     <h4 className="text-sm font-medium mb-2">{t('common', 'tags')}</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {fragment.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">{tag}</Badge>
+                        <Badge key={tag} variant="secondary">
+                          {tag}
+                        </Badge>
                       ))}
                     </div>
                   </div>
@@ -146,18 +167,14 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
             {(fragment.quality === 'draft' || fragment.quality === 'reviewed') && (
               <SheetFooter className="mt-6">
                 {fragment.quality === 'draft' && (
-                  <Button
-                    onClick={handleReview}
-                    disabled={reviewMutation.isPending}
-                  >
-                    {reviewMutation.isPending ? t('common', 'inProgress') : t('fragments', 'markReviewed')}
+                  <Button onClick={handleReview} disabled={reviewMutation.isPending}>
+                    {reviewMutation.isPending
+                      ? t('common', 'inProgress')
+                      : t('fragments', 'markReviewed')}
                   </Button>
                 )}
                 {fragment.quality === 'reviewed' && (
-                  <Button
-                    onClick={handleApprove}
-                    disabled={approveMutation.isPending}
-                  >
+                  <Button onClick={handleApprove} disabled={approveMutation.isPending}>
                     {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
                   </Button>
                 )}

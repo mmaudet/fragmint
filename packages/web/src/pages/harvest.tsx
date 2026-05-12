@@ -215,9 +215,17 @@ export default function HarvestPage() {
         <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
         <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-5 w-5" />
-          <span>{t('harvest', 'error')}: {job.error}</span>
+          <span>
+            {t('harvest', 'error')}: {job.error}
+          </span>
         </div>
-        <Button variant="outline" onClick={() => { setJobId(null); setFiles([]); }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setJobId(null);
+            setFiles([]);
+          }}
+        >
           {t('harvest', 'uploadTitle')}
         </Button>
       </div>

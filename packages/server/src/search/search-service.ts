@@ -55,33 +55,33 @@ export interface EmbeddingPrefixes {
 export function reRankResults(results: SearchResult[]): SearchResult[] {
   const now = Date.now();
 
-  return results.map(r => {
-    let adjustedScore = r.score;
+  return results
+    .map((r) => {
+      let adjustedScore = r.score;
 
-    // Quality boost
-    const qualityMultiplier =
-      r.quality === 'approved' ? 1.0 :
-      r.quality === 'reviewed' ? 0.95 :
-      0.80;
-    adjustedScore *= qualityMultiplier;
+      // Quality boost
+      const qualityMultiplier =
+        r.quality === 'approved' ? 1.0 : r.quality === 'reviewed' ? 0.95 : 0.8;
+      adjustedScore *= qualityMultiplier;
 
-    // Freshness boost (if updated_at available)
-    if (r.updated_at) {
-      const ageMs = now - new Date(r.updated_at).getTime();
-      const ageDays = ageMs / (1000 * 60 * 60 * 24);
-      if (ageDays <= 7) adjustedScore += 0.05;
-      else if (ageDays <= 30) adjustedScore += 0.03;
-      else if (ageDays <= 90) adjustedScore += 0.01;
-    }
+      // Freshness boost (if updated_at available)
+      if (r.updated_at) {
+        const ageMs = now - new Date(r.updated_at).getTime();
+        const ageDays = ageMs / (1000 * 60 * 60 * 24);
+        if (ageDays <= 7) adjustedScore += 0.05;
+        else if (ageDays <= 30) adjustedScore += 0.03;
+        else if (ageDays <= 90) adjustedScore += 0.01;
+      }
 
-    // Usage momentum
-    if (r.uses !== undefined) {
-      if (r.uses > 10) adjustedScore += 0.02;
-      else if (r.uses > 5) adjustedScore += 0.01;
-    }
+      // Usage momentum
+      if (r.uses !== undefined) {
+        if (r.uses > 10) adjustedScore += 0.02;
+        else if (r.uses > 5) adjustedScore += 0.01;
+      }
 
-    return { ...r, score: adjustedScore };
-  }).sort((a, b) => b.score - a.score);
+      return { ...r, score: adjustedScore };
+    })
+    .sort((a, b) => b.score - a.score);
 }
 
 /**
@@ -103,45 +103,61 @@ export class SearchService {
     private milvusClient: FragmintMilvusClient | null,
     options?: { prefixes?: EmbeddingPrefixes; maxTokens?: number },
   ) {
-    this.prefixes = options?.prefixes ?? { document: 'search_document: ', query: 'search_query: ', cluster: 'clustering: ' };
+    this.prefixes = options?.prefixes ?? {
+      document: 'search_document: ',
+      query: 'search_query: ',
+      cluster: 'clustering: ',
+    };
     this.maxTokens = options?.maxTokens ?? 480;
   }
 
-  async indexFragment(id: string, body: string, metadata: FragmentMetadata, partitionName?: string): Promise<void> {
+  async indexFragment(
+    id: string,
+    body: string,
+    metadata: FragmentMetadata,
+    partitionName?: string,
+  ): Promise<void> {
     if (!this.milvusClient) return;
 
     try {
       const title = body.match(/^#\s+(.+)$/m)?.[1] ?? '';
       const rawText = `${title}\n\n${body}`;
       const vector = await this.embeddingClient.embed(
-        this.prefixes.document + truncateForEmbedding(rawText, this.maxTokens)
+        this.prefixes.document + truncateForEmbedding(rawText, this.maxTokens),
       );
 
-      await this.milvusClient.upsert([{
-        id,
-        vector,
-        type: metadata.type,
-        domain: metadata.domain,
-        lang: metadata.lang,
-        quality: metadata.quality,
-        author: metadata.author,
-        created_at: new Date(metadata.created_at).getTime(),
-        updated_at: new Date(metadata.updated_at).getTime(),
-        tags: metadata.tags,
-        access_read: metadata.access_read,
-        community_id: 0,
-      }], partitionName);
+      await this.milvusClient.upsert(
+        [
+          {
+            id,
+            vector,
+            type: metadata.type,
+            domain: metadata.domain,
+            lang: metadata.lang,
+            quality: metadata.quality,
+            author: metadata.author,
+            created_at: new Date(metadata.created_at).getTime(),
+            updated_at: new Date(metadata.updated_at).getTime(),
+            tags: metadata.tags,
+            access_read: metadata.access_read,
+            community_id: 0,
+          },
+        ],
+        partitionName,
+      );
     } catch (err) {
       console.warn(`Failed to index fragment ${id} in Milvus:`, err);
     }
   }
 
-  async indexBatch(items: { id: string; body: string; metadata: FragmentMetadata }[]): Promise<{ indexed: number }> {
+  async indexBatch(
+    items: { id: string; body: string; metadata: FragmentMetadata }[],
+  ): Promise<{ indexed: number }> {
     if (!this.milvusClient || items.length === 0) return { indexed: 0 };
 
     let indexed = 0;
     try {
-      const texts = items.map(item => {
+      const texts = items.map((item) => {
         const title = item.body.match(/^#\s+(.+)$/m)?.[1] ?? '';
         const rawText = `${title}\n\n${item.body}`;
         return this.prefixes.document + truncateForEmbedding(rawText, this.maxTokens);
@@ -175,12 +191,17 @@ export class SearchService {
     return { indexed };
   }
 
-  async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]): Promise<SearchResult[]> {
+  async search(
+    query: string,
+    filters?: SearchFilters,
+    limit = 20,
+    partitionNames?: string[],
+  ): Promise<SearchResult[]> {
     // Try Milvus path
     if (this.milvusClient) {
       try {
         const vector = await this.embeddingClient.embed(
-          this.prefixes.query + truncateForEmbedding(query, this.maxTokens)
+          this.prefixes.query + truncateForEmbedding(query, this.maxTokens),
         );
         const milvusFilters: MilvusFilters = {
           type: filters?.type,
@@ -188,32 +209,51 @@ export class SearchService {
           lang: filters?.lang,
           quality_min: filters?.quality_min,
         };
-        const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit, partitionNames);
+        const milvusResults = await this.milvusClient.search(
+          vector,
+          milvusFilters,
+          limit,
+          partitionNames,
+        );
 
         if (milvusResults.length > 0) {
           // Enrich from SQLite
-          const ids = milvusResults.map(r => r.id);
+          const ids = milvusResults.map((r) => r.id);
           const conditions = [inArray(fragments.id, ids)];
+
+          // Scope by collection — Milvus has no collection field, so the SQLite
+          // join is the only place this filter is applied on the Milvus path.
+          if (filters?.collectionSlug) {
+            if (filters.collectionSlug === 'common') {
+              conditions.push(
+                or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!,
+              );
+            } else {
+              conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
+            }
+          }
 
           // Apply temporal filtering on Milvus results too
           if (filters?.valid_at) {
             conditions.push(
-              or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))!
+              or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))!,
             );
             conditions.push(
-              or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))!
+              or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))!,
             );
           }
 
           // Exclude deprecated
           conditions.push(ne(fragments.quality, 'deprecated'));
 
-          const rows = await this.db.select().from(fragments)
+          const rows = await this.db
+            .select()
+            .from(fragments)
             .where(and(...conditions));
 
-          const rowMap = new Map(rows.map(r => [r.id, r]));
+          const rowMap = new Map(rows.map((r) => [r.id, r]));
           const enriched = milvusResults
-            .map(mr => {
+            .map((mr) => {
               const row = rowMap.get(mr.id);
               if (!row) return null;
               return {
@@ -265,7 +305,11 @@ export class SearchService {
     };
   }
 
-  private async sqliteSearch(query: string, filters?: SearchFilters, limit = 20): Promise<SearchResult[]> {
+  private async sqliteSearch(
+    query: string,
+    filters?: SearchFilters,
+    limit = 20,
+  ): Promise<SearchResult[]> {
     const conditions = [];
     const q = `%${query}%`;
     conditions.push(or(like(fragments.title, q), like(fragments.body_excerpt, q)));
@@ -295,7 +339,9 @@ export class SearchService {
     // Filter by collection
     if (filters?.collectionSlug) {
       if (filters.collectionSlug === 'common') {
-        conditions.push(or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug)));
+        conditions.push(
+          or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug)),
+        );
       } else {
         conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
       }
@@ -303,22 +349,24 @@ export class SearchService {
 
     if (filters?.valid_at) {
       conditions.push(
-        or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at))
+        or(isNull(fragments.valid_from), lte(fragments.valid_from, filters.valid_at)),
       );
       conditions.push(
-        or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at))
+        or(isNull(fragments.valid_until), gte(fragments.valid_until, filters.valid_at)),
       );
     }
 
     // Always exclude deprecated
     conditions.push(ne(fragments.quality, 'deprecated'));
 
-    const rows = await this.db.select().from(fragments)
+    const rows = await this.db
+      .select()
+      .from(fragments)
       .where(and(...conditions))
       .orderBy(desc(fragments.uses))
       .limit(limit);
 
-    const results = rows.map(row => ({
+    const results = rows.map((row) => ({
       id: row.id,
       score: 0, // no vector score for SQLite fallback
       title: row.title,

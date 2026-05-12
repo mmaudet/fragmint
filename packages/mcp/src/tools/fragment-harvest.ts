@@ -16,7 +16,11 @@ export const harvestDefinition: ToolDefinition = {
         type: 'number',
         description: 'Minimum confidence threshold (0.0-1.0, default 0.65)',
       },
-      collection_slug: { type: 'string', description: 'Target collection slug (default: "common"). Use collection_list to discover available collections.' },
+      collection_slug: {
+        type: 'string',
+        description:
+          'Target collection slug (default: "common"). Use collection_list to discover available collections.',
+      },
     },
     required: ['file_path'],
   },
@@ -25,7 +29,11 @@ export const harvestDefinition: ToolDefinition = {
 export function harvestHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
-      const { file_path, min_confidence = 0.65, collection_slug } = args as {
+      const {
+        file_path,
+        min_confidence = 0.65,
+        collection_slug,
+      } = args as {
         file_path: string;
         min_confidence?: number;
         collection_slug?: string;

@@ -1,36 +1,30 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ComposerService, formatFrenchNumber } from './composer-service.js';
 
 describe('ComposerService.resolveContextVars', () => {
   it('replaces {{context.lang}} with context value', () => {
-    const result = ComposerService.resolveContextVars(
-      '{{context.lang}}',
-      { lang: 'fr' },
-    );
+    const result = ComposerService.resolveContextVars('{{context.lang}}', { lang: 'fr' });
     expect(result).toBe('fr');
   });
 
   it('replaces multiple context vars in a string', () => {
-    const result = ComposerService.resolveContextVars(
-      '{{context.lang}}-{{context.domain}}',
-      { lang: 'fr', domain: 'commercial' },
-    );
+    const result = ComposerService.resolveContextVars('{{context.lang}}-{{context.domain}}', {
+      lang: 'fr',
+      domain: 'commercial',
+    });
     expect(result).toBe('fr-commercial');
   });
 
   it('leaves literal strings unchanged', () => {
-    const result = ComposerService.resolveContextVars(
-      'plain-string',
-      { lang: 'fr' },
-    );
+    const result = ComposerService.resolveContextVars('plain-string', { lang: 'fr' });
     expect(result).toBe('plain-string');
   });
 
   it('replaces unknown context vars with empty string', () => {
-    const result = ComposerService.resolveContextVars(
-      '{{context.missing}}',
-      {},
-    );
+    const result = ComposerService.resolveContextVars('{{context.missing}}', {});
     expect(result).toBe('');
   });
 });
@@ -63,17 +57,59 @@ describe('ComposerService.parseStructuredTags', () => {
   });
 });
 
+describe('ComposerService.splitTitleFromBody', () => {
+  it('splits a short "Title — rest" card body', () => {
+    expect(ComposerService.splitTitleFromBody('Twake Workplace — la suite collaborative')).toEqual({
+      title: 'Twake Workplace',
+      body: 'la suite collaborative',
+    });
+  });
+
+  it('does not treat a long prose prefix as a title (no truncation)', () => {
+    const body =
+      'En deux mille vingt-quatre nous avons connu une année charnière — et nous comptons accélérer';
+    expect(ComposerService.splitTitleFromBody(body)).toEqual({ body });
+  });
+
+  it('rejects a prefix containing sentence punctuation', () => {
+    const body = 'Bonjour. Bienvenue — chez nous';
+    expect(ComposerService.splitTitleFromBody(body)).toEqual({ body });
+  });
+
+  it('returns the trimmed body when there is no separator', () => {
+    expect(ComposerService.splitTitleFromBody('  plain body  ')).toEqual({ body: 'plain body' });
+  });
+});
+
 describe('ComposerService.buildTemplateData', () => {
+  it('derives a title from a card-style body when there is no title: tag', () => {
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
+    resolved.set('produit', [
+      {
+        id: 'frag-card',
+        body: 'Twake Workplace — la suite collaborative souveraine',
+        quality: 'approved',
+        score: 0.9,
+      },
+    ]);
+    const result = ComposerService.buildTemplateData(resolved, {});
+    expect(result.fragments.produit.title).toBe('Twake Workplace');
+    expect(result.fragments.produit.body).toBe('la suite collaborative souveraine');
+  });
+
   it('builds data with single-count fragments', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('intro', [
       { id: 'frag-001', body: 'Welcome text', quality: 'approved', score: 0.95 },
     ]);
 
-    const result = ComposerService.buildTemplateData(
-      resolved,
-      { client: 'LINAGORA' },
-    );
+    const result = ComposerService.buildTemplateData(resolved, { client: 'LINAGORA' });
 
     expect(result.fragments.intro).toEqual({
       body: 'Welcome text',
@@ -85,7 +121,10 @@ describe('ComposerService.buildTemplateData', () => {
   });
 
   it('builds data with multi-count fragments as arrays', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('references', [
       { id: 'frag-001', body: 'Reference 1', quality: 'approved', score: 0.9 },
       { id: 'frag-002', body: 'Reference 2', quality: 'reviewed', score: 0.85 },
@@ -98,10 +137,11 @@ describe('ComposerService.buildTemplateData', () => {
   });
 
   it('injects structured_data at top level', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
-    resolved.set('intro', [
-      { id: 'frag-001', body: 'Text', quality: 'draft', score: 1.0 },
-    ]);
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
+    resolved.set('intro', [{ id: 'frag-001', body: 'Text', quality: 'draft', score: 1.0 }]);
 
     const structuredData = {
       pricing: { unit_price: 100, total: 5000 },
@@ -115,10 +155,25 @@ describe('ComposerService.buildTemplateData', () => {
   });
 
   it('merges structured tags into fragment objects', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('produits', [
-      { id: 'frag-001', body: 'Description Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:4.50'] },
-      { id: 'frag-002', body: 'Description OpenRAG', quality: 'draft', score: 0.8, tags: ['produit:OpenRAG', 'pu:15000'] },
+      {
+        id: 'frag-001',
+        body: 'Description Twake',
+        quality: 'draft',
+        score: 0.9,
+        tags: ['produit:Twake', 'pu:4.50'],
+      },
+      {
+        id: 'frag-002',
+        body: 'Description OpenRAG',
+        quality: 'draft',
+        score: 0.8,
+        tags: ['produit:OpenRAG', 'pu:15000'],
+      },
     ]);
 
     const result = ComposerService.buildTemplateData(resolved, {});
@@ -162,10 +217,25 @@ describe('formatFrenchNumber', () => {
 
 describe('ComposerService.buildTemplateData with quantities', () => {
   it('computes qte, total, and formats pu for pricing fragments', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('produits', [
-      { id: 'frag-001', body: 'Twake Workplace', quality: 'approved', score: 0.9, tags: ['produit:Twake Workplace', 'pu:4.50', 'unite:utilisateur/mois'] },
-      { id: 'frag-002', body: 'OpenRAG', quality: 'approved', score: 0.8, tags: ['produit:OpenRAG', 'pu:15000', 'unite:instance/an'] },
+      {
+        id: 'frag-001',
+        body: 'Twake Workplace',
+        quality: 'approved',
+        score: 0.9,
+        tags: ['produit:Twake Workplace', 'pu:4.50', 'unite:utilisateur/mois'],
+      },
+      {
+        id: 'frag-002',
+        body: 'OpenRAG',
+        quality: 'approved',
+        score: 0.8,
+        tags: ['produit:OpenRAG', 'pu:15000', 'unite:instance/an'],
+      },
     ]);
 
     const structuredData = {
@@ -194,9 +264,18 @@ describe('ComposerService.buildTemplateData with quantities', () => {
   });
 
   it('leaves pu as raw string when no quantities are provided', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('produits', [
-      { id: 'frag-001', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:4.50'] },
+      {
+        id: 'frag-001',
+        body: 'Twake',
+        quality: 'draft',
+        score: 0.9,
+        tags: ['produit:Twake', 'pu:4.50'],
+      },
     ]);
 
     const result = ComposerService.buildTemplateData(resolved, {});
@@ -208,9 +287,18 @@ describe('ComposerService.buildTemplateData with quantities', () => {
   });
 
   it('leaves pu as raw string when fragment id is not in quantities map', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('produits', [
-      { id: 'frag-001', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:4.50'] },
+      {
+        id: 'frag-001',
+        body: 'Twake',
+        quality: 'draft',
+        score: 0.9,
+        tags: ['produit:Twake', 'pu:4.50'],
+      },
     ]);
 
     const structuredData = {
@@ -227,9 +315,18 @@ describe('ComposerService.buildTemplateData with quantities', () => {
   });
 
   it('does not add pricing fields to fragments without pu tag', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('intro', [
-      { id: 'frag-010', body: 'Intro text', quality: 'approved', score: 0.95, tags: ['domain:commercial'] },
+      {
+        id: 'frag-010',
+        body: 'Intro text',
+        quality: 'approved',
+        score: 0.95,
+        tags: ['domain:commercial'],
+      },
     ]);
 
     const structuredData = {
@@ -245,10 +342,11 @@ describe('ComposerService.buildTemplateData with quantities', () => {
   });
 
   it('quantities map is also available as top-level structured_data', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
-    resolved.set('intro', [
-      { id: 'frag-001', body: 'Text', quality: 'draft', score: 1.0 },
-    ]);
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
+    resolved.set('intro', [{ id: 'frag-001', body: 'Text', quality: 'draft', score: 1.0 }]);
 
     const structuredData = {
       quantities: { 'frag-001': 10 },
@@ -264,10 +362,25 @@ describe('ComposerService.buildTemplateData with quantities', () => {
 
 describe('ComposerService.buildTemplateData auto-totals', () => {
   it('computes total_ht, tva, total_ttc from pricing fragments', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('produits', [
-      { id: 'frag-1', body: 'Twake', quality: 'draft', score: 0.9, tags: ['produit:Twake', 'pu:100'] },
-      { id: 'frag-2', body: 'OpenRAG', quality: 'draft', score: 0.8, tags: ['produit:OpenRAG', 'pu:200'] },
+      {
+        id: 'frag-1',
+        body: 'Twake',
+        quality: 'draft',
+        score: 0.9,
+        tags: ['produit:Twake', 'pu:100'],
+      },
+      {
+        id: 'frag-2',
+        body: 'OpenRAG',
+        quality: 'draft',
+        score: 0.8,
+        tags: ['produit:OpenRAG', 'pu:200'],
+      },
     ]);
 
     const structuredData = { quantities: { 'frag-1': 10, 'frag-2': 5 } };
@@ -280,7 +393,10 @@ describe('ComposerService.buildTemplateData auto-totals', () => {
   });
 
   it('does NOT add totals when no pricing fragments', () => {
-    const resolved = new Map<string, Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>>();
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
     resolved.set('intro', [
       { id: 'frag-1', body: 'Intro', quality: 'approved', score: 1, tags: [] },
     ]);
@@ -309,8 +425,9 @@ describe('ComposerService.validateContext', () => {
       lang: { type: 'string', required: true },
     };
 
-    expect(() => ComposerService.validateContext(context, schema))
-      .toThrow('Missing required context field: client_name');
+    expect(() => ComposerService.validateContext(context, schema)).toThrow(
+      'Missing required context field: client_name',
+    );
   });
 
   it('applies default values', () => {
@@ -341,8 +458,9 @@ describe('ComposerService.validateContext', () => {
       lang: { type: 'string', required: true, enum: ['fr', 'en'] },
     };
 
-    expect(() => ComposerService.validateContext(context, schema))
-      .toThrow("Context field 'lang' must be one of: fr, en. Got: de");
+    expect(() => ComposerService.validateContext(context, schema)).toThrow(
+      "Context field 'lang' must be one of: fr, en. Got: de",
+    );
   });
 
   it('does not throw for optional fields that are missing without default', () => {
@@ -352,5 +470,79 @@ describe('ComposerService.validateContext', () => {
     };
 
     expect(() => ComposerService.validateContext(context, schema)).not.toThrow();
+  });
+});
+
+describe('ComposerService — collection access gating', () => {
+  function makeService(accessibleSlugs: string[]) {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'composer-test-'));
+    const templateService = {
+      getById: async (id: string) => ({
+        id,
+        name: 'T',
+        description: null,
+        output_format: 'docx',
+        version: '1',
+        template_path: 't.docx',
+        yaml_path: 't.yaml',
+        author: 'sys',
+        created_at: '',
+        updated_at: '',
+        git_hash: null,
+        yaml: {
+          id,
+          name: 'T',
+          output_format: 'docx',
+          carbone_template: 't.docx',
+          version: '1',
+          fragments: [
+            {
+              key: 'sec',
+              type: 'argument',
+              domain: 'd',
+              lang: 'fr',
+              quality_min: 'approved',
+              required: true,
+              fallback: 'error',
+              count: 1,
+              collection: 'team-secret',
+            },
+          ],
+        },
+      }),
+      getTemplatePath: () => 't.docx',
+    };
+    const searchService = { search: async () => [] } as any;
+    const fragmentService = { getById: async () => null, list: async () => [] } as any;
+    const collectionAccess = { getAccessibleSlugs: async () => accessibleSlugs };
+    return new ComposerService(
+      fragmentService,
+      searchService,
+      templateService as any,
+      tmpBase,
+      collectionAccess,
+    );
+  }
+
+  it('rejects composing a slot pinned to a collection the caller cannot access', async () => {
+    const svc = makeService([]); // caller is a member of no collections
+    await expect(svc.compose('tpl-x', { context: {} }, 'reader', 'user-1')).rejects.toThrow(
+      /cannot access/,
+    );
+  });
+
+  it('lets a member of the pinned collection through to fragment resolution', async () => {
+    const svc = makeService(['team-secret']);
+    // Gate passes; the slot is still required and search returns nothing → not-found error.
+    await expect(svc.compose('tpl-x', { context: {} }, 'reader', 'user-1')).rejects.toThrow(
+      /No approved fragment found/,
+    );
+  });
+
+  it('does not gate admins (no caller restriction)', async () => {
+    const svc = makeService([]);
+    await expect(svc.compose('tpl-x', { context: {} }, 'admin', 'admin-1')).rejects.toThrow(
+      /No approved fragment found/,
+    );
   });
 });

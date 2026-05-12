@@ -11,6 +11,7 @@ import { fragments, harvestJobs, harvestCandidates } from '../db/schema.js';
 import type { LlmClient, SegmentBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
+import { HARVESTER_DOMAINS, HARVESTER_TYPES, coerceFragmentType } from './harvester-taxonomy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -105,15 +106,14 @@ export class HarvesterService {
     minConfidence: number,
   ): Promise<void> {
     try {
-      // Get existing types and domains for classification context
-      const existingTypesRows = await this.db
-        .selectDistinct({ type: fragments.type })
-        .from(fragments);
-      const existingDomainsRows = await this.db
-        .selectDistinct({ domain: fragments.domain })
-        .from(fragments);
-      const existingTypes = existingTypesRows.map((r) => r.type);
-      const existingDomains = existingDomainsRows.map((r) => r.domain);
+      const dbTypes = (await this.db.selectDistinct({ type: fragments.type }).from(fragments)).map(
+        (r) => r.type,
+      );
+      const dbDomains = (
+        await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)
+      ).map((r) => r.domain);
+      const existingTypes = [...new Set([...HARVESTER_TYPES, ...dbTypes])];
+      const existingDomains = [...new Set([...HARVESTER_DOMAINS, ...dbDomains])];
 
       let totalCandidates = 0;
       let duplicatesCount = 0;
@@ -132,17 +132,26 @@ export class HarvesterService {
         let markdown: string;
         try {
           const { stdout } = await execFileAsync('pandoc', [
-            '--from', 'docx',
-            '--to', 'markdown',
+            '--from',
+            'docx',
+            '--to',
+            'markdown',
             tempFile,
           ]);
           markdown = stdout;
         } finally {
-          try { unlinkSync(tempFile); } catch { /* ignore cleanup errors */ }
+          try {
+            unlinkSync(tempFile);
+          } catch {
+            /* ignore cleanup errors */
+          }
         }
 
         // Pre-process: normalize whitespace, detect language
-        markdown = markdown.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+        markdown = markdown
+          .replace(/\r\n/g, '\n')
+          .replace(/[ \t]+\n/g, '\n')
+          .replace(/\n{3,}/g, '\n\n');
         const lang = HarvesterService.detectLanguage(markdown);
 
         // Chunk the markdown for better LLM segmentation on long documents
@@ -158,31 +167,32 @@ export class HarvesterService {
         const blocks = HarvesterService.deduplicateBlocks(allBlocks);
 
         for (const block of blocks) {
-          // The LLM returns the full block text in body — use it directly
           const text = block.body;
 
-          // Classify
           let classification;
           try {
             classification = await this.llmClient.classify(text, existingTypes, existingDomains);
           } catch (classErr: any) {
-            classification = { type: block.type || 'unknown', domain: 'unknown', tags: [], confidence: 0.5 };
+            classification = {
+              type: block.type || 'unknown',
+              domain: 'unknown',
+              tags: [],
+              confidence: 0.5,
+            };
           }
 
           if (classification.confidence < minConfidence) {
             lowConfidenceCount++;
           }
 
-          // Filter blocks below threshold — still insert but track
           let duplicateOf: string | null = null;
           let duplicateScore: number | null = null;
 
-          // Check for duplicates via Milvus if available
           try {
             const searchResults = await this.searchService.search(text, undefined, 1);
             if (searchResults.length > 0) {
               const topScore = searchResults[0].score;
-              if (topScore > 0.80) {
+              if (topScore > 0.8) {
                 duplicateOf = searchResults[0].id;
                 duplicateScore = topScore;
                 duplicatesCount++;
@@ -310,7 +320,7 @@ export class HarvesterService {
 
       const result = await this.fragmentService.create(
         {
-          type: candidate.type as any,
+          type: coerceFragmentType(candidate.type) as any,
           domain: candidate.domain,
           tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
           lang: candidate.lang,
@@ -346,7 +356,7 @@ export class HarvesterService {
 
       const result = await this.fragmentService.create(
         {
-          type: (mod.type ?? candidate.type) as any,
+          type: coerceFragmentType(mod.type ?? candidate.type) as any,
           domain: mod.domain ?? candidate.domain,
           tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
           lang: candidate.lang,
@@ -392,11 +402,7 @@ export class HarvesterService {
     return { committed, merged, rejected };
   }
 
-  static extractBlockText(
-    markdown: string,
-    startMarker: string,
-    endMarker: string,
-  ): string {
+  static extractBlockText(markdown: string, startMarker: string, endMarker: string): string {
     if (!startMarker || !endMarker) return '';
 
     // Match first ~8 words of startMarker, case-insensitive
@@ -418,8 +424,8 @@ export class HarvesterService {
     return markdown.slice(startPos, endPos).trim();
   }
 
-  static readonly MAX_CHUNK_CHARS = 6000;  // ~1500 tokens
-  static readonly OVERLAP_CHARS = 400;     // ~100 tokens overlap
+  static readonly MAX_CHUNK_CHARS = 6000; // ~1500 tokens
+  static readonly OVERLAP_CHARS = 400; // ~100 tokens overlap
 
   static chunkMarkdown(markdown: string): string[] {
     if (markdown.length <= HarvesterService.MAX_CHUNK_CHARS) return [markdown];
@@ -445,7 +451,7 @@ export class HarvesterService {
 
   static deduplicateBlocks(blocks: SegmentBlock[]): SegmentBlock[] {
     const seen = new Set<string>();
-    return blocks.filter(b => {
+    return blocks.filter((b) => {
       // Use first 50 chars of body as dedup key
       const key = (b.body || '').substring(0, 50).trim().toLowerCase();
       if (seen.has(key)) return false;
@@ -456,12 +462,42 @@ export class HarvesterService {
 
   static detectLanguage(text: string): 'fr' | 'en' {
     const frStops = [
-      'le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'est', 'sont',
-      'dans', 'pour', 'avec', 'qui', 'que', 'nous', 'cette', 'sur',
+      'le',
+      'la',
+      'les',
+      'de',
+      'du',
+      'des',
+      'un',
+      'une',
+      'est',
+      'sont',
+      'dans',
+      'pour',
+      'avec',
+      'qui',
+      'que',
+      'nous',
+      'cette',
+      'sur',
     ];
     const enStops = [
-      'the', 'is', 'are', 'of', 'in', 'to', 'for', 'with', 'and', 'that',
-      'this', 'from', 'have', 'has', 'been', 'will',
+      'the',
+      'is',
+      'are',
+      'of',
+      'in',
+      'to',
+      'for',
+      'with',
+      'and',
+      'that',
+      'this',
+      'from',
+      'have',
+      'has',
+      'been',
+      'will',
     ];
 
     const words = text.toLowerCase().split(/\s+/);

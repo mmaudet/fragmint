@@ -18,11 +18,15 @@ describe('Fragment routes', () => {
 
   it('POST /v1/fragments creates a fragment', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/fragments',
+      method: 'POST',
+      url: '/v1/fragments',
       headers: auth(),
       payload: {
-        type: 'argument', domain: 'test', lang: 'fr',
-        body: '# Test argument\n\nThis is a test.', tags: ['test'],
+        type: 'argument',
+        domain: 'test',
+        lang: 'fr',
+        body: '# Test argument\n\nThis is a test.',
+        tags: ['test'],
       },
     });
     expect(res.statusCode).toBe(201);
@@ -33,7 +37,9 @@ describe('Fragment routes', () => {
 
   it('GET /v1/fragments lists fragments', async () => {
     const res = await server.app.inject({
-      method: 'GET', url: '/v1/fragments', headers: auth(),
+      method: 'GET',
+      url: '/v1/fragments',
+      headers: auth(),
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -42,7 +48,8 @@ describe('Fragment routes', () => {
 
   it('POST /v1/fragments/search returns results', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/fragments/search',
+      method: 'POST',
+      url: '/v1/fragments/search',
       headers: auth(),
       payload: { query: 'test' },
     });
@@ -51,7 +58,8 @@ describe('Fragment routes', () => {
 
   it('POST /v1/fragments/inventory returns counts', async () => {
     const res = await server.app.inject({
-      method: 'POST', url: '/v1/fragments/inventory',
+      method: 'POST',
+      url: '/v1/fragments/inventory',
       headers: auth(),
       payload: { topic: 'test' },
     });

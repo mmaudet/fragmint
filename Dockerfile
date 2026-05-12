@@ -1,22 +1,4 @@
-FROM node:20-alpine AS builder
-WORKDIR /app
-RUN apk add --no-cache python3 make g++ pandoc
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY packages/server/package.json packages/server/
-COPY packages/web/package.json packages/web/
-# Allow native addon builds (better-sqlite3 requires compilation)
-RUN echo '{"better-sqlite3": true, "protobufjs": true, "esbuild": true}' > /app/node_modules/.pnpm-approved-builds.json 2>/dev/null; \
-    pnpm install --frozen-lockfile && \
-    cd /app/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && \
-    npx --yes prebuild-install || npx --yes node-gyp rebuild
-
-COPY packages/server/ packages/server/
-COPY packages/web/ packages/web/
-RUN pnpm --filter @fragmint/web build
-
-FROM node:20-alpine
+FROM node:24-alpine AS dev
 WORKDIR /app
 RUN apk add --no-cache python3 make g++ git pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -24,14 +6,79 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
-RUN pnpm install --frozen-lockfile --prod && \
-    cd /app/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && \
-    npx --yes prebuild-install || npx --yes node-gyp rebuild
+COPY packages/cli/package.json packages/cli/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/obsidian/package.json packages/obsidian/
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
+    npx node-gyp rebuild
+
+COPY packages/server/ packages/server/
+
+RUN mkdir -p /data/vault && \
+    git config --global user.email 'fragmint@localhost' && \
+    git config --global user.name 'Fragmint'
+
+EXPOSE 3210
+ENV NODE_ENV=development
+ENV FRAGMINT_STORE_PATH=/data/vault
+
+WORKDIR /app/packages/server
+CMD ["node_modules/.bin/tsx", "watch", "src/index.ts"]
+
+FROM node:24-alpine AS web-dev
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+COPY packages/cli/package.json packages/cli/
+COPY packages/mcp/package.json packages/mcp/
+COPY packages/obsidian/package.json packages/obsidian/
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+COPY packages/web/ packages/web/
+
+EXPOSE 5173
+WORKDIR /app/packages/web
+CMD ["node_modules/.bin/vite", "--host"]
+
+FROM node:24-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache python3 make g++ pandoc
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
+    npx node-gyp rebuild
+
+COPY packages/server/ packages/server/
+COPY packages/web/ packages/web/
+RUN pnpm --filter @fragmint/web build
+
+FROM node:24-alpine
+WORKDIR /app
+RUN apk add --no-cache python3 make g++ git pandoc
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile --ignore-scripts --prod && \
+    cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
+    npx node-gyp rebuild
 
 COPY packages/server/ packages/server/
 COPY --from=builder /app/packages/web/dist packages/web/dist
 
 RUN mkdir -p /data/vault
+
+RUN git config --global user.email 'fragmint@localhost' && \
+    git config --global user.name 'Fragmint'
 
 EXPOSE 3210
 ENV NODE_ENV=production

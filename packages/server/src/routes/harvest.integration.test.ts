@@ -87,9 +87,7 @@ describe('Harvest routes', () => {
     expect(body.data.id).toBe(jobId);
     expect(body.data.status).toBe('done');
     expect(body.data.candidates).toHaveLength(2);
-    expect(body.data.candidates.map((c: any) => c.id).sort()).toEqual(
-      [cand1Id, cand2Id].sort(),
-    );
+    expect(body.data.candidates.map((c: any) => c.id).sort()).toEqual([cand1Id, cand2Id].sort());
   });
 
   it('GET /v1/harvest/:jobId returns 404 for unknown job', async () => {

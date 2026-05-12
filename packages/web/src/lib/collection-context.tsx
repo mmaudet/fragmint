@@ -22,10 +22,12 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('fragmint-collection', slug);
   }, []);
 
-  const isReadOnly = collections.find(c => c.slug === activeCollection)?.read_only ?? false;
+  const isReadOnly = collections.find((c) => c.slug === activeCollection)?.read_only ?? false;
 
   return (
-    <CollectionContext.Provider value={{ activeCollection, collections, setActiveCollection, setCollections, isReadOnly }}>
+    <CollectionContext.Provider
+      value={{ activeCollection, collections, setActiveCollection, setCollections, isReadOnly }}
+    >
       {children}
     </CollectionContext.Provider>
   );

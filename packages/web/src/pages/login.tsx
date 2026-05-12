@@ -39,7 +39,7 @@ export default function LoginPage() {
             <Input
               placeholder={t('login', 'username')}
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
               autoFocus
               required
             />
@@ -47,7 +47,7 @@ export default function LoginPage() {
               type="password"
               placeholder={t('login', 'password')}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               required
             />
             <Button type="submit" className="w-full" disabled={loading}>

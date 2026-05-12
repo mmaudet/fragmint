@@ -3,7 +3,10 @@ import { login } from './helpers';
 
 test('view inventory metrics and gaps', async ({ page }) => {
   await login(page);
-  await page.getByText(/Inventaire|Inventory/i).first().click();
+  await page
+    .getByText(/Inventaire|Inventory/i)
+    .first()
+    .click();
   await page.waitForURL('**/inventory');
 
   // Verify total fragment count is visible and > 0

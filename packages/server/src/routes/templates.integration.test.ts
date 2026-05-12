@@ -47,11 +47,15 @@ fragments:
     const parts: string[] = [];
     parts.push(`--${boundary}`);
     parts.push('Content-Disposition: form-data; name="docx"; filename="test-template.docx"');
-    parts.push('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    parts.push(
+      'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
     parts.push('');
     parts.push(docxContent.toString('binary'));
     parts.push(`--${boundary}`);
-    parts.push('Content-Disposition: form-data; name="yaml"; filename="test-template.fragmint.yaml"');
+    parts.push(
+      'Content-Disposition: form-data; name="yaml"; filename="test-template.fragmint.yaml"',
+    );
     parts.push('Content-Type: text/yaml');
     parts.push('');
     parts.push(yamlContent);

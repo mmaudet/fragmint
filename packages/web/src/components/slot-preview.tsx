@@ -66,18 +66,14 @@ export function SlotPreview({ slot, fragments, isLoading, onOverride }: SlotPrev
           <Badge variant="outline" className="text-xs">
             {slot.type}
           </Badge>
-          {slot.required && (
-            <span className="text-xs text-muted-foreground">requis</span>
-          )}
+          {slot.required && <span className="text-xs text-muted-foreground">requis</span>}
         </div>
 
         {hasFragments ? (
           <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
             <span className="truncate">{fragments[0].title ?? fragments[0].id}</span>
             <QualityBadge quality={fragments[0].quality} />
-            {fragments.length > 1 && (
-              <span className="text-xs">{fragments.length} fragments</span>
-            )}
+            {fragments.length > 1 && <span className="text-xs">{fragments.length} fragments</span>}
           </div>
         ) : (
           <div className="mt-1 text-sm">
@@ -85,9 +81,7 @@ export function SlotPreview({ slot, fragments, isLoading, onOverride }: SlotPrev
               Aucun fragment
             </span>
             {slot.fallback && (
-              <span className="ml-2 text-xs text-muted-foreground">
-                fallback: {slot.fallback}
-              </span>
+              <span className="ml-2 text-xs text-muted-foreground">fallback: {slot.fallback}</span>
             )}
           </div>
         )}

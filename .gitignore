@@ -3,6 +3,8 @@ dist/
 *.db
 *.sqlite
 .env
+.env.local
+.env.*.local
 .DS_Store
 data/
 # example-vault is managed by fragmint (has its own .git)
@@ -14,6 +16,17 @@ example-vault/.git/
 example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
+# Ignore all Claude Code configuration (local tooling, not project code)
 .claude/
 *.~lock.*
 e2e/demo/output/
+
+# Mission planning documents (local only)
+.claude/mission/
+
+# SQLite WAL files
+*.db-shm
+*.db-wal
+*.db-journal
+# Personal notes and learning references (local only)
+.claude/notes/

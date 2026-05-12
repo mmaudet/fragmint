@@ -17,7 +17,11 @@ describe('renderMarp (HTML)', () => {
 
   afterAll(() => {
     for (const f of tmpFiles) {
-      try { unlinkSync(f); } catch { /* ignore */ }
+      try {
+        unlinkSync(f);
+      } catch {
+        /* ignore */
+      }
     }
   });
 
@@ -54,9 +58,13 @@ describe('renderMarp (HTML)', () => {
       '+++END-FOR item+++',
     ].join('\n');
     const path = writeTempMd(md);
-    const result = await renderMarp(path, {
-      items: [{ name: 'Alpha' }, { name: 'Beta' }],
-    }, 'html');
+    const result = await renderMarp(
+      path,
+      {
+        items: [{ name: 'Alpha' }, { name: 'Beta' }],
+      },
+      'html',
+    );
 
     const html = result.buffer.toString('utf-8');
     expect(html).toContain('Alpha');
@@ -65,8 +73,8 @@ describe('renderMarp (HTML)', () => {
 
   it('throws on unsupported output type', async () => {
     const path = writeTempMd('# test');
-    await expect(
-      renderMarp(path, {}, 'pdf' as any),
-    ).rejects.toThrow('Unsupported Marp output type: pdf');
+    await expect(renderMarp(path, {}, 'pdf' as any)).rejects.toThrow(
+      'Unsupported Marp output type: pdf',
+    );
   });
 });

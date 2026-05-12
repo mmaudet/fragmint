@@ -20,7 +20,11 @@ export function CoverageBar({ fr, en, label }: CoverageBarProps) {
           <div className="bg-primary h-full" style={{ width: `${frPct}%` }} title={`FR: ${fr}`} />
         )}
         {enPct > 0 && (
-          <div className="bg-primary/40 h-full" style={{ width: `${enPct}%` }} title={`EN: ${en}`} />
+          <div
+            className="bg-primary/40 h-full"
+            style={{ width: `${enPct}%` }}
+            title={`EN: ${en}`}
+          />
         )}
       </div>
       <div className="flex gap-4 text-xs text-muted-foreground">
@@ -28,5 +32,5 @@ export function CoverageBar({ fr, en, label }: CoverageBarProps) {
         <span>EN: {en}</span>
       </div>
     </div>
-  )
+  );
 }

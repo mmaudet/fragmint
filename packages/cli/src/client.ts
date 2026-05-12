@@ -5,7 +5,11 @@ export class FragmintClient {
     private token?: string,
   ) {}
 
-  async uploadTemplate(docxPath: string, yamlPath: string, collectionSlug?: string): Promise<unknown> {
+  async uploadTemplate(
+    docxPath: string,
+    yamlPath: string,
+    collectionSlug?: string,
+  ): Promise<unknown> {
     const { readFileSync } = await import('node:fs');
     const { basename } = await import('node:path');
 
@@ -26,7 +30,7 @@ export class FragmintClient {
       body: form,
     });
 
-    const json = await res.json() as { data: unknown; error: string | null };
+    const json = (await res.json()) as { data: unknown; error: string | null };
     if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
     return json.data;
   }
@@ -40,7 +44,11 @@ export class FragmintClient {
     return Buffer.from(await res.arrayBuffer());
   }
 
-  async uploadHarvest(filePath: string, minConfidence: number, collectionSlug?: string): Promise<{ job_id: string; status: string }> {
+  async uploadHarvest(
+    filePath: string,
+    minConfidence: number,
+    collectionSlug?: string,
+  ): Promise<{ job_id: string; status: string }> {
     const { readFileSync } = await import('node:fs');
     const { basename } = await import('node:path');
     const form = new FormData();
@@ -51,13 +59,22 @@ export class FragmintClient {
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
 
     const prefix = collectionSlug ? `/v1/collections/${collectionSlug}` : '/v1';
-    const res = await fetch(`${this.baseUrl}${prefix}/harvest`, { method: 'POST', headers, body: form });
-    const json = await res.json() as { data: any; error: string | null };
+    const res = await fetch(`${this.baseUrl}${prefix}/harvest`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    const json = (await res.json()) as { data: any; error: string | null };
     if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
     return json.data;
   }
 
-  collectionRequest<T>(method: string, path: string, collectionSlug?: string, body?: unknown): Promise<T> {
+  collectionRequest<T>(
+    method: string,
+    path: string,
+    collectionSlug?: string,
+    body?: unknown,
+  ): Promise<T> {
     const prefix = collectionSlug ? `/v1/collections/${collectionSlug}` : '/v1';
     return this.request<T>(method, `${prefix}${path}`, body);
   }
@@ -72,7 +89,7 @@ export class FragmintClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const json = await res.json() as { data: T; error: string | null };
+    const json = (await res.json()) as { data: T; error: string | null };
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }

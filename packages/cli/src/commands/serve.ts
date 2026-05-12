@@ -7,7 +7,7 @@ export function registerServeCommand(program: Command) {
     .description('Start the Fragmint server')
     .option('--port <port>', 'Port to listen on')
     .option('--config <path>', 'Path to config file')
-    .option('--dev', 'Enable dev mode (in-memory DB, seed user)')
+    .option('--dev', 'Enable dev mode (seed dev user, relaxed config)')
     .action(async (opts) => {
       if (opts.port) {
         process.env.FRAGMINT_PORT = opts.port;

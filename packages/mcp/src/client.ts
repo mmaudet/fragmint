@@ -21,11 +21,11 @@ export class FragmintApiClient {
   async postMultipart<T>(path: string, form: FormData): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.token}` },
+      headers: { Authorization: `Bearer ${this.token}` },
       body: form,
     });
 
-    const json = await res.json() as { data: T; meta: unknown; error: string | null };
+    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }
@@ -35,7 +35,7 @@ export class FragmintApiClient {
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.token}`,
+      Authorization: `Bearer ${this.token}`,
     };
 
     const res = await fetch(`${this.baseUrl}${path}`, {
@@ -44,7 +44,7 @@ export class FragmintApiClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const json = await res.json() as { data: T; meta: unknown; error: string | null };
+    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }

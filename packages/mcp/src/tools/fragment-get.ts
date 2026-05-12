@@ -11,8 +11,15 @@ export const getDefinition: ToolDefinition = {
     type: 'object',
     properties: {
       id: { type: 'string', description: 'Fragment ID (e.g. "frag-f1a2b3c4-...")' },
-      include_history: { type: 'boolean', description: 'Include Git commit history (default false)' },
-      collection_slug: { type: 'string', description: 'Collection slug (default: "common"). Use collection_list to discover available collections.' },
+      include_history: {
+        type: 'boolean',
+        description: 'Include Git commit history (default false)',
+      },
+      collection_slug: {
+        type: 'string',
+        description:
+          'Collection slug (default: "common"). Use collection_list to discover available collections.',
+      },
     },
     required: ['id'],
   },
