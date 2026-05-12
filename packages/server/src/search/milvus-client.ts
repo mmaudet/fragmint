@@ -1,5 +1,5 @@
 // packages/server/src/search/milvus-client.ts
-import { MilvusClient as MilvusSdk, DataType } from '@zilliz/milvus2-sdk-node';
+import { MilvusClient as MilvusSdk, DataType, type RowData } from '@zilliz/milvus2-sdk-node';
 
 export interface MilvusFragment {
   id: string;
@@ -127,7 +127,9 @@ export class FragmintMilvusClient {
     await this.sdk.upsert({
       collection_name: this.collectionName,
       ...(partitionName ? { partition_name: partitionName } : {}),
-      data: items,
+      // MilvusFragment has no string index signature, so it isn't structurally a
+      // RowData ({ [x: string]: FieldData }) even though every field is valid.
+      data: items as unknown as RowData[],
     });
   }
 

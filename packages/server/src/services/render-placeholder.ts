@@ -73,7 +73,7 @@ export function resolvePlaceholders(template: string, data: Record<string, any>)
 
 function resolveForLoops(template: string, data: Record<string, any>): string {
   const forRegex = /\+\+\+FOR\s+(\w+)\s+IN\s+(.+?)\+\+\+([\s\S]*?)\+\+\+END-FOR\s+\1\+\+\+/g;
-  return template.replace(forRegex, (_, varName, arrayPath, body) => {
+  return template.replace(forRegex, (_, varName: string, arrayPath: string, body: string) => {
     const array = getNestedValue(data, arrayPath.trim());
     if (!Array.isArray(array)) return '';
     return array
@@ -81,7 +81,7 @@ function resolveForLoops(template: string, data: Record<string, any>): string {
         // Handle +++HTML $var.field+++ (Markdown → HTML)
         let resolved = body.replace(
           new RegExp(`\\+\\+\\+HTML\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-          (__, field) => {
+          (__: string, field: string) => {
             const val = item[field.trim()];
             if (val === undefined || val === null) return '';
             return markdownToHtmlSync(String(val));
@@ -90,7 +90,7 @@ function resolveForLoops(template: string, data: Record<string, any>): string {
         // Handle +++INS $var.field+++
         resolved = resolved.replace(
           new RegExp(`\\+\\+\\+INS\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-          (__, field) => {
+          (__: string, field: string) => {
             const val = item[field.trim()];
             return val !== undefined && val !== null ? String(val) : '';
           },

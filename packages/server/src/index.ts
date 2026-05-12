@@ -267,11 +267,12 @@ export async function createServer(options?: {
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode ?? 500;
+    const err = error as { statusCode?: number; message?: string };
+    const statusCode = err.statusCode ?? 500;
     reply.status(statusCode).send({
       data: null,
       meta: null,
-      error: error.message,
+      error: err.message,
     });
   });
 
