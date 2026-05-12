@@ -356,7 +356,11 @@ export class ComposerService {
 
     // 7. Save output
     const FORMAT_EXT: Record<string, string> = {
-      docx: 'docx', xlsx: 'xlsx', slides: 'html', reveal: 'html', pptx: 'pptx',
+      docx: 'docx',
+      xlsx: 'xlsx',
+      slides: 'html',
+      reveal: 'html',
+      pptx: 'pptx',
     };
     const outputFilename = request.output?.filename
       ? `${randomUUID()}-${request.output.filename}`

@@ -15,7 +15,6 @@ import { HARVESTER_DOMAINS, HARVESTER_TYPES } from './harvester-taxonomy.js';
 
 const execFileAsync = promisify(execFile);
 
-
 export interface HarvestJobWithCandidates {
   id: string;
   status: string;
@@ -107,8 +106,12 @@ export class HarvesterService {
     minConfidence: number,
   ): Promise<void> {
     try {
-      const dbTypes = (await this.db.selectDistinct({ type: fragments.type }).from(fragments)).map((r) => r.type);
-      const dbDomains = (await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)).map((r) => r.domain);
+      const dbTypes = (await this.db.selectDistinct({ type: fragments.type }).from(fragments)).map(
+        (r) => r.type,
+      );
+      const dbDomains = (
+        await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)
+      ).map((r) => r.domain);
       const existingTypes = [...new Set([...HARVESTER_TYPES, ...dbTypes])];
       const existingDomains = [...new Set([...HARVESTER_DOMAINS, ...dbDomains])];
 

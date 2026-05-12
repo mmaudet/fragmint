@@ -102,7 +102,11 @@ export default function ComposePage() {
         cleanContext[k] = String(schema.default);
       }
     }
-    compose.mutate({ templateId: selectedTemplateId, context: cleanContext, structured_data: structuredData });
+    compose.mutate({
+      templateId: selectedTemplateId,
+      context: cleanContext,
+      structured_data: structuredData,
+    });
   };
 
   return (
@@ -364,7 +368,10 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
                 .trim()
                 .replace(/\s+/g, '_');
               const filename = `${safeName}-${result.template.version}.${ext}`;
-              handleDownload(`${result.document_url}?name=${encodeURIComponent(filename)}`, filename);
+              handleDownload(
+                `${result.document_url}?name=${encodeURIComponent(filename)}`,
+                filename,
+              );
             }}
           >
             <Download className="mr-2 h-4 w-4" />

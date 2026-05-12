@@ -97,9 +97,7 @@ export default function ValidationPage() {
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-semibold">À reviewer</h3>
-          {draftFragments && (
-            <Badge variant="secondary">{draftFragments.length}</Badge>
-          )}
+          {draftFragments && <Badge variant="secondary">{draftFragments.length}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
           Fragments ingérés par le harvester — à relire avant validation.
@@ -132,9 +130,7 @@ export default function ValidationPage() {
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-semibold">{t('validation', 'pendingApproval')}</h3>
-          {reviewedFragments && (
-            <Badge variant="secondary">{reviewedFragments.length}</Badge>
-          )}
+          {reviewedFragments && <Badge variant="secondary">{reviewedFragments.length}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
           Fragments reviewés — prêts pour approbation finale.
@@ -157,7 +153,9 @@ export default function ValidationPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground py-4">{t('validation', 'noFragmentsPending')}</p>
+          <p className="text-sm text-muted-foreground py-4">
+            {t('validation', 'noFragmentsPending')}
+          </p>
         )}
       </section>
 

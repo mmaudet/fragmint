@@ -213,7 +213,10 @@ export function templateRoutes(
     const displayName = name ?? filename;
 
     reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream');
-    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+    );
     return reply.send(createReadStream(outputPath));
   });
 }
