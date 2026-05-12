@@ -28,6 +28,7 @@ import {
   LogOut,
   ChevronDown,
   Lock,
+  PenLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -48,6 +49,7 @@ export default function AppLayout() {
     { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
     { to: '/compose', label: t('nav', 'composer'), icon: FileText },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
+    { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
     { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
   ];
 

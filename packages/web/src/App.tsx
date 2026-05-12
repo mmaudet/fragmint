@@ -12,6 +12,7 @@ import InventoryPage from '@/pages/inventory';
 import ComposePage from '@/pages/compose';
 import ValidationPage from '@/pages/validation';
 import HarvestPage from '@/pages/harvest';
+import PlanGenerationPage from '@/pages/plan-generation';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="/compose" element={<ComposePage />} />
                   <Route path="/validation" element={<ValidationPage />} />
                   <Route path="/harvest" element={<HarvestPage />} />
+                  <Route path="/plan-generation" element={<PlanGenerationPage />} />
                 </Route>
               </Routes>
             </BrowserRouter>
