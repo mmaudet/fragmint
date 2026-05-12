@@ -91,6 +91,21 @@ export function planRoutes(
     return reply.status(204).send();
   });
 
+  // Helper: enforce that the caller is the plan owner or an admin.
+  // Returns null if access is allowed, or a sent error response otherwise.
+  async function requireOwnership(request: any, reply: any, id: string) {
+    const plan = await planService.get(id);
+    if (!plan) {
+      reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
+      return null;
+    }
+    if (plan.owner !== request.user.login && request.user.role !== 'admin') {
+      reply.status(403).send({ data: null, meta: null, error: 'Forbidden' });
+      return null;
+    }
+    return plan;
+  }
+
   // ACTIONS
   app.post(`${prefix}/plans/:id/generate-plan`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -98,6 +113,7 @@ export function planRoutes(
     if (!parsed.success) {
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     }
+    if (!(await requireOwnership(request, reply, id))) return;
     const out = await planService.generatePlan(id, parsed.data);
     if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
     return { data: out, meta: null, error: null };
@@ -105,6 +121,7 @@ export function planRoutes(
 
   app.post(`${prefix}/plans/:id/validate-plan`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    if (!(await requireOwnership(request, reply, id))) return;
     const out = await planService.validatePlan(id);
     if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
     return { data: out, meta: null, error: null };
@@ -119,6 +136,7 @@ export function planRoutes(
       if (!parsed.success) {
         return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
       }
+      if (!(await requireOwnership(request, reply, id))) return;
       const out = await planService.searchSection(id, sectionId, parsed.data);
       if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan or section not found' });
       return { data: out, meta: null, error: null };
@@ -127,6 +145,7 @@ export function planRoutes(
 
   app.post(`${prefix}/plans/:id/validate-fragments`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    if (!(await requireOwnership(request, reply, id))) return;
     const out = await planService.validateFragments(id);
     if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
     return { data: out, meta: null, error: null };
@@ -137,6 +156,7 @@ export function planRoutes(
     { preHandler: writeHandlers },
     async (request, reply) => {
       const { id, sectionId } = request.params as { id: string; sectionId: string };
+      if (!(await requireOwnership(request, reply, id))) return;
       const out = await planService.generateSection(id, sectionId);
       if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan or section not found' });
       return { data: out, meta: null, error: null };
@@ -145,6 +165,7 @@ export function planRoutes(
 
   app.post(`${prefix}/plans/:id/assemble`, { preHandler: writeHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    if (!(await requireOwnership(request, reply, id))) return;
     const out = await planService.assemble(id);
     if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
     return { data: out, meta: null, error: null };

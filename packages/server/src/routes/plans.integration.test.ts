@@ -89,4 +89,94 @@ describe('Plan routes', () => {
     const res = await api('POST', `/v1/plans/${id}/export`, { format: 'pdf' });
     expect(res.statusCode).toBe(400);
   });
+
+  it('returns 403 on action endpoints when a non-admin user does not own the plan', async () => {
+    // Use the admin (mmaudet) API to create two non-admin contributor users.
+    const adminHeaders = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    };
+
+    // Create 'bob' (contributor) — owner of the plan.
+    const bobCreate = await server.app.inject({
+      method: 'POST',
+      url: '/v1/users',
+      headers: adminHeaders,
+      payload: JSON.stringify({
+        login: 'bob',
+        password: 'bob-password',
+        display_name: 'Bob',
+        role: 'contributor',
+      }),
+    });
+    // 201 created OR 500/400 if user already exists from another test run — best-effort.
+    if (bobCreate.statusCode !== 201 && bobCreate.statusCode !== 500 && bobCreate.statusCode !== 400) {
+      throw new Error(`Unexpected status creating bob: ${bobCreate.statusCode} ${bobCreate.body}`);
+    }
+
+    // Create 'carol' (contributor) — outsider.
+    const carolCreate = await server.app.inject({
+      method: 'POST',
+      url: '/v1/users',
+      headers: adminHeaders,
+      payload: JSON.stringify({
+        login: 'carol',
+        password: 'carol-password',
+        display_name: 'Carol',
+        role: 'contributor',
+      }),
+    });
+    if (carolCreate.statusCode !== 201 && carolCreate.statusCode !== 500 && carolCreate.statusCode !== 400) {
+      throw new Error(`Unexpected status creating carol: ${carolCreate.statusCode} ${carolCreate.body}`);
+    }
+
+    // Log bob in.
+    const bobLogin = await server.app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { username: 'bob', password: 'bob-password' },
+    });
+    expect(bobLogin.statusCode).toBe(200);
+    const bobToken = JSON.parse(bobLogin.body).data.token;
+
+    // Bob creates a plan.
+    const created = await server.app.inject({
+      method: 'POST',
+      url: '/v1/plans',
+      headers: { authorization: `Bearer ${bobToken}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ title: "Bob's plan", spec_prompt: '' }),
+    });
+    expect(created.statusCode).toBe(201);
+    const planId = JSON.parse(created.body).data.id;
+
+    // Log carol in.
+    const carolLogin = await server.app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      payload: { username: 'carol', password: 'carol-password' },
+    });
+    expect(carolLogin.statusCode).toBe(200);
+    const carolToken = JSON.parse(carolLogin.body).data.token;
+    // Hit each action endpoint as carol — all should return 403.
+    // Only set content-type when sending a body to avoid Fastify's empty-body 400.
+    const actionEndpoints: Array<{ method: string; path: string; body?: any }> = [
+      { method: 'POST', path: `/v1/plans/${planId}/generate-plan`, body: {} },
+      { method: 'POST', path: `/v1/plans/${planId}/validate-plan` },
+      { method: 'POST', path: `/v1/plans/${planId}/sections/sec_x/search`, body: {} },
+      { method: 'POST', path: `/v1/plans/${planId}/validate-fragments` },
+      { method: 'POST', path: `/v1/plans/${planId}/sections/sec_x/generate` },
+      { method: 'POST', path: `/v1/plans/${planId}/assemble` },
+    ];
+    for (const ep of actionEndpoints) {
+      const headers: Record<string, string> = { authorization: `Bearer ${carolToken}` };
+      if (ep.body !== undefined) headers['content-type'] = 'application/json';
+      const res = await server.app.inject({
+        method: ep.method,
+        url: ep.path,
+        headers,
+        payload: ep.body !== undefined ? JSON.stringify(ep.body) : undefined,
+      });
+      expect(res.statusCode, `expected 403 for ${ep.path}, got ${res.statusCode}`).toBe(403);
+    }
+  });
 });

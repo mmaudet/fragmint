@@ -289,4 +289,208 @@ describe('PlanService.exportMarkdown / exportDocx', () => {
     const after = await svc.get(p.id);
     expect(after!.status).toBe('completed');
   });
+
+  it('exportMarkdown throws and does NOT change status when draft is empty', async () => {
+    const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]) });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, { status: 'fragments_validated' });
+    await expect(svc.exportMarkdown(p.id)).rejects.toThrow(/No assembled draft/);
+    const after = await svc.get(p.id);
+    expect(after!.status).toBe('fragments_validated');
+  });
+
+  it('exportMarkdown throws and does NOT change status when draft is whitespace only', async () => {
+    const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]) });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, { draft_markdown: '   \n\t  ', status: 'fragments_validated' });
+    await expect(svc.exportMarkdown(p.id)).rejects.toThrow(/No assembled draft/);
+    const after = await svc.get(p.id);
+    expect(after!.status).toBe('fragments_validated');
+  });
+
+  it('exportDocx throws and does NOT change status when draft is empty', async () => {
+    const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]) });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, { status: 'fragments_validated' });
+    await expect(svc.exportDocx(p.id, {})).rejects.toThrow(/No assembled draft/);
+    const after = await svc.get(p.id);
+    expect(after!.status).toBe('fragments_validated');
+  });
+});
+
+describe('PlanService.generateSection — full body fetch', () => {
+  it('fetches the original fragment body via getById for non-edited selections', async () => {
+    const llm = fakeLlm(['generated.']);
+    const fragments = fakeFragments();
+    const svc = makeServiceFull({ llm, search: fakeSearch([]), fragments });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, {
+      plan_markdown: '## A\n\nD',
+      sections: [
+        {
+          id: 'sec_a',
+          title: 'A',
+          description: 'D',
+          candidates: [],
+          selected: [
+            // edited=false → service should call getById and use the full body
+            { fragment_id: 'fOrig', body: 'truncated excerpt', edited: false, propose_to_library: false },
+          ],
+        },
+      ],
+      status: 'fragments_validated',
+    });
+    await svc.generateSection(p.id, 'sec_a');
+    expect((fragments.getById as any).mock.calls.length).toBe(1);
+    expect((fragments.getById as any).mock.calls[0][0]).toBe('fOrig');
+    // The LLM messages built from buildSectionMessages should include the full body 'body of fOrig'
+    const llmCall = (llm.chatMessages as any).mock.calls[0][0];
+    const concat = JSON.stringify(llmCall);
+    expect(concat).toContain('body of fOrig');
+  });
+
+  it('uses the user-edited body verbatim when edited=true and does NOT call getById', async () => {
+    const llm = fakeLlm(['generated.']);
+    const fragments = fakeFragments();
+    const svc = makeServiceFull({ llm, search: fakeSearch([]), fragments });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, {
+      plan_markdown: '## A\n\nD',
+      sections: [
+        {
+          id: 'sec_a',
+          title: 'A',
+          description: 'D',
+          candidates: [],
+          selected: [
+            { fragment_id: 'fOrig', body: 'my edited body', edited: true, propose_to_library: false },
+          ],
+        },
+      ],
+      status: 'fragments_validated',
+    });
+    await svc.generateSection(p.id, 'sec_a');
+    expect((fragments.getById as any).mock.calls.length).toBe(0);
+    const llmCall = (llm.chatMessages as any).mock.calls[0][0];
+    expect(JSON.stringify(llmCall)).toContain('my edited body');
+  });
+});
+
+describe('PlanService.validatePlan — error tolerance', () => {
+  it('keeps other sections when one section search fails', async () => {
+    // Search throws on the first call, returns results on the second.
+    let i = 0;
+    const search = {
+      search: vi.fn(async () => {
+        i++;
+        if (i === 1) throw new Error('milvus exploded');
+        return [{ id: 'f2', score: 0.9, title: 'F2', body_excerpt: 'b', quality: 'reviewed' }];
+      }),
+    } as unknown as SearchService;
+    const svc = makeServiceFull({ llm: fakeLlm([]), search });
+    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB' });
+
+    const out = await svc.validatePlan(p.id);
+    expect(out!.status).toBe('plan_validated');
+    expect(out!.state.sections).toHaveLength(2);
+    expect(out!.state.sections[0].candidates).toEqual([]);
+    expect(out!.state.sections[1].candidates).toHaveLength(1);
+    expect(out!.state.sections[1].candidates[0].fragment_id).toBe('f2');
+  });
+});
+
+describe('PlanService.validateFragments — FragmentService.create call shape', () => {
+  it('passes a valid CreateFragmentInput and uses positional args (input, owner, "contributor", ...)', async () => {
+    const fragments = fakeFragments('frag_created');
+    const svc = makeServiceFull({
+      llm: fakeLlm([]),
+      search: fakeSearch([]),
+      fragments,
+    });
+    const p = await svc.create({
+      owner: 'alice',
+      collection_slug: 'common',
+      spec_prompt: '',
+      filters: { lang: 'fr' },
+    });
+    await svc.update(p.id, {
+      plan_markdown: '## S\n\nD',
+      sections: [
+        {
+          id: 'sec_a',
+          title: 'S',
+          description: 'D',
+          candidates: [],
+          selected: [
+            { fragment_id: 'fOrig', body: 'edited body of the fragment', edited: true, propose_to_library: true },
+          ],
+        },
+      ],
+      status: 'plan_validated',
+    });
+
+    await svc.validateFragments(p.id);
+
+    const createCalls = (fragments.create as any).mock.calls;
+    expect(createCalls.length).toBe(1);
+    const [input, owner, role, ip, storePathOverride, collectionSlug] = createCalls[0];
+    // input is the CreateFragmentInput-shaped object
+    expect(input.body).toBe('edited body of the fragment');
+    expect(input.type).toBe('introduction'); // fakeFragments returns type:'introduction'
+    expect(input.domain).toBe('cloud');
+    expect(input.lang).toBe('fr');
+    expect(input.origin).toBe('generated');
+    expect(Array.isArray(input.tags)).toBe(true);
+    expect(input.tags).toEqual(['t1']); // parsed from '["t1"]'
+    expect(input.access).toEqual({
+      read: ['*'],
+      write: ['contributor', 'admin'],
+      approve: ['expert', 'admin'],
+    });
+    // Positional args after input
+    expect(owner).toBe('alice');
+    expect(role).toBe('contributor');
+    expect(ip).toBeUndefined();
+    expect(storePathOverride).toBeUndefined();
+    expect(collectionSlug).toBe('common');
+  });
+
+  it('falls back to safe defaults when original fragment has unrecognized type', async () => {
+    const fragments = {
+      create: vi.fn(async () => ({ id: 'frag_x' })),
+      getById: vi.fn(async () => ({
+        id: 'fOrig',
+        body: 'x',
+        type: 'not_a_real_type',
+        domain: '',
+        lang: 'zz9',
+        tags: null,
+      })),
+    } as unknown as FragmentService;
+    const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]), fragments });
+    const p = await svc.create({ owner: 'alice', collection_slug: null, spec_prompt: '' });
+    await svc.update(p.id, {
+      plan_markdown: '## S\n\nD',
+      sections: [
+        {
+          id: 'sec_a',
+          title: 'S',
+          description: 'D',
+          candidates: [],
+          selected: [
+            { fragment_id: 'fOrig', body: 'b', edited: true, propose_to_library: true },
+          ],
+        },
+      ],
+      status: 'plan_validated',
+    });
+    await svc.validateFragments(p.id);
+    const [input, , , , , collectionSlug] = (fragments.create as any).mock.calls[0];
+    expect(input.type).toBe('argument'); // fallback
+    expect(input.domain).toBe('general'); // fallback
+    expect(input.lang).toBe('fr'); // fallback
+    expect(input.tags).toEqual([]); // null tags → []
+    expect(collectionSlug).toBe('common'); // null collection → 'common'
+  });
 });

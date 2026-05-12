@@ -15,6 +15,8 @@ import { renderMarkdownToDocx } from './pandoc-render.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
+import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
+import type { FragmentCandidate } from '../schema/plan.js';
 
 export interface PlanServiceConfig {
   fragmentMaxChars: number;
@@ -193,24 +195,30 @@ export class PlanService {
     const newSections = await Promise.all(parsed.map(async (ps) => {
       const previous = oldById.get(ps.id);
       const filters = previous?.filters_override ?? p.state.filters;
-      const results = await search.search(
-        `${ps.title}\n${ps.description}`,
-        {
-          domain: filters.domain ? [filters.domain] : undefined,
-          type: filters.type ? [filters.type] : undefined,
-          lang: filters.lang,
-          tags: filters.tags,
-          collectionSlug: p.collection_slug ?? undefined,
-        },
-        5,
-      );
-      const candidates = results.map((r: any) => ({
-        fragment_id: r.id,
-        score: r.score,
-        title: r.title,
-        body_excerpt: r.body_excerpt,
-        quality: r.quality,
-      }));
+      let candidates: FragmentCandidate[] = [];
+      try {
+        const results = await search.search(
+          `${ps.title}\n${ps.description}`,
+          {
+            domain: filters.domain ? [filters.domain] : undefined,
+            type: filters.type ? [filters.type] : undefined,
+            lang: filters.lang,
+            tags: filters.tags,
+            collectionSlug: p.collection_slug ?? undefined,
+          },
+          5,
+        );
+        candidates = results.map((r: any) => ({
+          fragment_id: r.id,
+          score: r.score,
+          title: r.title,
+          body_excerpt: r.body_excerpt,
+          quality: r.quality,
+        }));
+      } catch (err) {
+        console.error(`Section "${ps.title}" search failed:`, err);
+        candidates = [];
+      }
       return {
         id: ps.id,
         title: ps.title,
@@ -268,18 +276,73 @@ export class PlanService {
       const newSelected = await Promise.all(s.selected.map(async (sel) => {
         if (!sel.propose_to_library || sel.proposed_fragment_id) return sel;
         const original = await fragments.getById(sel.fragment_id);
-        const created = await (fragments as any).create({
-          type: (original as any)?.type ?? 'other',
-          domain: (original as any)?.domain ?? 'other',
-          lang: (original as any)?.lang ?? 'fr',
+        const originalAny = original as any;
+
+        // Type: use original if it's in FRAGMENT_TYPES, else fallback to 'argument'.
+        const originalType = originalAny?.type;
+        const type = (FRAGMENT_TYPES as readonly string[]).includes(originalType)
+          ? (originalType as CreateFragmentInput['type'])
+          : 'argument';
+
+        // Domain: use original if non-empty, else 'general'.
+        const domain: string =
+          typeof originalAny?.domain === 'string' && originalAny.domain.length > 0
+            ? originalAny.domain
+            : 'general';
+
+        // Language: original, then plan filters, then 'fr'.
+        const candidateLang: string =
+          (typeof originalAny?.lang === 'string' && originalAny.lang.length > 0
+            ? originalAny.lang
+            : null) ??
+          p.state.filters.lang ??
+          'fr';
+        const lang: string = /^[a-z]{2}$/.test(candidateLang) ? candidateLang : 'fr';
+
+        // Tags: SQLite row stores tags as serialized JSON string (or null).
+        // Frontmatter tags would already be an array. Handle both.
+        let tags: string[] = [];
+        const rawTags = originalAny?.tags ?? originalAny?.frontmatter?.tags;
+        if (Array.isArray(rawTags)) {
+          tags = rawTags.filter((t): t is string => typeof t === 'string');
+        } else if (typeof rawTags === 'string' && rawTags.length > 0) {
+          try {
+            const parsed = JSON.parse(rawTags);
+            if (Array.isArray(parsed)) {
+              tags = parsed.filter((t): t is string => typeof t === 'string');
+            }
+          } catch {
+            tags = [];
+          }
+        }
+
+        const input: CreateFragmentInput = {
+          type,
+          domain,
+          lang,
           body: sel.body,
-          quality: 'draft',
-          origin: 'plan',
-          origin_source: id,
-          author: p.owner,
-          tags: (original as any)?.tags,
-          collection_slug: p.collection_slug,
-        });
+          tags,
+          translation_of: null,
+          parent_id: null,
+          generation: 0,
+          valid_from: null,
+          valid_until: null,
+          origin: 'generated',
+          access: {
+            read: ['*'],
+            write: ['contributor', 'admin'],
+            approve: ['expert', 'admin'],
+          },
+        };
+
+        const created = await fragments.create(
+          input,
+          p.owner,
+          'contributor',
+          undefined,
+          undefined,
+          p.collection_slug ?? 'common',
+        );
         return { ...sel, proposed_fragment_id: created.id };
       }));
       return { ...s, selected: newSelected };
@@ -293,9 +356,22 @@ export class PlanService {
     if (!p) return null;
     const section = p.state.sections.find((s) => s.id === sectionId);
     if (!section) return null;
+
+    // For non-edited selections, the stored `body` is body_excerpt (~200 chars).
+    // Fetch the full fragment body so the writer LLM has the complete context.
+    // If no FragmentService is configured (some test setups), fall back to sel.body.
+    const fragmentsService = this.config.fragments;
+    const fragments_for_writer = await Promise.all(
+      section.selected.map(async (sel) => {
+        if (sel.edited || !fragmentsService) return { body: sel.body };
+        const original = await fragmentsService.getById(sel.fragment_id);
+        return { body: (original as any)?.body ?? sel.body };
+      }),
+    );
+
     const messages = buildSectionMessages({
       section: { title: section.title, description: section.description },
-      fragments: section.selected.map((s) => ({ body: s.body })),
+      fragments: fragments_for_writer,
       lang: p.state.filters.lang ?? 'fr',
       max_chars: this.config.fragmentMaxChars,
       writer_prompt_override: p.state.writer_prompt_override,
@@ -324,9 +400,12 @@ export class PlanService {
   async exportMarkdown(id: string): Promise<{ content: string; filename: string }> {
     const p = await this.get(id);
     if (!p) throw new Error('Plan not found');
+    if (!p.state.draft_markdown || p.state.draft_markdown.trim() === '') {
+      throw new Error('No assembled draft to export — call /assemble first');
+    }
     await this.update(id, { status: 'completed' });
     return {
-      content: p.state.draft_markdown ?? '',
+      content: p.state.draft_markdown,
       filename: `${slugify(p.title)}.md`,
     };
   }
@@ -337,8 +416,11 @@ export class PlanService {
   ): Promise<{ content: Buffer; filename: string }> {
     const p = await this.get(id);
     if (!p) throw new Error('Plan not found');
+    if (!p.state.draft_markdown || p.state.draft_markdown.trim() === '') {
+      throw new Error('No assembled draft to export — call /assemble first');
+    }
     const reference = args.styleTemplatePath ?? this.config.docxReferencePath;
-    const buf = await renderMarkdownToDocx(p.state.draft_markdown ?? '', reference);
+    const buf = await renderMarkdownToDocx(p.state.draft_markdown, reference);
     await this.update(id, { status: 'completed' });
     return { content: buf, filename: `${slugify(p.title)}.docx` };
   }
