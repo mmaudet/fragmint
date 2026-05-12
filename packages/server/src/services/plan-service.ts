@@ -8,10 +8,20 @@ import {
   type PlanStatus,
   type PlanFilters,
 } from '../schema/plan.js';
+import { buildPlanMessages, buildSectionMessages } from './plan-prompts.js';
+import { parsePlanSections } from './plan-section-parser.js';
+import { slugify } from './slugify.js';
+import { renderMarkdownToDocx } from './pandoc-render.js';
+import type { LlmClient } from './llm-client.js';
+import type { SearchService } from '../search/search-service.js';
+import type { FragmentService } from './fragment-service.js';
 
 export interface PlanServiceConfig {
   fragmentMaxChars: number;
   docxReferencePath?: string;
+  llm?: LlmClient;
+  search?: SearchService;
+  fragments?: FragmentService;
 }
 
 export interface PlanRecord {
@@ -142,5 +152,194 @@ export class PlanService {
   async remove(id: string): Promise<boolean> {
     await this.db.delete(plans).where(eq(plans.id, id));
     return true;
+  }
+
+  private requireLlm(): LlmClient {
+    if (!this.config.llm) throw new Error('PlanService: LlmClient not configured');
+    return this.config.llm;
+  }
+  private requireSearch(): SearchService {
+    if (!this.config.search) throw new Error('PlanService: SearchService not configured');
+    return this.config.search;
+  }
+  private requireFragments(): FragmentService {
+    if (!this.config.fragments) throw new Error('PlanService: FragmentService not configured');
+    return this.config.fragments;
+  }
+
+  async generatePlan(
+    id: string,
+    args: { extra_instructions?: string },
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const messages = buildPlanMessages({
+      spec_prompt: p.state.spec_prompt,
+      filters: p.state.filters,
+      current_plan: p.state.plan_markdown,
+      extra_instructions: args.extra_instructions,
+    });
+    const out = await this.requireLlm().chatMessages(messages);
+    return this.update(id, { plan_markdown: out.trim() });
+  }
+
+  async validatePlan(id: string): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const parsed = parsePlanSections(p.state.plan_markdown);
+    const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
+
+    const search = this.requireSearch();
+    const newSections = await Promise.all(parsed.map(async (ps) => {
+      const previous = oldById.get(ps.id);
+      const filters = previous?.filters_override ?? p.state.filters;
+      const results = await search.search(
+        `${ps.title}\n${ps.description}`,
+        {
+          domain: filters.domain ? [filters.domain] : undefined,
+          type: filters.type ? [filters.type] : undefined,
+          lang: filters.lang,
+          tags: filters.tags,
+          collectionSlug: p.collection_slug ?? undefined,
+        },
+        5,
+      );
+      const candidates = results.map((r: any) => ({
+        fragment_id: r.id,
+        score: r.score,
+        title: r.title,
+        body_excerpt: r.body_excerpt,
+        quality: r.quality,
+      }));
+      return {
+        id: ps.id,
+        title: ps.title,
+        description: ps.description,
+        candidates,
+        selected: previous?.selected ?? [],
+        generated_markdown: previous?.generated_markdown,
+        filters_override: previous?.filters_override,
+      };
+    }));
+
+    return this.update(id, { sections: newSections, status: 'plan_validated' });
+  }
+
+  async searchSection(
+    planId: string,
+    sectionId: string,
+    args: { filters_override?: PlanFilters },
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const section = p.state.sections.find((s) => s.id === sectionId);
+    if (!section) return null;
+    const filters = args.filters_override ?? section.filters_override ?? p.state.filters;
+    const results = await this.requireSearch().search(
+      `${section.title}\n${section.description}`,
+      {
+        domain: filters.domain ? [filters.domain] : undefined,
+        type: filters.type ? [filters.type] : undefined,
+        lang: filters.lang,
+        tags: filters.tags,
+        collectionSlug: p.collection_slug ?? undefined,
+      },
+      5,
+    );
+    const candidates = results.map((r: any) => ({
+      fragment_id: r.id,
+      score: r.score,
+      title: r.title,
+      body_excerpt: r.body_excerpt,
+      quality: r.quality,
+    }));
+    const updatedSections = p.state.sections.map((s) =>
+      s.id === sectionId ? { ...s, candidates, filters_override: args.filters_override ?? s.filters_override } : s,
+    );
+    return this.update(planId, { sections: updatedSections });
+  }
+
+  async validateFragments(id: string): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const fragments = this.requireFragments();
+
+    const newSections = await Promise.all(p.state.sections.map(async (s) => {
+      const newSelected = await Promise.all(s.selected.map(async (sel) => {
+        if (!sel.propose_to_library || sel.proposed_fragment_id) return sel;
+        const original = await fragments.getById(sel.fragment_id);
+        const created = await (fragments as any).create({
+          type: (original as any)?.type ?? 'other',
+          domain: (original as any)?.domain ?? 'other',
+          lang: (original as any)?.lang ?? 'fr',
+          body: sel.body,
+          quality: 'draft',
+          origin: 'plan',
+          origin_source: id,
+          author: p.owner,
+          tags: (original as any)?.tags,
+          collection_slug: p.collection_slug,
+        });
+        return { ...sel, proposed_fragment_id: created.id };
+      }));
+      return { ...s, selected: newSelected };
+    }));
+
+    return this.update(id, { sections: newSections, status: 'fragments_validated' });
+  }
+
+  async generateSection(planId: string, sectionId: string): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const section = p.state.sections.find((s) => s.id === sectionId);
+    if (!section) return null;
+    const messages = buildSectionMessages({
+      section: { title: section.title, description: section.description },
+      fragments: section.selected.map((s) => ({ body: s.body })),
+      lang: p.state.filters.lang ?? 'fr',
+      max_chars: this.config.fragmentMaxChars,
+      writer_prompt_override: p.state.writer_prompt_override,
+    });
+    const out = await this.requireLlm().chatMessages(messages);
+    const updatedSections = p.state.sections.map((s) =>
+      s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
+    );
+    return this.update(planId, { sections: updatedSections });
+  }
+
+  async assemble(id: string): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const parts: string[] = [`# ${p.title}`, ''];
+    for (const s of p.state.sections) {
+      if (!s.generated_markdown) continue;
+      parts.push(`## ${s.title}`);
+      parts.push('');
+      parts.push(s.generated_markdown.trim());
+      parts.push('');
+    }
+    return this.update(id, { draft_markdown: parts.join('\n'), draft_dirty: false });
+  }
+
+  async exportMarkdown(id: string): Promise<{ content: string; filename: string }> {
+    const p = await this.get(id);
+    if (!p) throw new Error('Plan not found');
+    await this.update(id, { status: 'completed' });
+    return {
+      content: p.state.draft_markdown ?? '',
+      filename: `${slugify(p.title)}.md`,
+    };
+  }
+
+  async exportDocx(
+    id: string,
+    args: { styleTemplatePath?: string },
+  ): Promise<{ content: Buffer; filename: string }> {
+    const p = await this.get(id);
+    if (!p) throw new Error('Plan not found');
+    const reference = args.styleTemplatePath ?? this.config.docxReferencePath;
+    const buf = await renderMarkdownToDocx(p.state.draft_markdown ?? '', reference);
+    await this.update(id, { status: 'completed' });
+    return { content: buf, filename: `${slugify(p.title)}.docx` };
   }
 }
