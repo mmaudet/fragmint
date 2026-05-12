@@ -11,7 +11,7 @@ import { fragments, harvestJobs, harvestCandidates } from '../db/schema.js';
 import type { LlmClient, SegmentBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
-import { HARVESTER_DOMAINS, HARVESTER_TYPES } from './harvester-taxonomy.js';
+import { HARVESTER_DOMAINS, HARVESTER_TYPES, coerceFragmentType } from './harvester-taxonomy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -320,7 +320,7 @@ export class HarvesterService {
 
       const result = await this.fragmentService.create(
         {
-          type: candidate.type as any,
+          type: coerceFragmentType(candidate.type) as any,
           domain: candidate.domain,
           tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
           lang: candidate.lang,
@@ -356,7 +356,7 @@ export class HarvesterService {
 
       const result = await this.fragmentService.create(
         {
-          type: (mod.type ?? candidate.type) as any,
+          type: coerceFragmentType(mod.type ?? candidate.type) as any,
           domain: mod.domain ?? candidate.domain,
           tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
           lang: candidate.lang,

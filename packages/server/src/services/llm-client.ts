@@ -70,7 +70,7 @@ export class LlmClient {
 Rules:
 - body: copy the EXACT original text verbatim. Do NOT translate, paraphrase, or summarize. Preserve the source language.
 - title: a short label (3-8 words) in the SAME language as the body. Do NOT write an English title for French content. Do NOT write a French title for English content.
-- type: one of introduction, argument, description, pricing, clause, methodology, conclusion, other.
+- type: the closest match among introduction, argument, pricing, clause, faq, conclusion, bio, témoignage, reference-technique, methodology, engagement, cas-usage. Pick one of these exactly; do not invent other values.
 - lang: ISO 639-1 code (fr, en, de, ...).
 
 Document:
@@ -99,7 +99,7 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
 
 Choose the BEST matching type from this closed list: ${JSON.stringify(existingTypes)}.
 Choose the BEST matching domain from this closed list: ${JSON.stringify(existingDomains)}.
-If the text does not fit any option, use "other". Do not invent new values outside these lists.
+Always return one value from each list verbatim — do not invent new values. The type list has no catch-all, so pick the closest type even if the fit is imperfect; the domain list contains "other" for content that fits no domain.
 
 Text:
 ${blockText}

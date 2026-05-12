@@ -25,3 +25,27 @@ export const HARVESTER_TYPES = [
   'engagement', // commitment, SLA, guarantee
   'cas-usage', // use case, concrete example, scenario
 ];
+
+// Map a few common LLM "type" hallucinations onto the closest valid type.
+const TYPE_ALIASES: Record<string, string> = {
+  description: 'introduction',
+  intro: 'introduction',
+  arguments: 'argument',
+  benefit: 'argument',
+  testimonial: 'témoignage',
+  'use-case': 'cas-usage',
+  usecase: 'cas-usage',
+  technical: 'reference-technique',
+  reference: 'reference-technique',
+};
+
+// Fallback used when an LLM returns a type outside the closed list.
+export const DEFAULT_FRAGMENT_TYPE = 'argument';
+
+/** Coerce an LLM-provided fragment type onto a valid HARVESTER_TYPES value. */
+export function coerceFragmentType(type: string | null | undefined): string {
+  if (!type) return DEFAULT_FRAGMENT_TYPE;
+  const normalized = type.trim().toLowerCase();
+  if (HARVESTER_TYPES.includes(normalized)) return normalized;
+  return TYPE_ALIASES[normalized] ?? DEFAULT_FRAGMENT_TYPE;
+}
