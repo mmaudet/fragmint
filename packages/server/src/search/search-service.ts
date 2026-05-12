@@ -221,6 +221,18 @@ export class SearchService {
           const ids = milvusResults.map((r) => r.id);
           const conditions = [inArray(fragments.id, ids)];
 
+          // Scope by collection — Milvus has no collection field, so the SQLite
+          // join is the only place this filter is applied on the Milvus path.
+          if (filters?.collectionSlug) {
+            if (filters.collectionSlug === 'common') {
+              conditions.push(
+                or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!,
+              );
+            } else {
+              conditions.push(eq(fragments.collection_slug, filters.collectionSlug));
+            }
+          }
+
           // Apply temporal filtering on Milvus results too
           if (filters?.valid_at) {
             conditions.push(

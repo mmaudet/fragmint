@@ -57,6 +57,40 @@ describe('SearchService', () => {
     expect(results[0].id).toBe('frag-test-1');
   });
 
+  it('search() on the Milvus path filters enriched results by collection', async () => {
+    // Add a second fragment in a different collection; Milvus returns both ids.
+    await db.insert(fragments).values({
+      id: 'frag-test-2',
+      type: 'argument',
+      domain: 'test',
+      lang: 'fr',
+      quality: 'approved',
+      author: 'test',
+      title: 'Other collection argument',
+      body_excerpt: 'Belongs to team-secret.',
+      created_at: '2026-03-14',
+      updated_at: '2026-03-14',
+      file_path: 'fragments/test/argument-test-fr-00000002.md',
+      origin: 'manual',
+      uses: 1,
+      collection_slug: 'team-secret',
+    });
+    // frag-test-1 was seeded with collection_slug = null (i.e. "common").
+    const embedding = mockEmbeddingClient();
+    const milvus = mockMilvusClient();
+    milvus.search.mockResolvedValue([
+      { id: 'frag-test-1', score: 0.95 },
+      { id: 'frag-test-2', score: 0.9 },
+    ]);
+    const service = new SearchService(db, embedding as any, milvus as any);
+
+    const common = await service.search('sovereignty', { collectionSlug: 'common' });
+    expect(common.map((r) => r.id)).toEqual(['frag-test-1']);
+
+    const team = await service.search('sovereignty', { collectionSlug: 'team-secret' });
+    expect(team.map((r) => r.id)).toEqual(['frag-test-2']);
+  });
+
   it('search() falls back to SQLite when milvusClient is null', async () => {
     const embedding = mockEmbeddingClient();
     const service = new SearchService(db, embedding as any, null);
