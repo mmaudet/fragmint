@@ -127,3 +127,45 @@ describe('TemplateService', () => {
     expect(fetched).toBeNull();
   });
 });
+
+describe('TemplateService.createStyleReference', () => {
+  let dir: string;
+  let svc: TemplateService;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'fragmint-tpl-style-'));
+    const db = createDb(':memory:');
+    const git = new GitRepository(dir);
+    await git.init();
+    const audit = new AuditService(db);
+    svc = new TemplateService(db, dir, audit);
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true });
+  });
+
+  it('persists a style_reference template without YAML', async () => {
+    const docx = Buffer.from('PK\x03\x04 fake docx');
+    const result = await svc.createStyleReference(
+      docx,
+      'corporate-style.docx',
+      'Corporate Style',
+      'Standard layout for proposals',
+      'alice',
+      'contributor',
+    );
+    expect(result.id).toMatch(/^tpl_style_/);
+    const row = await svc.getById(result.id);
+    expect(row!.kind).toBe('style_reference');
+    expect(row!.yaml_path).toBe('');
+    expect(row!.output_format).toBe('docx');
+  });
+
+  it('rejects filenames containing path-traversal sequences', async () => {
+    const docx = Buffer.from('PK\x03\x04');
+    await expect(
+      svc.createStyleReference(docx, '../evil.docx', 'X', null, 'a', 'contributor'),
+    ).rejects.toThrow();
+  });
+});

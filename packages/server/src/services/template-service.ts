@@ -1,5 +1,6 @@
 // packages/server/src/services/template-service.ts
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -94,6 +95,60 @@ export class TemplateService {
     return { id, template_path: relDocxPath, yaml_path: relYamlPath, commit_hash: commitHash };
   }
 
+  async createStyleReference(
+    docxBuffer: Buffer,
+    docxFilename: string,
+    name: string,
+    description: string | null,
+    author: string,
+    authorRole: string,
+    ip?: string,
+  ) {
+    if (docxFilename.includes('..') || docxFilename.includes('/')) {
+      throw new Error('Invalid filename: must not contain ".." or "/"');
+    }
+
+    const id = `tpl_style_${randomUUID()}`;
+    const now = new Date().toISOString();
+    const templatesDir = join(this.storePath, 'templates');
+    mkdirSync(templatesDir, { recursive: true });
+
+    const safeName = `${id}-${docxFilename}`;
+    const docxPath = join(templatesDir, safeName);
+    writeFileSync(docxPath, docxBuffer);
+    const relDocxPath = relative(this.storePath, docxPath);
+
+    const commitHash = await this.git.commitFiles(
+      [relDocxPath],
+      `template: create style-reference ${name} (${id})`,
+    );
+
+    await this.db.insert(templates).values({
+      id,
+      name,
+      description,
+      output_format: 'docx',
+      version: '1.0.0',
+      template_path: relDocxPath,
+      yaml_path: '',
+      author,
+      created_at: now,
+      updated_at: now,
+      git_hash: commitHash,
+      kind: 'style_reference',
+    });
+
+    await this.audit.log({
+      user_id: author,
+      role: authorRole,
+      action: 'template:create_style_reference',
+      fragment_id: id,
+      ip_source: ip,
+    });
+
+    return { id, template_path: relDocxPath };
+  }
+
   async syncFromVault(): Promise<number> {
     const templatesDir = join(this.storePath, 'templates');
     if (!existsSync(templatesDir)) return 0;
@@ -141,10 +196,13 @@ export class TemplateService {
     return synced;
   }
 
-  async list(filters?: { output_format?: string; limit?: number; offset?: number }) {
+  async list(filters?: { output_format?: string; kind?: string; limit?: number; offset?: number }) {
     const conditions = [];
     if (filters?.output_format) {
       conditions.push(eq(templates.output_format, filters.output_format));
+    }
+    if (filters?.kind) {
+      conditions.push(eq(templates.kind, filters.kind));
     }
 
     const limit = filters?.limit ?? 50;
@@ -153,7 +211,9 @@ export class TemplateService {
     const rows = await this.db
       .select()
       .from(templates)
-      .where(conditions.length ? conditions[0] : undefined)
+      .where(
+        conditions.length ? (conditions.length === 1 ? conditions[0] : and(...conditions)) : undefined,
+      )
       .orderBy(desc(templates.updated_at))
       .limit(limit)
       .offset(offset);
@@ -166,6 +226,11 @@ export class TemplateService {
     if (rows.length === 0) return null;
 
     const row = rows[0];
+
+    if (!row.yaml_path) {
+      return { ...row, yaml: null };
+    }
+
     const yamlPath = join(this.storePath, row.yaml_path);
 
     if (!existsSync(yamlPath)) {
