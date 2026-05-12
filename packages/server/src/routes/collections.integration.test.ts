@@ -87,6 +87,41 @@ describe('Collection routes', () => {
     expect(body.data.type).toBe('system');
   });
 
+  it('PUT /v1/collections/:slug persists updates', async () => {
+    const res = await server.app.inject({
+      method: 'PUT',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+      payload: { name: 'Renamed Team', description: 'Updated description', read_only: 1 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.data.name).toBe('Renamed Team');
+    expect(body.data.description).toBe('Updated description');
+    expect(body.data.read_only).toBe(1);
+
+    // Re-fetch to confirm the change was actually written, not just echoed back.
+    const detailRes = await server.app.inject({
+      method: 'GET',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+    });
+    const detailBody = JSON.parse(detailRes.body);
+    expect(detailBody.data.name).toBe('Renamed Team');
+    expect(detailBody.data.description).toBe('Updated description');
+    expect(detailBody.data.read_only).toBe(1);
+  });
+
+  it('PUT /v1/collections/:slug with no fields returns 400', async () => {
+    const res = await server.app.inject({
+      method: 'PUT',
+      url: '/v1/collections/test-team',
+      headers: auth(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('Backward compat: /v1/fragments returns fragments', async () => {
     const res = await server.app.inject({
       method: 'GET',

@@ -136,6 +136,26 @@ export class CollectionService {
     return rows.length > 0 ? rows[0] : null;
   }
 
+  async update(
+    slug: string,
+    updates: { name?: string; description?: string | null; read_only?: number | boolean },
+  ): Promise<Collection> {
+    const collection = await this.getBySlug(slug);
+    if (!collection) throw new Error(`Collection '${slug}' not found`);
+
+    const set: Partial<typeof collections.$inferInsert> = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.description !== undefined) set.description = updates.description;
+    if (updates.read_only !== undefined) set.read_only = updates.read_only ? 1 : 0;
+
+    if (Object.keys(set).length > 0) {
+      await this.db.update(collections).set(set).where(eq(collections.slug, slug));
+    }
+
+    const updated = await this.getBySlug(slug);
+    return updated!;
+  }
+
   async addMember(
     collectionSlug: string,
     userId: string,

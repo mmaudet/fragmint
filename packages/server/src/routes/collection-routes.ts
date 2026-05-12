@@ -44,10 +44,14 @@ export function collectionRoutes(
     { preHandler: [authenticate, requireCollectionRole('owner')] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
-      const body = request.body as { name?: string; description?: string; read_only?: number };
-      const collection = request.collection;
+      const body = request.body as {
+        name?: string;
+        description?: string | null;
+        read_only?: number | boolean;
+      };
 
-      const updates: Record<string, any> = {};
+      const updates: { name?: string; description?: string | null; read_only?: number | boolean } =
+        {};
       if (body.name !== undefined) updates.name = body.name;
       if (body.description !== undefined) updates.description = body.description;
       if (body.read_only !== undefined) updates.read_only = body.read_only;
@@ -56,9 +60,8 @@ export function collectionRoutes(
         return reply.status(400).send({ data: null, meta: null, error: 'No fields to update' });
       }
 
-      // Re-fetch after update
-      const updated = await collectionService.getBySlug(slug);
-      return { data: { ...collection, ...updates }, meta: null, error: null };
+      const updated = await collectionService.update(slug, updates);
+      return { data: updated, meta: null, error: null };
     },
   );
 
