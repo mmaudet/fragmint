@@ -9,7 +9,7 @@ COPY packages/web/package.json packages/web/
 COPY packages/cli/package.json packages/cli/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/obsidian/package.json packages/obsidian/
-RUN pnpm install --ignore-scripts && \
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
     npx node-gyp rebuild
 
@@ -36,7 +36,7 @@ COPY packages/web/package.json packages/web/
 COPY packages/cli/package.json packages/cli/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/obsidian/package.json packages/obsidian/
-RUN pnpm install --ignore-scripts
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY packages/web/ packages/web/
 
@@ -52,7 +52,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
-RUN pnpm install --ignore-scripts && \
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
     npx node-gyp rebuild
 
@@ -68,7 +68,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
-RUN pnpm install --ignore-scripts --prod && \
+RUN pnpm install --frozen-lockfile --ignore-scripts --prod && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
     npx node-gyp rebuild
 
