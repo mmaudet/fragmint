@@ -74,6 +74,18 @@ export function createDb(path: string | ':memory:') {
       duplicate_of TEXT, duplicate_score REAL,
       status TEXT NOT NULL DEFAULT 'pending', fragment_id TEXT
     );
+    CREATE TABLE IF NOT EXISTS plans (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      collection_slug TEXT,
+      status TEXT NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS plans_owner_idx ON plans(owner);
+    CREATE INDEX IF NOT EXISTS plans_collection_idx ON plans(collection_slug);
   `);
 
   // Add collection_slug to api_tokens if not already present

@@ -136,3 +136,14 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   status: text('status').notNull().default('pending'),
   fragment_id: text('fragment_id'),
 });
+
+export const plans = sqliteTable('plans', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  owner: text('owner').notNull(),
+  collection_slug: text('collection_slug'),
+  status: text('status').notNull(),
+  state_json: text('state_json').notNull(),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+});
