@@ -6,3 +6,4 @@ export { FragmentService } from './fragment-service.js';
 export { ComposerService } from './composer-service.js';
 export type { TemplateServiceLike } from './composer-service.js';
 export { TemplateService } from './template-service.js';
+export { PlanService } from './plan-service.js';

@@ -28,6 +28,7 @@ import {
   FragmentService,
   TemplateService,
   ComposerService,
+  PlanService,
 } from './services/index.js';
 import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
@@ -36,6 +37,7 @@ import { fragmentRoutes } from './routes/fragment-routes.js';
 import { adminRoutes } from './routes/admin-routes.js';
 import { templateRoutes } from './routes/template-routes.js';
 import { harvestRoutes } from './routes/harvest-routes.js';
+import { planRoutes } from './routes/plan-routes.js';
 import { collectionRoutes } from './routes/collection-routes.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -210,6 +212,17 @@ export async function createServer(options?: {
     storePath,
   );
 
+  const planService = new PlanService(db, {
+    fragmentMaxChars: config.plan_fragment_max_chars,
+    docxReferencePath: config.plan_docx_reference_path,
+    llm: llmClient,
+    search: searchService,
+    fragments: fragmentService,
+  });
+
+  // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
+  (app as unknown as { planService: PlanService }).planService = planService;
+
   // Routes
   authRoutes(app, userService);
   fragmentRoutes(app, fragmentService, authenticate);
@@ -224,6 +237,7 @@ export async function createServer(options?: {
   );
   templateRoutes(app, templateService, composerService, authenticate);
   harvestRoutes(app, harvesterService, authenticate);
+  planRoutes(app, planService, templateService, config.store_path, authenticate);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);

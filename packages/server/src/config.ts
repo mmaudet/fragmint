@@ -39,6 +39,10 @@ export interface FragmintConfig {
 
   // Collections
   collections_path: string;
+
+  // Plans
+  plan_fragment_max_chars: number;
+  plan_docx_reference_path?: string;
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -115,6 +119,12 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     milvus_enabled:
       process.env.FRAGMINT_MILVUS_ENABLED === 'true' || fileConfig.milvus_enabled === true,
     collections_path: collectionsPath,
+    plan_fragment_max_chars:
+      toNumber(process.env.FRAGMINT_PLAN_FRAGMENT_MAX_CHARS) ??
+      fileConfig.plan_fragment_max_chars ??
+      4000,
+    plan_docx_reference_path:
+      process.env.FRAGMINT_PLAN_DOCX_REFERENCE ?? fileConfig.plan_docx_reference_path,
   };
 }
 
