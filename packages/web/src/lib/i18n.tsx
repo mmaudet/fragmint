@@ -107,6 +107,19 @@ const translations = {
   },
   validation: {
     title: { fr: 'Validation', en: 'Validation' },
+    toReview: { fr: 'À reviewer', en: 'To review' },
+    toReviewDescription: {
+      fr: 'Fragments ingérés par le harvester — à relire avant validation.',
+      en: 'Fragments ingested by the harvester — review before validation.',
+    },
+    noFragmentsToReview: {
+      fr: 'Aucun fragment en attente de review.',
+      en: 'No fragments awaiting review.',
+    },
+    readyForApproval: {
+      fr: 'Fragments reviewés — prêts pour approbation finale.',
+      en: 'Reviewed fragments — ready for final approval.',
+    },
     pendingApproval: { fr: "Fragments en attente d'approbation", en: 'Fragments pending approval' },
     noFragmentsPending: {
       fr: 'Aucun fragment en attente de validation',

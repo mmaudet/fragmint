@@ -56,10 +56,10 @@ export default function ValidationPage() {
     if (!selectedId) return;
     reviewMutation.mutate(selectedId, {
       onSuccess: () => {
-        toast.success('Fragment marqué comme reviewed');
+        toast.success(t('fragments', 'reviewSuccess'));
         setSelectedId(null);
       },
-      onError: () => toast.error('Erreur lors du passage en reviewed'),
+      onError: () => toast.error(t('fragments', 'reviewError')),
     });
   };
 
@@ -96,12 +96,10 @@ export default function ValidationPage() {
       {/* Section 1 — À reviewer (draft) */}
       <section className="space-y-4">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold">À reviewer</h3>
+          <h3 className="text-lg font-semibold">{t('validation', 'toReview')}</h3>
           {draftFragments && <Badge variant="secondary">{draftFragments.length}</Badge>}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Fragments ingérés par le harvester — à relire avant validation.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('validation', 'toReviewDescription')}</p>
         {isLoadingDraft ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -120,7 +118,9 @@ export default function ValidationPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground py-4">Aucun fragment en attente de review.</p>
+          <p className="text-sm text-muted-foreground py-4">
+            {t('validation', 'noFragmentsToReview')}
+          </p>
         )}
       </section>
 
@@ -132,9 +132,7 @@ export default function ValidationPage() {
           <h3 className="text-lg font-semibold">{t('validation', 'pendingApproval')}</h3>
           {reviewedFragments && <Badge variant="secondary">{reviewedFragments.length}</Badge>}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Fragments reviewés — prêts pour approbation finale.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('validation', 'readyForApproval')}</p>
         {isLoadingReviewed ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -255,7 +253,9 @@ export default function ValidationPage() {
                 {actionMode === 'review' ? (
                   <Button onClick={handleReview} disabled={reviewMutation.isPending}>
                     <BookOpen className="mr-2 h-4 w-4" />
-                    {reviewMutation.isPending ? t('common', 'inProgress') : 'Marquer reviewed'}
+                    {reviewMutation.isPending
+                      ? t('common', 'inProgress')
+                      : t('fragments', 'markReviewed')}
                   </Button>
                 ) : (
                   <Button onClick={handleApprove} disabled={approveMutation.isPending}>
