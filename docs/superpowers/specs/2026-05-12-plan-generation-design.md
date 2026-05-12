@@ -30,7 +30,6 @@ The flow is fully resumable: plans are persisted server-side and statuses move f
 - Reusable plan templates / skeletons.
 - Plan-internal audit-log entries (the existing `audit_log` only records library fragment changes).
 - Spec file upload (`.docx → Pandoc → spec_prompt`). Captured as a clear follow-on phase; the server already has Pandoc available via the harvest stack.
-- DOCX reference template / styling (see §12 Future enhancements).
 
 ---
 
@@ -69,6 +68,7 @@ type PlanState = {
   sections: PlanSection[];                      // populated after plan validation
   draft_markdown?: string;                      // step 4 — final assembled markdown (editable)
   draft_dirty?: boolean;                        // true once user has manually edited draft_markdown
+  export_style_template_id?: string;            // step 4 — picked DOCX style-reference template id (templates table, kind = 'style_reference')
 };
 
 type PlanSection = {
@@ -145,7 +145,18 @@ All routes under `/v1/plans`. New files:
 
 ### Export
 
-- `POST /v1/plans/:id/export` — Body: `{ format: 'md' | 'docx' }`. Returns binary stream with `Content-Disposition: attachment` and `filename="<slug>.<ext>"`. Sets `status: 'completed'`.
+- `POST /v1/plans/:id/export` — Body: `{ format: 'md' | 'docx', style_template_id?: string }`. Returns binary stream with `Content-Disposition: attachment` and `filename="<slug>.<ext>"`. Sets `status: 'completed'`.
+  - For `docx`: if `style_template_id` is provided, the corresponding template (must be `kind: 'style_reference'`) is passed to Pandoc as `--reference-doc`. If omitted, the `PlanState.export_style_template_id` is used; if also unset, falls back to `FRAGMINT_PLAN_DOCX_REFERENCE`; otherwise default Pandoc styling.
+
+### DOCX style-reference templates (registry)
+
+Extension of the existing `templates` table (see §10). New routes for managing style-reference templates only (existing composer template routes are untouched):
+
+- `GET    /v1/templates?kind=style_reference` — List style references (the existing list endpoint gains an optional `kind` filter; default behavior unchanged).
+- `POST   /v1/templates/style-reference` — `multipart/form-data` upload: `file` (the `.docx`), `name`, `description?`. No YAML required. Persists a `templates` row with `kind: 'style_reference'`, `output_format: 'docx'`, `yaml_path: null`. The `.docx` is stored in the vault under `templates/` and Git-committed (same pattern as composer template uploads).
+- `DELETE /v1/templates/:id` — Existing endpoint; now also valid for style references (admin or owner).
+
+Style references are not bound to a collection in v1 (they're global, like the existing composer templates).
 
 All inputs validated with Zod. LLM calls use the existing `LlmClient`, extended with a `chatMessages(messages: ChatMessage[])` overload (the existing `chat(content)` will continue to wrap into a single user message internally).
 
@@ -218,6 +229,7 @@ Same left rail of sections.
 - Editing the textarea sets `draft_dirty: true` (PATCHed back). If user clicks "Re-assemble" (which calls `/assemble`) while dirty, frontend shows a confirmation modal — "This will overwrite your manual edits. Continue?".
 - Live preview tab.
 - Two export buttons: **Download .md** and **Download .docx**.
+- Next to "Download .docx": a **Style template** dropdown listing all `templates` rows with `kind: 'style_reference'`, plus a "(default styling)" option. Selection is persisted into `state.export_style_template_id` via the normal PATCH. A small "Upload new style template" button opens a modal (file picker + name + optional description) that POSTs to `/v1/templates/style-reference`; on success the new template appears in the dropdown.
 
 ### Components
 
@@ -377,7 +389,11 @@ Deterministic, server-side, no LLM. Builds `state.draft_markdown` as:
   - Reads the output, streams it, deletes both tmp files.
   - 30s timeout.
   - Returns Pandoc stderr (truncated) on error.
-  - If `FRAGMINT_PLAN_DOCX_REFERENCE` env var is set, passes it as `--reference-doc`; otherwise Pandoc default styling.
+  - Resolves `--reference-doc` in this priority:
+    1. `style_template_id` from the request body (looked up in `templates` table, must be `kind: 'style_reference'`; 404 / 400 if missing or wrong kind).
+    2. `PlanState.export_style_template_id` (same lookup).
+    3. `FRAGMINT_PLAN_DOCX_REFERENCE` env var.
+    4. Pandoc default styling.
 
 Both exports set `status: 'completed'` and bump `updated_at`.
 
@@ -410,7 +426,7 @@ If fragment creation fails (e.g., user lacks contributor permission on the activ
 
 ## 10. Migrations
 
-One new migration file:
+Two new migration files:
 
 ```sql
 -- packages/server/src/db/migrations/<timestamp>_create_plans.sql
@@ -428,6 +444,16 @@ CREATE INDEX plans_owner_idx ON plans(owner);
 CREATE INDEX plans_collection_idx ON plans(collection_slug);
 ```
 
+```sql
+-- packages/server/src/db/migrations/<timestamp>_templates_add_kind.sql
+ALTER TABLE templates ADD COLUMN kind TEXT NOT NULL DEFAULT 'composer';
+CREATE INDEX templates_kind_idx ON templates(kind);
+```
+
+- All existing templates remain `kind = 'composer'` and continue to work unchanged.
+- `kind = 'style_reference'` rows have `yaml_path = ''` (or NULL — see Drizzle migration; existing column is `notNull()` so the migration also relaxes that to nullable, OR we store an empty string and treat empty as "no YAML"). Implementation note: relaxing the constraint is cleaner; both Drizzle and SQLite support `ALTER TABLE` patterns for this (recreate-table-and-copy on SQLite if needed).
+- `template-service.ts` gains a new `createStyleReference(docxBuffer, filename, name, description, author)` method that mirrors `create()` but skips YAML handling, sets `kind = 'style_reference'`, and leaves `yaml_path` empty/null. Existing `create()` defaults `kind = 'composer'`.
+
 ---
 
 ## 11. Testing
@@ -437,15 +463,16 @@ CREATE INDEX plans_collection_idx ON plans(collection_slug);
   - `plan-prompts.test.ts` — snapshot of assembled prompts for stable inputs.
   - `pandoc-render.test.ts` — wrapper happy path, stderr surfaced on error, timeout.
 - **Integration (Vitest + Fastify `inject`)**:
-  - `plans.integration.test.ts` — full CRUD; status transitions; auth/role gating; missing/empty fragments; section search re-run; export endpoints with both formats.
+  - `plans.integration.test.ts` — full CRUD; status transitions; auth/role gating; missing/empty fragments; section search re-run; export endpoints with both formats; DOCX export with and without `style_template_id` (validates the priority chain: body → plan state → env var → default); `kind` mismatch on style-template lookup yields a 400.
+  - `templates-style-reference.integration.test.ts` — `POST /v1/templates/style-reference` upload, `GET /v1/templates?kind=style_reference` filter, existing composer template uploads remain unaffected.
 - **E2E (Playwright)** — deferred to a follow-on phase. Happy-path coverage (create plan → generate → validate plan → approve fragments → generate drafts → export .md) once the UI stabilizes.
 
 ---
 
 ## 12. Future enhancements
 
-- **DOCX reference template selector (v2):** allow the user to pick a `.docx` reference doc (from the existing `templates` table or a dedicated registry) for styling exported documents. Plumbing is already in place — the Pandoc wrapper takes `--reference-doc`. UI gains a template picker in Step 4.
 - **Spec file upload (v1.1):** `.docx` / `.pdf` / `.md` upload that runs through Pandoc and pre-fills the spec prompt textarea.
+- **Per-collection scoping for style references:** make `templates.collection_slug` meaningful for style-reference rows so different teams see their own.
 - **Streaming LLM responses** for the plan and section writer (reduces perceived latency).
 - **PDF export** via Pandoc + LaTeX (or weasyprint).
 - **Plan templates** (reusable plan skeletons).
@@ -459,7 +486,7 @@ New entries (all optional, with defaults):
 
 ```
 FRAGMINT_PLAN_FRAGMENT_MAX_CHARS    # default 4000 — per-fragment char limit fed to writer LLM
-FRAGMINT_PLAN_DOCX_REFERENCE        # optional path to a .docx Pandoc reference-doc for styling
+FRAGMINT_PLAN_DOCX_REFERENCE        # optional fallback path to a .docx Pandoc reference-doc, used only when no style template is selected for the plan
 ```
 
 No changes to existing variables.
