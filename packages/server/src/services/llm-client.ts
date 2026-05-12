@@ -7,6 +7,11 @@ export interface LlmClientConfig {
   timeout: number;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export interface SegmentBlock {
   title: string;
   body: string;
@@ -25,6 +30,10 @@ export class LlmClient {
   constructor(private config: LlmClientConfig) {}
 
   private async chat(content: string): Promise<string> {
+    return this.chatMessages([{ role: 'user', content }]);
+  }
+
+  async chatMessages(messages: ChatMessage[]): Promise<string> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.config.timeout);
 
@@ -35,7 +44,7 @@ export class LlmClient {
         body: JSON.stringify({
           model: this.config.model,
           temperature: this.config.temperature,
-          messages: [{ role: 'user', content }],
+          messages,
         }),
         signal: controller.signal,
       });

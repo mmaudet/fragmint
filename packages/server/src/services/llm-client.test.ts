@@ -86,3 +86,48 @@ describe('LlmClient', () => {
     });
   });
 });
+
+describe('LlmClient.chatMessages', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sends messages array through and returns assistant content', async () => {
+    const fetchMock = vi.fn(async (_url: string, _opts: RequestInit) => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ choices: [{ message: { content: 'hello back' } }] }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new LlmClient({
+      endpoint: 'http://localhost:11434/v1',
+      model: 'm',
+      temperature: 0,
+      timeout: 5000,
+    });
+
+    const result = await client.chatMessages([
+      { role: 'system', content: 'be helpful' },
+      { role: 'user', content: 'hi' },
+    ]);
+
+    expect(result).toBe('hello back');
+    const [, opts] = fetchMock.mock.calls[0];
+    const body = JSON.parse((opts as RequestInit).body as string);
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'be helpful' },
+      { role: 'user', content: 'hi' },
+    ]);
+  });
+
+  it('throws when the server returns a non-ok status', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 500, statusText: 'X' }));
+    const client = new LlmClient({
+      endpoint: 'http://localhost:11434/v1',
+      model: 'm',
+      temperature: 0,
+      timeout: 5000,
+    });
+    await expect(client.chatMessages([{ role: 'user', content: 'hi' }])).rejects.toThrow();
+  });
+});
