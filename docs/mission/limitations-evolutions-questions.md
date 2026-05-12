@@ -9,6 +9,73 @@
 
 ## HARVESTER
 
+### H0 — Roadmap optimisation vitesse et qualité du harvester (2026-05-12)
+
+#### Vitesse — Quick wins (~1h30, gain combiné 8-12x)
+
+**Contexte** : document 30 pages → 5-10 min d'ingestion. Bloquant pour la démo et le corpus Linagora (~50 docs). La parallélisation `Promise.all` a été essayée et revertée (Ollama séquentiel par défaut — voir bug #30).
+
+**Action 1 — Multi-classification batched (1h, gain 5-10x)**
+Modifier le prompt `classify()` pour accepter une liste de N candidats et retourner un JSON array. Batch de 5-10 candidats par appel LLM.
+- Neutre sur la qualité (même modèle, même contexte)
+- Amortit le coût fixe de chaque appel sur N candidats
+- Risque : valider le format JSON array avec le modèle utilisé (OpenRouter vs Ollama)
+
+**Action 2 — Modèle plus petit pour classify (30 min, gain 3-5x)**
+Garder `mistral-nemo:12b` pour `segment()`. Tester `qwen2.5:7b-instruct` pour `classify()` — **déjà installé localement**, aucun `ollama pull` nécessaire. Candidat suivant si insuffisant : `qwen2.5:3b` (à puller).
+- ⚠️ Ne pas activer avant golden dataset — même un modèle 7B peut aggraver le pattern "technical fourre-tout" sur des documents Linagora complexes
+
+**Résultat combiné attendu** : document AURA (24 candidats) : 5-10 min → 30-60 sec.
+
+#### Qualité — Quick wins (~1h30, gain mesurable sur classifications)
+
+**Action 3 — Définitions enrichies dans le prompt classify (30 min)**
+Aujourd'hui : liste sèche des 12 types. Demain : une ligne par type.
+```
+introduction: présente un contexte, un sujet ou une entité (entreprise, produit, projet)
+argument: défend une position, justifie un choix, démontre une valeur client
+cas-usage: décrit comment un produit résout un problème concret, avec exemple
+methodology: décrit une démarche en étapes chronologiques ou un processus projet
+reference-technique: documentation technique, certifications, normes, architecture
+engagement: SLA, garantie contractuelle, engagement de service, niveau de support
+```
+Réduit le pattern "technical/methodology fourre-tout" observé sur 7 tests.
+
+**Action 4 — Few-shot examples dans le prompt classify (1h)**
+Ajouter 2-3 exemples concrets tirés des cas d'échec des 8 tests :
+- "Capacité de partage et chiffrement (50 Go, AES-256, tarif 4,50€)" → `argument/technical` (pas `pricing` malgré la mention tarifaire)
+- "Conformément au RGPD, les données personnelles sont traitées..." → `clause/legal`
+- "Phase 1 : audit de l'existant. Phase 2 : migration. Phase 3 : formation." → `methodology/commercial`
+
+#### Trade-off vitesse / qualité
+
+| Levier | Vitesse | Qualité |
+|--------|---------|---------|
+| Modèle plus petit (classify) | +++ | -- (à mesurer) |
+| Batching multi-classification | +++ | ~ neutre |
+| Définitions enrichies | - (prompt plus long) | +++ |
+| Few-shot examples | - (prompt plus long) | +++ |
+| Golden dataset | ~ | ~ (mesure, pas amélioration) |
+
+**Décision** : batching (neutre qualité) + définitions + few-shots (améliore qualité). L'allongement du prompt est amorti par le batching. Modèle plus petit : après validation golden dataset uniquement.
+
+**Ordre d'implémentation** :
+1. Définitions enrichies — 30 min, zéro risque
+2. Batching classify — 1h, neutre qualité
+3. Few-shot examples — 1h, sur les échecs persistants post-1
+4. Golden dataset — en parallèle des 3 actions, prérequis pour valider le modèle plus petit
+5. Modèle plus petit — seulement après seuil qualité validé sur golden dataset
+
+#### Évolutions V2 (synthèse)
+- Two-phase ingestion : phase 1 rapide visible, phase 2 async enrichissement
+- Progress bar : polling `GET /v1/harvest/:jobId` toutes les 2s avec `progress.percentage`
+- Skip `segment()` pour docs très structurés (H1/H2 explicites → bypass LLM)
+- Cache embeddings : `hash(body)` → vector, évite recalcul sur ré-ingestion
+- Streaming pipeline : gain ~30% vitesse perçue, effort 4-6h — mentionner en synthèse seulement
+- GPU local : matériel, hors scope code mission
+
+---
+
 ### H1 — Taxonomie de classification hardcodée (bug #11)
 
 **État** : fix Phase A en place (`harvester-taxonomy.ts`), 7 domaines, 8 types, liste fermée.
@@ -121,15 +188,15 @@ Même document re-harvesté après le fix → 9 fragments au niveau H2 ("Resourc
 Pour le corpus Linagora : une proposition avec H1 "Solution proposée" + 5 H2 produira probablement 5 fragments (1 par H2), ce qui est le bon niveau de granularité pour les slots de composition.
 
 **Nouvelle observation — sur-utilisation de `type: methodology`** :
-Pattern sur 3 tests : test 1 → 1/7 en methodology, test 2 → 2/2, test 3 → 4/4. Total : 7/13 (54%) des fragments classés `methodology`. Les types `description` et `argument` sont sous-utilisés.
+Pattern sur 3 tests : test 1 → 1/7 en methodology, test 2 → 2/2, test 3 → 4/4. Total : 7/13 (54%) des fragments classés `methodology`. Les types `argument` et `cas-usage` sont sous-utilisés.
 Le LLM utilise `methodology` comme fourre-tout pour tout contenu structuré en étapes ou bonnes pratiques.
 Cause : prompt `classify()` sans exemples ni règles de désambiguïsation entre types proches.
 
 **Évolution V2 (2-3h) — enrichir le prompt `classify()` avec des règles explicites** :
 - `methodology` = phases d'un processus chronologique (déploiement, migration, cycle de vie projet)
-- `description` = caractéristiques statiques d'un produit, concept ou composant
+- `cas-usage` = caractéristiques statiques d'un produit, concept ou composant, exemple concret
 - `argument` = raison de choisir, justification, bénéfice client
-- `other` = contenu hors-scope des 7 types ci-dessus
+- `engagement` = SLA, garantie, contenu hors-scope des autres types
 
 Cette évolution est prioritaire sur E1/E2 si du temps est disponible en Phase 2 — le taux de 54% en `methodology` dégrade la précision des slots de composition.
 
@@ -155,6 +222,56 @@ Cette évolution est prioritaire sur E1/E2 si du temps est disponible en Phase 2
 
 ---
 
+### H2e — Test 8 : faq-redondante.docx (2026-05-12)
+
+**Setup** : FAQ commerciale LinShare Pro, 6 questions explicites format "Q : ... / R : ...", avec redondances intentionnelles (tarif 4,50 € mentionné 3×, "ministères régaliens" répété, "30 jours d'évaluation" répété). Premier test post-réalignement taxonomie (fix bug #11).
+
+**Résultats bruts** : 7 candidats, 0 doublon, 0 faible confiance, 7 valides.
+
+| Fragment | Type | Domaine |
+|---|---|---|
+| Qu'est-ce que LinShare Pro ? | bio | technical |
+| Capacité de partage et chiffrement | pricing | commercial |
+| Tarification de LinShare Pro | pricing | pricing |
+| Fonctionnalités principales | cas-usage | technical |
+| Certifications de LinShare Pro | reference-technique | technical |
+| Souscription à LinShare Pro | faq | technical |
+| Délais de déploiement | methodology | technical |
+
+**Validations** :
+- ✅ 5 nouveaux types utilisés : `bio`, `cas-usage`, `reference-technique`, `faq`, `pricing` — fix bug #11 confirmé opérationnel
+- ✅ `faq` correctement identifié pour le pattern question-réponse "Souscription"
+- ✅ `reference-technique` excellent pour les certifications
+- ✅ 0 doublon sur redondances intentionnelles — comportement attendu (seuil 0.80 textuel, pas sémantique)
+- ✅ Titres en français, body verbatim — fix #31 tient
+
+**Classifications discutables** :
+- `bio` pour "Qu'est-ce que LinShare Pro ?" — le LLM utilise `bio` comme "présentation d'entité produit". `bio` était probablement prévu pour les biographies de personnes. Défendable mais hors usage prévu.
+- `cas-usage` pour "Fonctionnalités principales" — faute de `description` dans la taxonomie, le LLM choisit le type le plus proche. Renforce la question H4b sur `description`.
+- `pricing` pour "Capacité de partage et chiffrement" — erreur : fragment sur les fonctionnalités techniques (50 Go, AES-256) classé `pricing` à cause d'une mention secondaire du tarif. Le LLM se laisse piéger par un signal minoritaire dans le texte.
+- `pricing/pricing` (type + domain identiques) — cohérent mais sémantiquement redondant.
+
+**Limitation C renforcée** : `technical` utilisé pour 6/7 fragments d'un document commercial. Pattern persistant sur tous les tests.
+
+---
+
+### H2f — Nouvelle limitation : aplatissement des formats structurés (FAQ, tableaux, listes)
+
+**Observation (test 8, faq-redondante.docx)** :
+
+Le document source était structuré en 6 questions explicites format "Q : … / R : …". Après ingestion, les 7 fragments sont des paragraphes narratifs autonomes. La structure question-réponse originale est perdue.
+
+- ✅ Cohérent avec l'approche "fragments réutilisables" — un fragment doit pouvoir s'insérer dans n'importe quel template sans supposer un contexte Q/R
+- ❌ Perte d'information : on ne sait plus que c'était une FAQ, ni quelle était la question associée à chaque réponse
+
+**Conséquence pratique** : un template FAQ generé depuis ces fragments ne peut pas reconstruire les paires Q+R. Pour générer une vraie FAQ, il faudrait stocker le couple (question, réponse) plutôt que la réponse seule.
+
+**Généralisable** à d'autres formats structurés : tableaux (voir H7), listes de bullet points numérotées, étapes de processus avec numérotation.
+
+**Évolution V2** : pour le type `faq`, stocker la question dans les métadonnées du fragment (champ `question: string`). Le composer pourrait alors injecter `fragment.question` + `fragment.body` dans un template FAQ. Effort : 1-2j (schema + harvester + composer + templates).
+
+---
+
 ### H3 — Détection de doublons (bug #4)
 
 **État** : CONFIRMÉ FONCTIONNEL (2026-05-10). Testé sur plusieurs réingestions — doublons correctement flaggés via Milvus (seuil > 0.80). Bug #4 supprimé du tracker.
@@ -171,7 +288,41 @@ Cette évolution est prioritaire sur E1/E2 si du temps est disponible en Phase 2
 
 ---
 
-### H5 — Formats de fichiers supportés (évolution V2)
+### H4b — Question de design : types `description` et `other` dans FRAGMENT_TYPES ?
+
+**Contexte** : `FRAGMENT_TYPES` (schéma canonique de mmaudet) contient 12 types sans `description` ni `other`. Notre bug #11 fix avait introduit ces deux types dans `HARVESTER_TYPES` — désalignement avec le schéma canonique découvert quand la fix SQLite a exposé les fragments récoltés (ZodError au reindex).
+
+**Fix appliqué** : `HARVESTER_TYPES` réaligné sur `FRAGMENT_TYPES`. Les 24 fragments du vault (`description` × 23, `other` × 1) retyped en `argument` / `introduction`.
+
+**Question ouverte pour Paul/mmaudet** :
+1. Le type `description` (caractéristiques statiques d'un produit) est-il utile dans le schéma ? `cas-usage` couvre-t-il ce besoin ?
+2. Un type catch-all `other` est-il voulu dans `FRAGMENT_TYPES` ? (actuellement le LLM ne peut pas classer "hors taxonomie")
+
+**Décision requise par** : mmaudet / Paul
+
+---
+
+### H5 — Background job harvester : pseudo-asynchrone, pas de queue persistante
+
+**Architecture actuelle** : le harvester démarre la pipeline via `setImmediate()` dans le même process Node.js. Le `jobId` est retourné immédiatement, le statut est stocké en SQLite (`harvest_jobs`).
+
+**Limitations** :
+
+1. **Job perdu au restart** — `setImmediate` s'exécute dans l'event loop du process courant. Si le serveur redémarre pendant qu'un job est en cours (`status: 'processing'`), la pipeline est tuée. Le job reste bloqué en `processing` indéfiniment dans la DB — l'utilisateur ne peut pas le reprendre ni savoir qu'il a échoué.
+
+2. **Pas de limite de concurrence** — plusieurs uploads simultanés déclenchent plusieurs pipelines en parallèle dans le même event loop. Sur un serveur avec Ollama local, l'API LLM est saturée et les temps de classification explosent.
+
+3. **Pas de retry automatique** — une erreur LLM transitoire (timeout, réseau) échoue le job entier sans tentative de reprise partielle.
+
+**Impact démo** : faible si un seul utilisateur fait les uploads manuellement. Risque si deux documents sont uploadés en parallèle ou si le serveur redémarre pendant un upload long (30+ candidats).
+
+**Évolution V2** : remplacer `setImmediate` par une queue persistante (BullMQ + Redis, ou queue SQLite maison). À la startup, détecter les jobs `processing` orphelins et les passer en `failed`. Effort : 1-2j.
+
+**Fichier concerné** : `packages/server/src/services/harvester-service.ts` lignes 93-98
+
+---
+
+### H6 — Formats de fichiers supportés (évolution V2)
 
 **État actuel** : le harvester accepte uniquement `.docx`. C'est la limite du POC initial, pas un bug.
 
@@ -279,9 +430,61 @@ Paramètres à définir : N candidats à passer au LLM (5 recommandé), seuil de
 
 ---
 
+### T2 — PPTX format non-functional (bug #33)
+
+**Status**: OPEN — contractual deliverable missing.
+
+The render code path exists (`render-marp.ts`) but PPTX is not usable: `@marp-team/marp-cli` is not installed as a package dependency (only `marp-core` is), and no template with `output_format: pptx` exists. All slide templates use `output_format: slides` (Marp HTML).
+
+**Distinction**: `slides` (Marp→HTML, working) ≠ `pptx` (Marp→PowerPoint, broken). The contract requires `pptx` and `reveal` as separate deliverables.
+
+**Fix**: add `@marp-team/marp-cli` as a real dependency + create a PPTX template. See bug #33.
+
+**Residual limitation post-fix**: Marp→PPTX has limited layout control vs. native PptxGenJS (no custom master slides, limited font embedding). Acceptable for demo; V2 would use native PptxGenJS for client-grade output.
+
+---
+
+### T3 — No Linagora branding on existing templates
+
+**Status**: Pending Phase 3 — blocked on assets from Paul.
+
+All 4 existing templates (`tpl-lincloud-docx.yaml`, `tpl-lincloud-xlsx.yaml`, `tpl-lincloud-slides.yaml`, `tpl-lincloud-reveal.yaml`) use generic "LinCloud Souverain" placeholder content. No Linagora logo, colors, or typography have been applied.
+
+The contract requires "clean, ready to send to a client" output quality. Paul confirmed Linagora will provide template references and brand assets. Until these arrive, generated documents are not client-grade.
+
+**Action required**: request brand assets and template references from Paul (logo, color palette, fonts, reference DOCX/PPTX). Apply to all 4 templates + new PPTX template during Phase 3.
+
+---
+
 ## AUTH / SESSION
 
-### A1 — JWT non persisté entre onglets (bug #5)
+### A1 — No admin UI for user and role management
+
+**Status**: OPEN — API exists, UI absent.
+
+The backend exposes a full admin API: `GET/POST /v1/users`, `GET/POST /v1/tokens`, `GET /v1/audit`, all protected by `requireRole('admin')`. No frontend page exposes these endpoints. User creation, token management, and collection membership assignment all require direct API calls (`curl`).
+
+**Impact for demo**: Cannot add a second user or manage roles from the browser. mmaudet (auto-seeded as admin) is the only usable account in dev without manual API calls.
+
+**Evolution V2** (3-4h): Add an Admin panel page in the web UI — user list, create user form, token management, collection membership editor.
+
+---
+
+### A2 — Collection role enforcement incomplete for content operations (bug #34)
+
+**Status**: OPEN — schema complete, enforcement partial.
+
+The 5-level collection role hierarchy (`reader → contributor → expert → manager → owner`) exists in the schema and is enforced for collection management (add members, delete collection). For content operations within a collection (`/v1/collections/:slug/fragments`, templates, harvest), all operations are gated at `reader` level only — a collection reader can create, modify, and approve fragments.
+
+Non-collection routes (`/v1/fragments`) correctly enforce global roles (`contributor` for write, `expert` for approve).
+
+**Impact**: Multi-user setups where some members should be read-only do not work as intended. The roles exist in the DB but the API does not enforce them for content operations.
+
+**Fix**: See bug #34 — pass per-level middlewares to route registration in `index.ts`.
+
+---
+
+### A3 — JWT non persisté entre onglets (bug #5)
 
 **État** : OPEN. JWT stocké en mémoire JavaScript uniquement. Nouvel onglet ou refresh = re-login obligatoire. Jobs harvester en cours perdus.
 

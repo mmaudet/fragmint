@@ -37,7 +37,7 @@
 | 11 | Classification contaminated by existing domains | FIXED |
 | 12 | Candidate editing missing in UI | OPEN |
 | 29 | "Faible confiance" counter always 0 — confidence threshold non-functional | OPEN |
-| 30 | Harvester ingestion too slow — sequential classify loop blocks demo | DEFERRED |
+| 30 | Harvester ingestion too slow — sequential classify loop blocks demo | OPEN |
 | 31 | `segment()` prompt generates English titles + may translate body for French docs | FIXED |
 
 ## Infrastructure / Search
@@ -68,6 +68,7 @@
 |---|-------|--------|
 | 2 | Git user not configured in Dockerfile | MERGED |
 | 13 | Templates not persisted in Git vault | MERGED |
+| 33 | PPTX format non-functional — `marp-cli` missing + no template | OPEN |
 
 ## API / Docs
 
@@ -76,9 +77,78 @@
 | 8 | `/review` and `/approve` endpoints not documented | OPEN |
 | 19 | SQLite 0/1 integers render as text in collection selector | MERGED |
 
+## Inventaire / UI
+
+| # | Title | Status |
+|---|-------|--------|
+| 35 | Inventory "Couverture par domaine" shows language breakdown, not domain | OPEN |
+| 36 | Inventory gaps table: `*` in Langue column not user-readable | OPEN |
+| 37 | Validation page shows no fragments after harvest commit — draft vs reviewed mismatch | OPEN — P1 |
+
 ---
 
 ## Detailed Bug Reports
+
+### #35 — Inventory "Couverture par domaine" shows language breakdown, not domain [OPEN]
+
+**Status**: OPEN
+
+**Description**: The Inventory page section titled "Couverture par domaine" displays a single aggregated `CoverageBar` (FR total / EN total) instead of one bar per domain. The backend `inventory()` method returns `by_lang: { fr: { approved, reviewed, draft }, en: {...} }` — grouped by language quality, with no domain dimension. The title is misleading.
+
+**Root cause**: `packages/server/src/services/fragment-service.ts` line 482 builds `byLang` keyed by `lang → quality → count`. No `by_domain` structure is computed. `packages/web/src/pages/inventory.tsx` line 136 passes `frTotal` and `enTotal` (sums of all qualities for each language) to a single `CoverageBar`.
+
+**Fix (1-2h)**:
+1. Add `by_domain` to the inventory service: `{ commercial: { approved: X, draft: Y }, technical: {...} }`
+2. Update the UI to render one `CoverageBar` per domain entry
+
+**Quick fix (15 min)**: Rename the section title to "Couverture par langue" to match what the UI actually shows.
+
+**Files affected**: `packages/server/src/services/fragment-service.ts`, `packages/web/src/pages/inventory.tsx`
+
+---
+
+### #37 — Validation page shows no fragments after harvest commit [OPEN — P1]
+
+**Status**: OPEN
+
+**Description**: After committing harvest candidates, the UI shows a toast "committed in draft — go to validation" and redirects to `/validation`. The validation page is empty.
+
+**Root cause**: `packages/web/src/pages/validation.tsx` fetches only `quality: 'reviewed'` fragments:
+```tsx
+const { data: fragments } = useFragments(activeCollection, { quality: 'reviewed' });
+```
+The harvester creates fragments with `quality: 'draft'`. The quality lifecycle is `draft → reviewed → approved`. There is no UI step to transition from `draft` to `reviewed` — `draft` fragments are invisible in the UI after commit.
+
+Both backend endpoints exist and work:
+- `POST /fragments/:id/review` — `draft → reviewed`
+- `POST /fragments/:id/approve` — `reviewed → approved`
+
+Both hooks exist: `useReviewFragment`, `useApproveFragment`.
+
+**Fix (Option B — full workflow, ~1h)**:
+Split the validation page into two sections:
+1. **"À reviewer"** — fetches `quality: draft`, shows `useReviewFragment` action ("Marquer comme reviewed")
+2. **"À approuver"** — fetches `quality: reviewed`, shows `useApproveFragment` action ("Approuver")
+
+No backend changes needed.
+
+**Files affected**: `packages/web/src/pages/validation.tsx`
+
+---
+
+### #36 — Inventory gaps table: `*` in Langue column not user-readable [OPEN]
+
+**Status**: OPEN
+
+**Description**: The "Lacunes détectées" table displays `*` in the Langue column for `no_approved` gaps. The `*` is generated intentionally in `fragment-service.ts` line 508 to mean "gap applies to all languages" (the type/domain pair has no approved fragment in any language). A user reading the table sees `*` with no explanation.
+
+**Root cause**: `gaps.push({ type, domain, lang: '*', status: 'no_approved' })` — the wildcard is never translated in the UI (`gap.lang` rendered directly in `inventory.tsx` line 170).
+
+**Fix (15 min)**: In `inventory.tsx`, render `gap.lang === '*' ? t('inventory', 'allLanguages') : gap.lang` — reuses the existing i18n key already used for the coverage section label.
+
+**Files affected**: `packages/web/src/pages/inventory.tsx`
+
+---
 
 ### #26 — `quality_min` defaults to `draft` instead of `approved` [FIXED]
 
@@ -245,32 +315,85 @@ After Milvus retrieval, pass the top-N candidates to the LLM with the full conte
 
 ---
 
-### #30 — Harvester ingestion too slow — sequential classify loop [P0 — DEMO BLOCKER]
+### #30 — Harvester ingestion too slow — sequential classify loop [OPEN — P1]
 
-**Status**: DEFERRED — parallelization attempted and reverted (made things worse)
+**Status**: OPEN — parallelization attempt reverted (2026-05-10), new action plan defined (2026-05-12)
 
 **Description**: 30-page document takes 5–10 min to ingest. Unacceptable for live demo and corpus ingestion (~50 docs planned).
 
 **Root cause**:
 - Pipeline is sequential: for each candidate, `segment()` then `classify()` run one at a time
 - 30–40 candidates × ~10s each = 5–7 min minimum
+- `classify()` accounts for ~80% of total time
 
 **Parallelization attempt — FAILED (2026-05-10)**:
 Batching 5 `classify()` calls via `Promise.all` was tried and **made ingestion slower**, not faster. Reverted.
+Why it failed: Ollama processes LLM requests **sequentially by default** (`OLLAMA_NUM_PARALLEL=1`). Sending 5 concurrent requests queues them with HTTP overhead but no parallelism gain.
 
-Why it failed: Ollama processes LLM requests **sequentially by default** (`OLLAMA_NUM_PARALLEL=1`). Sending 5 concurrent requests doesn't parallelize inference — they queue in Ollama with the added overhead of 5 open HTTP connections. Same throughput + overhead = worse.
+---
 
-**What would actually work (out of scope)**:
-- Set `OLLAMA_NUM_PARALLEL=N` + GPU with enough VRAM to hold N model contexts simultaneously
-- Or switch to a remote API (ai.linagora.com) that handles true parallelism server-side
-- Or add a progress bar (Phase 2 below) so the wait is at least visible
+**Action plan — Quick wins (~1h30, gain combiné 8-12x) — 2026-05-12**
 
-**Actual fix for demo (Phase 2 — deferred)**:
-- Enrich `GET /v1/harvest/:jobId` with `progress: { phase, candidatesTotal, candidatesProcessed, percentage }`
-- UI polls every 2s and shows a progress bar instead of a spinner
-- The wait doesn't get shorter but it becomes tolerable for a demo
+**Action 1 — Multi-classification batched (1h) — gain 5-10x**
 
-**Files affected**: `packages/server/src/services/harvester-service.ts`
+Modifier le prompt `classify()` pour accepter une liste de N candidats et retourner un JSON array :
+
+```
+Input: [{id, body, title}, {id, body, title}, ...]
+Output: [{id, type, domain, lang, confidence}, ...]
+```
+
+Batch de 5-10 candidats par appel LLM. Amortit le coût fixe de chaque appel sur N candidats.
+Avantage : neutre sur la qualité (même modèle, même prompt, même contexte).
+Risque : valider que le modèle retourne un JSON array bien formé — à tester sur OpenRouter avant de déployer.
+
+**Action 2 — Modèle plus petit pour classify (30 min) — gain 3-5x supplémentaire**
+
+Garder `mistral-nemo:12b` pour `segment()` (raisonnement complexe requis).
+Tester `qwen2.5:7b-instruct` pour `classify()` — **déjà installé localement**, aucun `ollama pull` nécessaire.
+Gain attendu : 3-5x sur le temps classify.
+
+⚠️ **Risque qualité non négligeable** : sur nos tests, mistral-nemo:12b produit déjà 54-85% `technical` / `methodology` fourre-tout. Un modèle 7B peut aggraver ce pattern sur des documents complexes. Ne pas activer avant golden dataset (voir EVALS.md).
+
+**Résultat combiné attendu :**
+- Document AURA (30 pages, ~24 candidats) : 5-10 min → 30-60 secondes
+- Document court (memo, 13 candidats) : ~2 min → 10-20 secondes
+- Suffisant pour démo Maudet et corpus Linagora
+
+---
+
+**Trade-off vitesse / qualité :**
+
+| Levier | Vitesse | Qualité |
+|--------|---------|---------|
+| Modèle plus petit pour classify | +++ | -- (à mesurer) |
+| Multi-classification batched | +++ | ~ (neutre) |
+| Définitions enrichies dans prompt | - (prompt plus long) | +++ |
+| Few-shot examples | - (prompt plus long) | +++ |
+| Golden dataset | ~ (mesure) | ~ (mesure, pas amélioration) |
+
+**Décision** : faire batching (neutre qualité) + définitions/few-shots (améliore qualité). L'allongement du prompt est amorti par le batching. Modèle plus petit : seulement après validation golden dataset.
+
+**Ordre d'implémentation recommandé :**
+1. Définitions enrichies dans `classify()` — 30 min, zéro risque
+2. Batching classify — 1h, neutre qualité
+3. Few-shot examples — 1h, après observation des échecs persistants
+4. Golden dataset — en parallèle, prérequis pour valider le modèle plus petit
+5. Modèle plus petit — seulement si le golden dataset valide le seuil qualité
+
+---
+
+**Phase V2 (synthèse) :**
+- Two-phase ingestion (UX) : phase 1 rapide visible, phase 2 async enrichissement
+- Progress bar : `GET /v1/harvest/:jobId` avec `progress.percentage`, polling 2s côté UI
+- Skip `segment()` pour docs structurés (bypass LLM sur sections H1/H2 claires)
+- Cache embeddings : `hash(body)` → vector pour ré-ingestion sans recalcul
+- GPU local : matériel, hors scope code
+
+**Phase non recommandée :**
+- Streaming pipeline : 4-6h pour gain marginal ~30% sur vitesse perçue — mentionner en synthèse uniquement
+
+**Files affected**: `packages/server/src/services/harvester-service.ts`, `packages/server/src/services/llm-client.ts`
 
 ---
 
@@ -320,3 +443,62 @@ No over-correction observed. Fix confirmed in both directions.
 **Why this is not P1**: This is a UX/quality-of-results issue, not a data integrity or correctness bug. The system returns valid data, just not always relevant. For the demo, mitigation is to ensure the corpus contains content matching realistic search queries.
 
 **Files affected**: `packages/server/src/search/search-service.ts`, `packages/web/src/components/search/` (UI score display)
+
+---
+
+### #34 — Collection role enforcement incomplete for content operations [OPEN — P2]
+
+**Status**: OPEN
+
+**Description**: The 5-level collection role hierarchy (`reader → contributor → expert → manager → owner`) is defined in the schema and enforced for collection management operations (add members, delete collection). However, for content operations under `/v1/collections/:slug/fragments`, `/v1/collections/:slug/templates`, and `/v1/collections/:slug/harvest`, **all operations are gated at `reader` level only**.
+
+Root cause in `packages/server/src/index.ts`:
+```typescript
+fragmentRoutes(app, fragmentService, authenticate, {
+  prefix: collPrefix,
+  collectionMiddleware: requireCollRole('reader'),  // same for read, write, expert, admin
+});
+```
+
+In `fragment-routes.ts`, `writeHandlers`, `expertHandlers`, and `adminHandlers` all receive the same `collectionMiddleware` — the `reader` minimum. A collection `reader` can therefore create, modify, and approve fragments within that collection.
+
+**Non-collection routes** (`/v1/fragments`, `/v1/templates`, `/v1/harvest`) correctly use global roles (`requireRole('contributor')` for write, `requireRole('expert')` for approve, etc.).
+
+**Impact**: Multi-user collection scenarios where some members should be read-only (`reader`) and others write-capable (`contributor`) do not work as expected. The distinction exists in the DB schema and membership table but is not enforced at the API level.
+
+**Fix**: Pass the correct minimum role per handler group in `index.ts`:
+```typescript
+fragmentRoutes(app, fragmentService, authenticate, {
+  prefix: collPrefix,
+  collectionMiddleware: requireCollRole('reader'),       // read
+  writeMiddleware: requireCollRole('contributor'),       // write
+  expertMiddleware: requireCollRole('expert'),           // approve
+  adminMiddleware: requireCollRole('manager'),           // admin ops
+});
+```
+And update `fragmentRoutes`, `templateRoutes`, `harvestRoutes` to accept and use these per-level middlewares.
+
+**Files affected**: `packages/server/src/index.ts`, `packages/server/src/routes/fragment-routes.ts`, `packages/server/src/routes/template-routes.ts`, `packages/server/src/routes/harvest-routes.ts`
+
+---
+
+### #33 — PPTX format non-functional [OPEN]
+
+**Status**: OPEN
+
+**Description**: The contract explicitly requires PPTX as a deliverable output format. The render code path exists (`render-marp.ts`, `outputType: 'pptx'`) but the format is not usable for two reasons:
+
+1. **Missing dependency**: `@marp-team/marp-cli` is not installed as a package dependency — only `@marp-team/marp-core` is. The code calls `npx --yes @marp-team/marp-cli` at composition time, which is unreliable in a Docker container (network dependency, slow, can fail silently).
+
+2. **No template**: There is no template with `output_format: pptx` in the vault. All slide templates use `output_format: slides` (Marp HTML). The Composer UI has no PPTX option available to users.
+
+**Important distinction**: `slides` (Marp→HTML, working) and `pptx` (Marp→PowerPoint, broken) are two separate formats in the code. The brief requires `pptx`, not `slides`.
+
+**Fix**:
+1. Add `@marp-team/marp-cli` to `packages/server/package.json` devDependencies and rebuild Docker image
+2. Create a `tpl-lincloud-pptx.yaml` template with `output_format: pptx` and Linagora branding
+3. Test end-to-end generation
+
+**Known limitation post-fix**: Marp→PPTX produces PowerPoint files with limited layout control (no custom master slides, limited font embedding). Quality may be below "ready to send to a client". Native PptxGenJS would give full control — deferred to V2.
+
+**Files affected**: `packages/server/package.json`, `packages/server/Dockerfile`, new template YAML

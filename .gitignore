@@ -16,10 +16,8 @@ example-vault/.git/
 example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
-# Only ignore local/personal Claude settings, not the shared coding environment
-.claude/settings.local.json
-.claude/PRPs/reports/
-.claude/PRPs/debug/
+# Ignore all Claude Code configuration (local tooling, not project code)
+.claude/
 *.~lock.*
 e2e/demo/output/
 
