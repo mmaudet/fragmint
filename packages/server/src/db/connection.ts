@@ -114,6 +114,17 @@ export function createDb(path: string | ':memory:') {
     // Column already exists — ignore
   }
 
+  try {
+    sqlite.exec("ALTER TABLE templates ADD COLUMN kind TEXT NOT NULL DEFAULT 'composer'");
+  } catch (_) {
+    // Column already exists — ignore
+  }
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS templates_kind_idx ON templates(kind)');
+  } catch (_) {
+    // Index already exists — ignore
+  }
+
   const db = drizzle(sqlite, { schema });
   return db;
 }

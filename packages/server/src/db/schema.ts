@@ -55,11 +55,12 @@ export const templates = sqliteTable('templates', {
   output_format: text('output_format').notNull(),
   version: text('version').notNull(),
   template_path: text('template_path').notNull(),
-  yaml_path: text('yaml_path').notNull(),
+  yaml_path: text('yaml_path').notNull().default(''),
   author: text('author').notNull(),
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at').notNull(),
   git_hash: text('git_hash'),
+  kind: text('kind').notNull().default('composer'),
 });
 
 export const apiTokens = sqliteTable('api_tokens', {
