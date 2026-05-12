@@ -140,6 +140,25 @@ export class ComposerService {
   }
 
   /**
+   * Split a card-style body ("Title — rest") into a title and the remaining body.
+   * Only treats the prefix as a title when it's short and free of sentence
+   * punctuation, so prose that merely contains an em-dash isn't truncated.
+   * Used by both compose (enrichFragment) and the /resolve preview so the two stay
+   * in sync — a fragment with no explicit `title:` tag previews exactly as it renders.
+   */
+  static splitTitleFromBody(body: string): { title?: string; body: string } {
+    const trimmed = body.trim();
+    const dashIdx = trimmed.indexOf(' — ');
+    if (dashIdx > 0 && dashIdx <= 60) {
+      const candidate = trimmed.slice(0, dashIdx).trim();
+      if (candidate.length > 0 && !/[.!?:;\n]/.test(candidate)) {
+        return { title: candidate, body: trimmed.slice(dashIdx + 3).trim() };
+      }
+    }
+    return { body: trimmed };
+  }
+
+  /**
    * Build the data object for the rendering engine.
    * docx-templates uses flat data access: {fieldName} or +++FOR row IN rows+++
    */
@@ -158,11 +177,9 @@ export class ComposerService {
 
       // Extract "Title — rest" format into separate title field when no explicit title: tag
       if (!parsed.title) {
-        const dashIdx = body.indexOf(' — ');
-        if (dashIdx > 0 && dashIdx < 100) {
-          autoTitle = body.slice(0, dashIdx);
-          body = body.slice(dashIdx + 3).trim();
-        }
+        const split = ComposerService.splitTitleFromBody(body);
+        body = split.body;
+        autoTitle = split.title;
       }
 
       const obj: Record<string, any> = {
@@ -442,14 +459,22 @@ export class ComposerService {
           });
         } else {
           const first = items[0];
-          const full = await this.fragmentService.getById(first.id);
+          // Mirror enrichFragment so the preview matches what compose will render.
+          const parsed = ComposerService.parseStructuredTags(first.tags ?? []);
+          let title: string | null = parsed.title ?? null;
+          let previewBody = first.body.trim();
+          if (!title) {
+            const split = ComposerService.splitTitleFromBody(previewBody);
+            title = split.title ?? null;
+            previewBody = split.body;
+          }
           result.push({
             key: slot.key,
             fragment_id: first.id,
             score: first.score,
             quality: first.quality,
-            title: full?.title ?? null,
-            body_excerpt: full?.body?.slice(0, 120) ?? null,
+            title,
+            body_excerpt: previewBody.slice(0, 120) || null,
             skipped: false,
           });
         }

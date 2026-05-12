@@ -54,7 +54,49 @@ describe('ComposerService.parseStructuredTags', () => {
   });
 });
 
+describe('ComposerService.splitTitleFromBody', () => {
+  it('splits a short "Title — rest" card body', () => {
+    expect(ComposerService.splitTitleFromBody('Twake Workplace — la suite collaborative')).toEqual({
+      title: 'Twake Workplace',
+      body: 'la suite collaborative',
+    });
+  });
+
+  it('does not treat a long prose prefix as a title (no truncation)', () => {
+    const body =
+      'En deux mille vingt-quatre nous avons connu une année charnière — et nous comptons accélérer';
+    expect(ComposerService.splitTitleFromBody(body)).toEqual({ body });
+  });
+
+  it('rejects a prefix containing sentence punctuation', () => {
+    const body = 'Bonjour. Bienvenue — chez nous';
+    expect(ComposerService.splitTitleFromBody(body)).toEqual({ body });
+  });
+
+  it('returns the trimmed body when there is no separator', () => {
+    expect(ComposerService.splitTitleFromBody('  plain body  ')).toEqual({ body: 'plain body' });
+  });
+});
+
 describe('ComposerService.buildTemplateData', () => {
+  it('derives a title from a card-style body when there is no title: tag', () => {
+    const resolved = new Map<
+      string,
+      Array<{ id: string; body: string; quality: string; score: number; tags?: string[] }>
+    >();
+    resolved.set('produit', [
+      {
+        id: 'frag-card',
+        body: 'Twake Workplace — la suite collaborative souveraine',
+        quality: 'approved',
+        score: 0.9,
+      },
+    ]);
+    const result = ComposerService.buildTemplateData(resolved, {});
+    expect(result.fragments.produit.title).toBe('Twake Workplace');
+    expect(result.fragments.produit.body).toBe('la suite collaborative souveraine');
+  });
+
   it('builds data with single-count fragments', () => {
     const resolved = new Map<
       string,
