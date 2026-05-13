@@ -1,27 +1,33 @@
-# docker/docker-compose.dev.yml
+# docker-compose.dev.yml
 # Full dev stack with hot reload — no server restart needed on code changes.
-# Start: docker compose -f docker/docker-compose.dev.yml up
+# Start: docker compose -f docker-compose.dev.yml up
 name: fragmint-dev
 services:
   fragmint:
     container_name: fragmint-server
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
       target: dev
     ports:
       - "3210:3210"
     volumes:
-      - ../packages/server/src:/app/packages/server/src
-      - ../example-vault:/data/vault
+      - ./packages/server/src:/app/packages/server/src
+      - ./example-vault:/data/vault
     environment:
       FRAGMINT_JWT_SECRET: changeme-dev
       FRAGMINT_STORE_PATH: /data/vault
       FRAGMINT_MILVUS_ENABLED: "true"
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
-      FRAGMINT_EMBEDDING_ENDPOINT: http://host.docker.internal:11434/v1
-      FRAGMINT_LLM_ENDPOINT: http://host.docker.internal:11434/v1
-      FRAGMINT_LLM_MODEL: mistral-nemo:12b
+      # All AI settings are sourced from .env at repo root (see .env.example).
+      # LLM and embedding can use different endpoints, keys, and models.
+      FRAGMINT_LLM_ENDPOINT: ${FRAGMINT_LLM_ENDPOINT}
+      FRAGMINT_LLM_API_KEY: ${FRAGMINT_LLM_API_KEY}
+      FRAGMINT_LLM_MODEL: ${FRAGMINT_LLM_MODEL}
+      FRAGMINT_EMBEDDING_ENDPOINT: ${FRAGMINT_EMBEDDING_ENDPOINT}
+      FRAGMINT_EMBEDDING_API_KEY: ${FRAGMINT_EMBEDDING_API_KEY}
+      FRAGMINT_EMBEDDING_MODEL: ${FRAGMINT_EMBEDDING_MODEL}
+      FRAGMINT_EMBEDDING_DIMENSIONS: ${FRAGMINT_EMBEDDING_DIMENSIONS}
       FRAGMINT_LLM_TIMEOUT: "300000"
     depends_on:
       milvus:
@@ -30,14 +36,14 @@ services:
   web:
     container_name: fragmint-web
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
       target: web-dev
     ports:
       - "5173:5173"
     volumes:
-      - ../packages/web/src:/app/packages/web/src
-      - ../packages/web/index.html:/app/packages/web/index.html
+      - ./packages/web/src:/app/packages/web/src
+      - ./packages/web/index.html:/app/packages/web/index.html
     environment:
       API_HOST: http://fragmint:3210
     depends_on:

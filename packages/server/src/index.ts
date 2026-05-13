@@ -148,6 +148,7 @@ export async function createServer(options?: {
     config.embedding_endpoint,
     config.embedding_model,
     config.embedding_dimensions,
+    config.embedding_api_key,
   );
 
   let milvusClient: FragmintMilvusClient | null = null;
@@ -203,6 +204,7 @@ export async function createServer(options?: {
     model: config.llm_model,
     temperature: config.llm_temperature,
     timeout: config.llm_timeout,
+    apiKey: config.llm_api_key,
   });
   const harvesterService = new HarvesterService(
     db,

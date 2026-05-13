@@ -5,6 +5,7 @@ export interface LlmClientConfig {
   model: string;
   temperature: number;
   timeout: number;
+  apiKey?: string;
 }
 
 export interface ChatMessage {
@@ -38,9 +39,13 @@ export class LlmClient {
     const timer = setTimeout(() => controller.abort(), this.config.timeout);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.config.apiKey) {
+        headers.Authorization = `Bearer ${this.config.apiKey}`;
+      }
       const res = await fetch(`${this.config.endpoint}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           model: this.config.model,
           temperature: this.config.temperature,

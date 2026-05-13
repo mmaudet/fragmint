@@ -22,12 +22,14 @@ export interface FragmintConfig {
   embedding_prefix_document: string;
   embedding_prefix_query: string;
   embedding_prefix_cluster: string;
+  embedding_api_key?: string;
 
   // LLM
   llm_endpoint: string;
   llm_model: string;
   llm_temperature: number;
   llm_timeout: number;
+  llm_api_key?: string;
 
   // CORS
   cors_origin: string[];
@@ -101,12 +103,14 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       process.env.FRAGMINT_EMBEDDING_PREFIX_CLUSTER ??
       fileConfig.embedding_prefix_cluster ??
       'clustering: ',
+    embedding_api_key: process.env.FRAGMINT_EMBEDDING_API_KEY ?? fileConfig.embedding_api_key,
     llm_endpoint:
       process.env.FRAGMINT_LLM_ENDPOINT ?? fileConfig.llm_endpoint ?? 'http://localhost:11434/v1',
     llm_model: process.env.FRAGMINT_LLM_MODEL ?? fileConfig.llm_model ?? 'mistral-nemo:12b',
     llm_temperature:
       toFloat(process.env.FRAGMINT_LLM_TEMPERATURE) ?? fileConfig.llm_temperature ?? 0.2,
     llm_timeout: toNumber(process.env.FRAGMINT_LLM_TIMEOUT) ?? fileConfig.llm_timeout ?? 60000,
+    llm_api_key: process.env.FRAGMINT_LLM_API_KEY ?? fileConfig.llm_api_key,
     cors_origin: process.env.FRAGMINT_CORS_ORIGIN
       ? process.env.FRAGMINT_CORS_ORIGIN.split(',').map((s) => s.trim())
       : (fileConfig.cors_origin ?? ['http://localhost:3210', 'http://localhost:5173']),

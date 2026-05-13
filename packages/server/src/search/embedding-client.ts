@@ -7,6 +7,7 @@ export class EmbeddingClient {
     private readonly endpoint: string,
     private readonly model: string,
     private readonly dimensions: number,
+    private readonly apiKey?: string,
   ) {
     this.url = `${endpoint.replace(/\/$/, '')}/embeddings`;
   }
@@ -37,9 +38,13 @@ export class EmbeddingClient {
   }
 
   private async callApi(input: string[]): Promise<number[][]> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
     const response = await fetch(this.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ model: this.model, input }),
     });
 
