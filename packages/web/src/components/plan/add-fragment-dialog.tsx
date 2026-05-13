@@ -90,14 +90,14 @@ export function AddFragmentDialog({
         </div>
 
         {mode === 'library' ? (
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <Input
               placeholder={t('planGeneration', 'libraryQueryPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus
             />
-            <div className="max-h-80 overflow-y-auto space-y-2">
+            <div className="max-h-80 overflow-y-auto overflow-x-hidden space-y-2 min-w-0">
               {query.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('planGeneration', 'libraryQueryHint')}
@@ -114,16 +114,18 @@ export function AddFragmentDialog({
                     key={f.id}
                     onClick={() => pickFromLibrary(f.id)}
                     disabled={add.isPending}
-                    className="w-full text-left p-3 border rounded hover:bg-muted transition-colors disabled:opacity-50"
+                    className="block w-full min-w-0 text-left p-3 border rounded hover:bg-muted transition-colors disabled:opacity-50 overflow-hidden"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate">{f.title ?? f.id}</span>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-medium text-sm truncate min-w-0">
+                        {f.title ?? f.id}
+                      </span>
                       <span className="text-xs text-muted-foreground shrink-0">
                         {f.type} · {f.quality}
                       </span>
                     </div>
                     {f.body_excerpt && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 break-words">
                         {f.body_excerpt}
                       </p>
                     )}
