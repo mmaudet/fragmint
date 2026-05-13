@@ -11,11 +11,20 @@ services:
       FRAGMINT_JWT_SECRET: ${JWT_SECRET:-changeme-in-production}
       FRAGMINT_MILVUS_ENABLED: "true"
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
-      FRAGMINT_EMBEDDING_ENDPOINT: http://host.docker.internal:11434/v1
-      FRAGMINT_LLM_ENDPOINT: http://host.docker.internal:11434/v1
-      FRAGMINT_LLM_MODEL: mistral-nemo:12b
       FRAGMINT_CORS_ORIGIN: http://localhost:3210
       FRAGMINT_LLM_TIMEOUT: "300000"
+      # AI settings come from .env (see .env.example)
+      FRAGMINT_LLM_ENDPOINT: ${FRAGMINT_LLM_ENDPOINT}
+      FRAGMINT_LLM_API_KEY: ${FRAGMINT_LLM_API_KEY}
+      FRAGMINT_LLM_MODEL: ${FRAGMINT_LLM_MODEL}
+      FRAGMINT_EMBEDDING_ENDPOINT: ${FRAGMINT_EMBEDDING_ENDPOINT}
+      FRAGMINT_EMBEDDING_API_KEY: ${FRAGMINT_EMBEDDING_API_KEY}
+      FRAGMINT_EMBEDDING_MODEL: ${FRAGMINT_EMBEDDING_MODEL}
+      FRAGMINT_EMBEDDING_DIMENSIONS: ${FRAGMINT_EMBEDDING_DIMENSIONS}
+      # Trust the bind-mounted vault repo despite host/container UID mismatch
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /data/vault
     depends_on:
       milvus:
         condition: service_healthy

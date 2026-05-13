@@ -3,6 +3,16 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ git pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Pre-fetch Node headers from nodejs.org/dist. node-gyp would otherwise fetch
+# them from unofficial-builds.nodejs.org (musl default), which is unreachable
+# from Docker's default bridge network on some hosts.
+RUN NODE_VERSION=$(node -v | tr -d v) && \
+    mkdir -p /tmp/node-headers && \
+    wget --tries=5 --timeout=30 -q -O /tmp/headers.tar.gz \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-headers.tar.gz" && \
+    tar -xzf /tmp/headers.tar.gz -C /tmp/node-headers --strip-components 1 && \
+    rm /tmp/headers.tar.gz
+
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
@@ -11,7 +21,7 @@ COPY packages/mcp/package.json packages/mcp/
 COPY packages/obsidian/package.json packages/obsidian/
 RUN pnpm install --ignore-scripts && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
-    npx node-gyp rebuild
+    npx node-gyp rebuild --nodedir=/tmp/node-headers
 
 COPY packages/server/ packages/server/
 
@@ -49,12 +59,20 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Pre-fetch musl Node headers (see comment in `dev` stage).
+RUN NODE_VERSION=$(node -v | tr -d v) && \
+    mkdir -p /tmp/node-headers && \
+    wget --tries=5 --timeout=30 -q -O /tmp/headers.tar.gz \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-headers.tar.gz" && \
+    tar -xzf /tmp/headers.tar.gz -C /tmp/node-headers --strip-components 1 && \
+    rm /tmp/headers.tar.gz
+
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
 RUN pnpm install --ignore-scripts && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
-    npx node-gyp rebuild
+    npx node-gyp rebuild --nodedir=/tmp/node-headers
 
 COPY packages/server/ packages/server/
 COPY packages/web/ packages/web/
@@ -65,12 +83,20 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ git pandoc
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# Pre-fetch musl Node headers (see comment in `dev` stage).
+RUN NODE_VERSION=$(node -v | tr -d v) && \
+    mkdir -p /tmp/node-headers && \
+    wget --tries=5 --timeout=30 -q -O /tmp/headers.tar.gz \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-headers.tar.gz" && \
+    tar -xzf /tmp/headers.tar.gz -C /tmp/node-headers --strip-components 1 && \
+    rm /tmp/headers.tar.gz
+
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
 RUN pnpm install --ignore-scripts --prod && \
     cd $(find /app/node_modules/.pnpm -name "binding.gyp" -path "*/better-sqlite3*" | head -1 | xargs dirname) && \
-    npx node-gyp rebuild
+    npx node-gyp rebuild --nodedir=/tmp/node-headers
 
 COPY packages/server/ packages/server/
 COPY --from=builder /app/packages/web/dist packages/web/dist
