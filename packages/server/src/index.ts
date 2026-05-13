@@ -141,7 +141,9 @@ export async function createServer(options?: {
     },
   });
   await app.register(fastifyRateLimit, { max: 100, timeWindow: '1 minute' });
-  await app.register(multipart);
+  await app.register(multipart, {
+    limits: { fileSize: config.upload_max_bytes },
+  });
 
   // Search infrastructure
   const embeddingClient = new EmbeddingClient(

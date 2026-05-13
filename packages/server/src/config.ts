@@ -45,6 +45,9 @@ export interface FragmintConfig {
   // Plans
   plan_fragment_max_chars: number;
   plan_docx_reference_path?: string;
+
+  // Uploads
+  upload_max_bytes: number;
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -129,6 +132,10 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       4000,
     plan_docx_reference_path:
       process.env.FRAGMINT_PLAN_DOCX_REFERENCE ?? fileConfig.plan_docx_reference_path,
+    upload_max_bytes:
+      toNumber(process.env.FRAGMINT_UPLOAD_MAX_BYTES) ??
+      fileConfig.upload_max_bytes ??
+      50 * 1024 * 1024,
   };
 }
 
