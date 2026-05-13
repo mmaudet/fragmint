@@ -170,6 +170,7 @@ export interface PlanSection {
   selected: SectionFragmentSelection[];
   generated_markdown?: string;
   filters_override?: PlanFilters;
+  inferred_type?: string;
 }
 
 export interface PlanState {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, and, desc } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans } from '../db/schema.js';
+import { plans, fragments } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -17,6 +17,9 @@ import type { SearchResult, SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
+import { HARVESTER_TYPES, HARVESTER_DOMAINS } from './harvester-taxonomy.js';
+
+const SECTION_SCORE_THRESHOLD = 0.5;
 
 function toCandidate(r: SearchResult): FragmentCandidate {
   return {
@@ -185,22 +188,59 @@ export class PlanService {
   }
 
   private async runSectionSearch(
-    section: { title: string; description: string },
+    section: { title: string; description: string; inferred_type?: string },
     filters: PlanFilters,
     collectionSlug: string | null,
   ): Promise<FragmentCandidate[]> {
+    const effectiveType = filters.type ?? section.inferred_type;
     const results = await this.requireSearch().search(
       `${section.title}\n${section.description}`,
       {
         domain: filters.domain ? [filters.domain] : undefined,
-        type: filters.type ? [filters.type] : undefined,
+        type: effectiveType ? [effectiveType] : undefined,
         lang: filters.lang,
         tags: filters.tags,
         collectionSlug: collectionSlug ?? undefined,
       },
       5,
     );
-    return results.map(toCandidate);
+    return results
+      .filter((r) => r.score >= SECTION_SCORE_THRESHOLD)
+      .map(toCandidate);
+  }
+
+  private async inferSectionTypes(
+    sections: { id: string; title: string; description: string }[],
+  ): Promise<Map<string, string | undefined>> {
+    const dbTypes = (
+      await this.db.selectDistinct({ type: fragments.type }).from(fragments)
+    ).map((r) => r.type);
+    const dbDomains = (
+      await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)
+    ).map((r) => r.domain);
+    const knownTypes = [...new Set([...HARVESTER_TYPES, ...dbTypes])].filter(
+      (t) => t !== 'unknown' && t !== 'other',
+    );
+    const knownDomains = [...new Set([...HARVESTER_DOMAINS, ...dbDomains])];
+
+    const llm = this.requireLlm();
+    const entries = await Promise.all(
+      sections.map(async (s) => {
+        try {
+          const c = await llm.classify(
+            `${s.title}\n${s.description}`,
+            knownTypes,
+            knownDomains,
+          );
+          const t = knownTypes.includes(c.type) ? c.type : undefined;
+          return [s.id, t] as const;
+        } catch (err) {
+          console.error(`Section "${s.title}" type inference failed:`, err);
+          return [s.id, undefined] as const;
+        }
+      }),
+    );
+    return new Map(entries);
   }
 
   async generatePlan(
@@ -225,12 +265,19 @@ export class PlanService {
     const parsed = parsePlanSections(p.state.plan_markdown);
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
+    const inferredById = await this.inferSectionTypes(parsed);
+
     const newSections = await Promise.all(parsed.map(async (ps) => {
       const previous = oldById.get(ps.id);
       const filters = previous?.filters_override ?? p.state.filters;
+      const inferred_type = inferredById.get(ps.id) ?? previous?.inferred_type;
       let candidates: FragmentCandidate[] = [];
       try {
-        candidates = await this.runSectionSearch(ps, filters, p.collection_slug);
+        candidates = await this.runSectionSearch(
+          { ...ps, inferred_type },
+          filters,
+          p.collection_slug,
+        );
       } catch (err) {
         console.error(`Section "${ps.title}" search failed:`, err);
         candidates = [];
@@ -243,6 +290,7 @@ export class PlanService {
         selected: previous?.selected ?? [],
         generated_markdown: previous?.generated_markdown,
         filters_override: previous?.filters_override,
+        inferred_type,
       };
     }));
 
@@ -259,9 +307,27 @@ export class PlanService {
     const section = p.state.sections.find((s) => s.id === sectionId);
     if (!section) return null;
     const filters = args.filters_override ?? section.filters_override ?? p.state.filters;
-    const candidates = await this.runSectionSearch(section, filters, p.collection_slug);
+
+    let inferred_type = section.inferred_type;
+    if (!inferred_type) {
+      const inferred = await this.inferSectionTypes([section]);
+      inferred_type = inferred.get(section.id);
+    }
+
+    const candidates = await this.runSectionSearch(
+      { ...section, inferred_type },
+      filters,
+      p.collection_slug,
+    );
     const updatedSections = p.state.sections.map((s) =>
-      s.id === sectionId ? { ...s, candidates, filters_override: args.filters_override ?? s.filters_override } : s,
+      s.id === sectionId
+        ? {
+            ...s,
+            candidates,
+            filters_override: args.filters_override ?? s.filters_override,
+            inferred_type,
+          }
+        : s,
     );
     return this.update(planId, { sections: updatedSections });
   }

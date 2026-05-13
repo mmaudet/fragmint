@@ -81,16 +81,22 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
                 </CardContent>
               </Card>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
-                {active.candidates.map((c) => (
-                  <SectionFragmentCard
-                    key={c.fragment_id}
-                    candidate={c}
-                    selection={active.selected.find((s) => s.fragment_id === c.fragment_id)}
-                    onChange={(sel) => applySelectionChange(active, c.fragment_id, sel)}
-                  />
-                ))}
-              </div>
+              {active.candidates.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {t('planGeneration', 'noCandidates')}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
+                  {active.candidates.map((c) => (
+                    <SectionFragmentCard
+                      key={c.fragment_id}
+                      candidate={c}
+                      selection={active.selected.find((s) => s.fragment_id === c.fragment_id)}
+                      onChange={(sel) => applySelectionChange(active, c.fragment_id, sel)}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

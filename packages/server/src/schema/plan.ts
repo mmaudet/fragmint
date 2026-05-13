@@ -34,6 +34,7 @@ export const PlanSectionSchema = z.object({
   selected: z.array(SectionFragmentSelectionSchema).default([]),
   generated_markdown: z.string().optional(),
   filters_override: PlanFiltersSchema.optional(),
+  inferred_type: z.string().optional(),
 });
 
 export const PlanStateSchema = z.object({

@@ -168,6 +168,13 @@ const translations = {
     useLocally: { fr: 'Utiliser localement', en: 'Use locally' },
     proposeToLibrary: { fr: 'Proposer à la bibliothèque', en: 'Propose to library' },
     reSearch: { fr: 'Re-rechercher', en: 'Re-search' },
+    noCandidates: {
+      fr: 'Aucun fragment trouvé pour cette section. Cliquez sur « Re-rechercher » pour relancer la recherche.',
+      en: 'No fragments found for this section. Click "Re-search" to run the search again.',
+    },
+    matchStrong: { fr: 'pertinence forte', en: 'strong match' },
+    matchMedium: { fr: 'pertinence moyenne', en: 'medium match' },
+    matchWeak: { fr: 'pertinence faible', en: 'weak match' },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
     writerOverride: { fr: 'Instructions au rédacteur', en: 'Writer instructions' },
   },

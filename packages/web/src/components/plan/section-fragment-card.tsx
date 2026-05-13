@@ -22,6 +22,21 @@ export function SectionFragmentCard({
   const [propose, setPropose] = useState(selection?.propose_to_library ?? false);
   const approved = !!selection;
 
+  const matchTier: 'strong' | 'medium' | 'weak' =
+    candidate.score >= 0.7 ? 'strong' : candidate.score >= 0.55 ? 'medium' : 'weak';
+  const matchLabel =
+    matchTier === 'strong'
+      ? t('planGeneration', 'matchStrong')
+      : matchTier === 'medium'
+        ? t('planGeneration', 'matchMedium')
+        : t('planGeneration', 'matchWeak');
+  const matchClass =
+    matchTier === 'strong'
+      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+      : matchTier === 'medium'
+        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+        : 'bg-muted text-muted-foreground';
+
   function approve() {
     onChange({
       fragment_id: candidate.fragment_id,
@@ -50,7 +65,12 @@ export function SectionFragmentCard({
           <CardTitle className="text-sm truncate">{candidate.title ?? candidate.fragment_id}</CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{candidate.quality}</Badge>
-            <span className="text-xs text-muted-foreground">score {candidate.score.toFixed(2)}</span>
+            <span
+              className={`text-xs px-2 py-0.5 rounded ${matchClass}`}
+              title={`score ${candidate.score.toFixed(2)}`}
+            >
+              {matchLabel}
+            </span>
           </div>
         </div>
       </CardHeader>
