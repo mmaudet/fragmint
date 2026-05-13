@@ -49,8 +49,8 @@ export default function AppLayout() {
     { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
     { to: '/compose', label: t('nav', 'composer'), icon: FileText },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
-    { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
     { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
+    { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
 
   return (

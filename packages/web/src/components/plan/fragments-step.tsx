@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
 import { AddFragmentDialog } from './add-fragment-dialog';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function FragmentsStep({ plan }: { plan: Plan }) {
@@ -36,6 +36,15 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
       selected: sel
         ? [...section.selected.filter((s) => s.fragment_id !== candidateId), sel]
         : section.selected.filter((s) => s.fragment_id !== candidateId),
+    };
+    updateSection(section.id, () => next);
+  }
+
+  function applyCandidateReject(section: PlanSection, candidateId: string) {
+    const next: PlanSection = {
+      ...section,
+      candidates: section.candidates.filter((c) => c.fragment_id !== candidateId),
+      selected: section.selected.filter((s) => s.fragment_id !== candidateId),
     };
     updateSection(section.id, () => next);
   }
@@ -80,6 +89,7 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
                       onClick={() => search.mutate({ sectionId: active.id })}
                       disabled={search.isPending}
                     >
+                      {search.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                       {t('planGeneration', 'reSearch')}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
@@ -102,6 +112,7 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
                       candidate={c}
                       selection={active.selected.find((s) => s.fragment_id === c.fragment_id)}
                       onChange={(sel) => applySelectionChange(active, c.fragment_id, sel)}
+                      onReject={() => applyCandidateReject(active, c.fragment_id)}
                     />
                   ))}
                 </div>

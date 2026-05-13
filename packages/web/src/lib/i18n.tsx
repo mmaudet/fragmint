@@ -44,7 +44,7 @@ const translations = {
     composer: { fr: 'Compositeur', en: 'Composer' },
     validation: { fr: 'Validation', en: 'Validation' },
     harvest: { fr: 'Ingestion', en: 'Ingestion' },
-    planGeneration: { fr: 'Génération de plan', en: 'Plan generation' },
+    planGeneration: { fr: 'Plan', en: 'Plan' },
     logout: { fr: 'Déconnexion', en: 'Logout' },
   },
   fragments: {
@@ -167,7 +167,7 @@ const translations = {
     edit: { fr: 'Éditer', en: 'Edit' },
     useLocally: { fr: 'Utiliser localement', en: 'Use locally' },
     proposeToLibrary: { fr: 'Proposer à la bibliothèque', en: 'Propose to library' },
-    reSearch: { fr: 'Re-rechercher', en: 'Re-search' },
+    reSearch: { fr: 'Rechercher de nouveau', en: 'Search again' },
     noCandidates: {
       fr: 'Aucun fragment trouvé pour cette section. Cliquez sur « Re-rechercher » pour relancer la recherche.',
       en: 'No fragments found for this section. Click "Re-search" to run the search again.',
@@ -198,6 +198,31 @@ const translations = {
     addAndSelect: { fr: 'Créer et sélectionner', en: 'Create and select' },
     fragmentAdded: { fr: 'Fragment ajouté à la section.', en: 'Fragment added to the section.' },
     addFragmentError: { fr: "Échec de l'ajout du fragment", en: 'Failed to add fragment' },
+    step1Label: { fr: 'Specs', en: 'Specs' },
+    step2Label: { fr: 'Fragments', en: 'Fragments' },
+    step3Label: { fr: 'Section drafts', en: 'Section drafts' },
+    step4Label: { fr: 'Assemblage', en: 'Assembly' },
+    step1Help: {
+      fr: "Décrivez l'objectif du document à produire et générez un plan structuré en sections. Ajustez le plan markdown puis cliquez sur « Valider le plan » pour passer à l'étape suivante.",
+      en: 'Describe the document you want to produce and generate a structured plan. Adjust the markdown plan, then click "Validate plan" to move on.',
+    },
+    step2Help: {
+      fr: "Pour chaque section du plan, choisissez les fragments à utiliser. Cliquez « Approuver » pour valider un candidat proposé, ou utilisez « Ajouter un fragment » pour en sélectionner un depuis la bibliothèque ou en créer un manuellement.",
+      en: 'For each section, pick the fragments to use. Click "Approve" to validate a suggested candidate, or use "Add a fragment" to pick one from the library or create one manually.',
+    },
+    step3Help: {
+      fr: "Générez le brouillon de chaque section à partir des fragments sélectionnés. Vous pouvez générer toutes les sections d'un coup ou les éditer individuellement.",
+      en: 'Generate the draft of each section from the selected fragments. Generate all at once or edit each section individually.',
+    },
+    step4Help: {
+      fr: "Assemblez le document final, choisissez un modèle de style et téléchargez le résultat en .md ou .docx.",
+      en: 'Assemble the final document, choose a style template, and download it as .md or .docx.',
+    },
+    helpClose: { fr: 'Masquer cette aide', en: 'Hide this help' },
+    stepLocked: {
+      fr: 'Terminez l’étape précédente pour débloquer celle-ci.',
+      en: 'Finish the previous step to unlock this one.',
+    },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
     writerOverride: { fr: 'Instructions au rédacteur', en: 'Writer instructions' },
   },

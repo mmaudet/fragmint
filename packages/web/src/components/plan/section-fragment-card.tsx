@@ -4,17 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Check, X, Pencil } from 'lucide-react';
+import { Check, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 export function SectionFragmentCard({
   candidate,
   selection,
   onChange,
+  onReject,
 }: {
   candidate: FragmentCandidate;
   selection: SectionFragmentSelection | undefined;
   onChange: (sel: SectionFragmentSelection | null) => void;
+  onReject: () => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -46,8 +48,6 @@ export function SectionFragmentCard({
     });
   }
 
-  function reject() { onChange(null); }
-
   function commitEdit() {
     onChange({
       fragment_id: candidate.fragment_id,
@@ -58,8 +58,12 @@ export function SectionFragmentCard({
     setEditing(false);
   }
 
+  const cardClass = approved
+    ? 'border-emerald-500/50 bg-emerald-500/10'
+    : 'border-amber-500/40 bg-amber-500/5';
+
   return (
-    <Card className={approved ? 'border-primary' : ''}>
+    <Card className={cardClass}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm truncate">{candidate.title ?? candidate.fragment_id}</CardTitle>
@@ -97,13 +101,19 @@ export function SectionFragmentCard({
               {selection?.body ?? candidate.body_excerpt}
             </p>
             <div className="flex gap-2">
-              {approved ? (
-                <Button size="sm" variant="ghost" onClick={reject}><X className="h-4 w-4" /></Button>
-              ) : (
-                <Button size="sm" onClick={approve}><Check className="h-4 w-4 mr-1" />{t('planGeneration', 'approve')}</Button>
+              {!approved && (
+                <Button size="sm" onClick={approve}>
+                  <Check className="h-4 w-4 mr-1" />
+                  {t('planGeneration', 'approve')}
+                </Button>
               )}
               <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-                <Pencil className="h-4 w-4 mr-1" />{t('planGeneration', 'edit')}
+                <Pencil className="h-4 w-4 mr-1" />
+                {t('planGeneration', 'edit')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onReject}>
+                <Trash2 className="h-4 w-4 mr-1" />
+                {t('planGeneration', 'reject')}
               </Button>
             </div>
           </>
