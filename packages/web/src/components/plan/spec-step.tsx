@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
 import type { Plan } from '@/api/types';
 import { useGeneratePlan, useUpdatePlan, useValidatePlan } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
@@ -67,8 +66,8 @@ export function SpecStep({ plan }: { plan: Plan }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
-      <div className="space-y-4">
+    <div className="space-y-4 p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle>{t('planGeneration', 'specPrompt')}</CardTitle></CardHeader>
           <CardContent>
@@ -85,46 +84,39 @@ export function SpecStep({ plan }: { plan: Plan }) {
             <Input placeholder="tags (comma-separated)" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} />
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader><CardTitle>{t('planGeneration', 'refinementInstructions')}</CardTitle></CardHeader>
-          <CardContent>
-            <Textarea
-              rows={4}
-              placeholder="(optional) e.g. add a section about pricing"
-              value={refinement}
-              onChange={(e) => setRefinement(e.target.value)}
-            />
-            <Button className="mt-3" onClick={handleGenerate} disabled={generate.isPending}>
-              {plan.state.plan_markdown ? t('planGeneration', 'regeneratePlan') : t('planGeneration', 'generatePlan')}
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="space-y-4">
-        <Card>
-          <CardHeader><CardTitle>Plan (markdown)</CardTitle></CardHeader>
-          <CardContent>
-            <Textarea
-              rows={20}
-              className="font-mono text-sm"
-              value={planMarkdown}
-              onChange={(e) => setPlanMarkdown(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Preview</CardTitle></CardHeader>
-          <CardContent className="prose dark:prose-invert max-w-none">
-            <ReactMarkdown>{planMarkdown}</ReactMarkdown>
-          </CardContent>
-        </Card>
-        <div className="flex justify-end">
-          <Button onClick={handleValidate} disabled={validate.isPending}>
-            {t('planGeneration', 'validatePlan')}
+      <Card>
+        <CardHeader><CardTitle>{t('planGeneration', 'refinementInstructions')}</CardTitle></CardHeader>
+        <CardContent>
+          <Textarea
+            rows={4}
+            placeholder="(optional) e.g. add a section about pricing"
+            value={refinement}
+            onChange={(e) => setRefinement(e.target.value)}
+          />
+          <Button className="mt-3" onClick={handleGenerate} disabled={generate.isPending}>
+            {plan.state.plan_markdown ? t('planGeneration', 'regeneratePlan') : t('planGeneration', 'generatePlan')}
           </Button>
-        </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Plan (markdown)</CardTitle></CardHeader>
+        <CardContent>
+          <Textarea
+            rows={20}
+            className="font-mono text-sm"
+            value={planMarkdown}
+            onChange={(e) => setPlanMarkdown(e.target.value)}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleValidate} disabled={validate.isPending}>
+          {t('planGeneration', 'validatePlan')}
+        </Button>
       </div>
     </div>
   );
