@@ -84,3 +84,19 @@ export const ExportPlanSchema = z.object({
   format: z.enum(['md', 'docx']),
   style_template_id: z.string().optional(),
 });
+
+export const AddFragmentToSectionSchema = z
+  .object({
+    fragment_id: z.string().min(1).optional(),
+    manual: z
+      .object({
+        body: z.string().min(1),
+        type: z.string().optional(),
+        lang: z.string().regex(/^[a-z]{2}$/).default('fr'),
+        domain: z.string().min(1).default('other'),
+      })
+      .optional(),
+  })
+  .refine((v) => !!v.fragment_id !== !!v.manual, {
+    message: 'Provide exactly one of fragment_id or manual',
+  });

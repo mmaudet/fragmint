@@ -98,6 +98,25 @@ export function useValidateFragments(id: string) {
   });
 }
 
+export interface AddFragmentArgs {
+  sectionId: string;
+  fragment_id?: string;
+  manual?: { body: string; type?: string; lang?: string; domain?: string };
+}
+
+export function useAddFragmentToSection(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sectionId, fragment_id, manual }: AddFragmentArgs) =>
+      apiRequest<Plan>(
+        'POST',
+        `/v1/plans/${id}/sections/${sectionId}/add-fragment`,
+        fragment_id ? { fragment_id } : { manual },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+  });
+}
+
 export function useGenerateSection(id: string) {
   const qc = useQueryClient();
   return useMutation({

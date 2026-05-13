@@ -8,6 +8,7 @@ import {
   GeneratePlanSchema,
   SectionSearchSchema,
   ExportPlanSchema,
+  AddFragmentToSectionSchema,
 } from '../schema/plan.js';
 import { join } from 'node:path';
 
@@ -132,6 +133,35 @@ export function planRoutes(
       if (!(await requireOwnership(request, reply, id))) return;
       const out = await planService.searchSection(id, sectionId, parsed.data);
       if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan or section not found' });
+      return { data: out, meta: null, error: null };
+    },
+  );
+
+  app.post(
+    `${prefix}/plans/:id/sections/:sectionId/add-fragment`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      const { id, sectionId } = request.params as { id: string; sectionId: string };
+      const parsed = AddFragmentToSectionSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      }
+      if (!(await requireOwnership(request, reply, id))) return;
+      const collection = (request as any).collection;
+      const out = await planService.addFragmentToSection(
+        id,
+        sectionId,
+        parsed.data,
+        request.user.login,
+        request.user.role,
+        request.ip,
+        collection?.git_path,
+      );
+      if (!out) {
+        return reply
+          .status(404)
+          .send({ data: null, meta: null, error: 'Plan, section or fragment not found' });
+      }
       return { data: out, meta: null, error: null };
     },
   );

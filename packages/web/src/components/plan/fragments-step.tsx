@@ -6,11 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
+import { AddFragmentDialog } from './add-fragment-dialog';
+import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function FragmentsStep({ plan }: { plan: Plan }) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
   const update = useUpdatePlan(plan.id);
   const search = useSectionSearch(plan.id);
   const validate = useValidateFragments(plan.id);
@@ -70,14 +73,20 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{active.description}</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => search.mutate({ sectionId: active.id })}
-                    disabled={search.isPending}
-                  >
-                    {t('planGeneration', 'reSearch')}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => search.mutate({ sectionId: active.id })}
+                      disabled={search.isPending}
+                    >
+                      {t('planGeneration', 'reSearch')}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      {t('planGeneration', 'addFragment')}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -116,6 +125,15 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
           </Button>
         </div>
       </main>
+
+      {active && (
+        <AddFragmentDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          planId={plan.id}
+          sectionId={active.id}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { buildPlanMessages, buildSectionMessages } from './plan-prompts.js';
 import { parsePlanSections } from './plan-section-parser.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx } from './pandoc-render.js';
+import { deriveTitle } from '../git/fragment-file.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchResult, SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
@@ -328,6 +329,103 @@ export class PlanService {
             inferred_type,
           }
         : s,
+    );
+    return this.update(planId, { sections: updatedSections });
+  }
+
+  async addFragmentToSection(
+    planId: string,
+    sectionId: string,
+    args: {
+      fragment_id?: string;
+      manual?: { body: string; type?: string; lang: string; domain: string };
+    },
+    author: string,
+    authorRole: string,
+    ip?: string,
+    collectionGitPath?: string,
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const section = p.state.sections.find((s) => s.id === sectionId);
+    if (!section) return null;
+
+    let fragmentId: string;
+    let title: string | null;
+    let bodyExcerpt: string | null;
+    let quality: string;
+    let preSelectBody: string | null = null;
+
+    if (args.fragment_id) {
+      const fragments = this.requireFragments();
+      const fragment = await fragments.getById(args.fragment_id);
+      if (!fragment) return null;
+      fragmentId = fragment.id;
+      title = fragment.title;
+      bodyExcerpt = fragment.body_excerpt;
+      quality = fragment.quality;
+    } else if (args.manual) {
+      const fragments = this.requireFragments();
+      const inferredType = section.inferred_type;
+      const type = (args.manual.type && FRAGMENT_TYPES.includes(args.manual.type as typeof FRAGMENT_TYPES[number]))
+        ? (args.manual.type as typeof FRAGMENT_TYPES[number])
+        : (inferredType && FRAGMENT_TYPES.includes(inferredType as typeof FRAGMENT_TYPES[number]))
+          ? (inferredType as typeof FRAGMENT_TYPES[number])
+          : 'introduction';
+      const input: CreateFragmentInput = {
+        type,
+        domain: args.manual.domain,
+        tags: [],
+        lang: args.manual.lang,
+        body: args.manual.body,
+        translation_of: null,
+        parent_id: null,
+        generation: 0,
+        valid_from: null,
+        valid_until: null,
+        origin: 'manual',
+        access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
+      };
+      const created = await fragments.create(
+        input,
+        author,
+        authorRole,
+        ip,
+        collectionGitPath,
+        p.collection_slug ?? undefined,
+      );
+      fragmentId = created.id;
+      title = deriveTitle(args.manual.body);
+      bodyExcerpt = args.manual.body.slice(0, 200);
+      quality = 'draft';
+      preSelectBody = args.manual.body;
+    } else {
+      return null;
+    }
+
+    const alreadyInCandidates = section.candidates.some((c) => c.fragment_id === fragmentId);
+    const newCandidates = alreadyInCandidates
+      ? section.candidates
+      : [
+          ...section.candidates,
+          { fragment_id: fragmentId, score: 1, title, body_excerpt: bodyExcerpt, quality },
+        ];
+
+    let newSelected = section.selected;
+    if (preSelectBody !== null && !section.selected.some((s) => s.fragment_id === fragmentId)) {
+      newSelected = [
+        ...section.selected,
+        {
+          fragment_id: fragmentId,
+          body: preSelectBody,
+          edited: false,
+          propose_to_library: false,
+        },
+      ];
+    }
+
+    const updatedSections = p.state.sections.map((s) =>
+      s.id === sectionId ? { ...s, candidates: newCandidates, selected: newSelected } : s,
     );
     return this.update(planId, { sections: updatedSections });
   }
