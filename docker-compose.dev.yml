@@ -29,6 +29,11 @@ services:
       FRAGMINT_EMBEDDING_MODEL: ${FRAGMINT_EMBEDDING_MODEL}
       FRAGMINT_EMBEDDING_DIMENSIONS: ${FRAGMINT_EMBEDDING_DIMENSIONS}
       FRAGMINT_LLM_TIMEOUT: "300000"
+      # Trust the bind-mounted vault repo despite host/container UID mismatch.
+      # Git reads these on every invocation; no rebuild needed.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /data/vault
     depends_on:
       milvus:
         condition: service_healthy
