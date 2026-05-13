@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { apiRequest, setToken } from '@/api/client';
+import { apiRequest, getToken, setToken } from '@/api/client';
 import type { LoginResponse, User } from '@/api/types';
 
 interface AuthContextValue {
@@ -11,9 +11,30 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const USER_STORAGE_KEY = 'fragmint.auth.user';
+
+function readStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredUser(user: User | null) {
+  try {
+    if (user) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable — session won't survive reload
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setTokenState] = useState<string | null>(null);
+  const initialToken = getToken();
+  const [user, setUser] = useState<User | null>(initialToken ? readStoredUser() : null);
+  const [token, setTokenState] = useState<string | null>(initialToken);
 
   const login = useCallback(async (username: string, password: string) => {
     const result = await apiRequest<LoginResponse>('POST', '/v1/auth/login', {
@@ -23,12 +44,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(result.token);
     setTokenState(result.token);
     setUser(result.user);
+    writeStoredUser(result.user);
   }, []);
 
   const logout = useCallback(() => {
     setToken(null);
     setTokenState(null);
     setUser(null);
+    writeStoredUser(null);
   }, []);
 
   return (

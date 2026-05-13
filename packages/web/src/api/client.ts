@@ -1,9 +1,25 @@
 import type { ApiResponse } from './types';
 
-let authToken: string | null = null;
+const TOKEN_STORAGE_KEY = 'fragmint.auth.token';
+
+function readStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken: string | null = readStoredToken();
 
 export function setToken(token: string | null) {
   authToken = token;
+  try {
+    if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // localStorage unavailable (private mode, SSR) — token stays in memory only
+  }
 }
 
 export function getToken(): string | null {
