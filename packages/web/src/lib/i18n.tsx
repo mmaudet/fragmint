@@ -223,6 +223,16 @@ const translations = {
       fr: 'Terminez l’étape précédente pour débloquer celle-ci.',
       en: 'Finish the previous step to unlock this one.',
     },
+    deleteConfirmPrompt: {
+      fr: 'Supprimer ce plan ? Cette action est irréversible.',
+      en: 'Delete this plan? This action cannot be undone.',
+    },
+    confirmDelete: { fr: 'Oui, supprimer', en: 'Yes, delete' },
+    cancel: { fr: 'Annuler', en: 'Cancel' },
+    deleteError: {
+      fr: 'Échec de la suppression du plan',
+      en: 'Failed to delete plan',
+    },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
     writerOverride: { fr: 'Instructions au rédacteur', en: 'Writer instructions' },
   },

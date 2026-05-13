@@ -58,7 +58,16 @@ export function useDeletePlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiRequest<void>('DELETE', `/v1/plans/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: KEY });
+      const previous = qc.getQueryData<Plan[]>(KEY);
+      qc.setQueryData<Plan[]>(KEY, (old) => (old ?? []).filter((p) => p.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(KEY, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 }
 

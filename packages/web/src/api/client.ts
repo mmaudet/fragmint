@@ -46,6 +46,12 @@ export async function apiRequest<T>(method: string, path: string, body?: unknown
     throw new Error('Session expired');
   }
 
+  // 204 No Content or empty body → return null without parsing
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return null as T;
+  }
+
   const json = (await res.json()) as ApiResponse<T>;
   if (!res.ok || json.error) {
     throw new Error(json.error ?? `HTTP ${res.status}`);
