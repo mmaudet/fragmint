@@ -299,8 +299,14 @@ export class SearchService {
     limit = 20,
   ): Promise<SearchResult[]> {
     const conditions = [];
-    const q = `%${query}%`;
-    conditions.push(or(like(fragments.title, q), like(fragments.body_excerpt, q)));
+    const keywords = [...new Set(
+      query.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()).filter((w) => w.length > 3),
+    )].slice(0, 8);
+    if (keywords.length > 0) {
+      conditions.push(
+        or(...keywords.map((kw) => or(like(fragments.title, `%${kw}%`), like(fragments.body_excerpt, `%${kw}%`)))),
+      );
+    }
 
     if (filters?.type?.length) {
       conditions.push(inArray(fragments.type, filters.type));
@@ -356,7 +362,7 @@ export class SearchService {
 
     const results = rows.map((row) => ({
       id: row.id,
-      score: 0, // no vector score for SQLite fallback
+      score: 0.6, // no vector score in SQLite fallback — treat any LIKE match as relevant
       title: row.title,
       body_excerpt: row.body_excerpt,
       type: row.type,
