@@ -4,7 +4,7 @@ export const PLAN_STATUSES = ['draft', 'plan_validated', 'fragments_validated', 
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 export const PlanFiltersSchema = z.object({
-  domain: z.string().optional(),
+  domain: z.preprocess((v) => (typeof v === 'string' ? [v] : v), z.array(z.string()).optional()),
   lang: z.string().optional(),
   type: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -35,6 +35,7 @@ export const PlanSectionSchema = z.object({
   generated_markdown: z.string().optional(),
   filters_override: PlanFiltersSchema.optional(),
   inferred_type: z.string().optional(),
+  writer_instructions: z.string().optional(),
 });
 
 export const PlanStateSchema = z.object({

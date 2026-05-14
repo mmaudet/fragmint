@@ -197,7 +197,7 @@ export class PlanService {
     const results = await this.requireSearch().search(
       `${section.title}\n${section.description}`,
       {
-        domain: filters.domain ? [filters.domain] : undefined,
+        domain: filters.domain?.length ? filters.domain : undefined,
         type: effectiveType ? [effectiveType] : undefined,
         lang: filters.lang,
         tags: filters.tags,
@@ -530,7 +530,7 @@ export class PlanService {
       fragments: fragments_for_writer,
       lang: p.state.filters.lang ?? 'fr',
       max_chars: this.config.fragmentMaxChars,
-      writer_prompt_override: p.state.writer_prompt_override,
+      writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
     });
     const out = await this.requireLlm().chatMessages(messages);
     const updatedSections = p.state.sections.map((s) =>
