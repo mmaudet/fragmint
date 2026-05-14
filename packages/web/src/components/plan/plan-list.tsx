@@ -42,7 +42,11 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
           {(plans ?? []).map((p) => {
             const isConfirming = confirmingId === p.id;
             return (
-              <Card key={p.id} className="cursor-pointer hover:shadow-md">
+              <Card
+                key={p.id}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => !isConfirming && nav(`/plan-generation?id=${p.id}`)}
+              >
                 <CardHeader>
                   <CardTitle className="truncate">{p.title}</CardTitle>
                 </CardHeader>
@@ -53,7 +57,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                   </p>
 
                   {isConfirming ? (
-                    <div className="pt-2 space-y-2">
+                    <div className="pt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                       <p className="text-sm text-destructive">
                         {t('planGeneration', 'deleteConfirmPrompt')}
                       </p>
@@ -76,10 +80,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex gap-2 pt-2">
-                      <Button size="sm" onClick={() => nav(`/plan-generation?id=${p.id}`)}>
-                        Open
-                      </Button>
+                    <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
                         variant="ghost"
