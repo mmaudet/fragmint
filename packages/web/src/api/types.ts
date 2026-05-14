@@ -140,7 +140,7 @@ export interface CollectionWithRole {
 export type PlanStatus = 'draft' | 'plan_validated' | 'fragments_validated' | 'completed';
 
 export interface PlanFilters {
-  domain?: string;
+  domain?: string[];
   lang?: string;
   type?: string;
   tags?: string[];
@@ -171,6 +171,7 @@ export interface PlanSection {
   generated_markdown?: string;
   filters_override?: PlanFilters;
   inferred_type?: string;
+  writer_instructions?: string;
 }
 
 export interface PlanState {

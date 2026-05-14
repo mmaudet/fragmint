@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
+import { Loader2, Info } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export function SpecStep({ plan }: { plan: Plan }) {
   const { t } = useI18n();
@@ -17,7 +19,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
   const validate = useValidatePlan(plan.id);
 
   const [specPrompt, setSpecPrompt] = useState(plan.state.spec_prompt);
-  const [domain, setDomain] = useState(plan.state.filters.domain ?? '');
+  const [domainStr, setDomainStr] = useState((plan.state.filters.domain ?? []).join(', '));
   const [lang, setLang] = useState(plan.state.filters.lang ?? '');
   const [type, setType] = useState(plan.state.filters.type ?? '');
   const [tagsStr, setTagsStr] = useState((plan.state.filters.tags ?? []).join(', '));
@@ -32,7 +34,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
       update.mutate({
         spec_prompt: specPrompt,
         filters: {
-          domain: domain || undefined,
+          domain: domainStr.split(',').map((s) => s.trim()).filter(Boolean),
           lang: lang || undefined,
           type: type || undefined,
           tags: tagsStr.split(',').map((s) => s.trim()).filter(Boolean),
@@ -44,7 +46,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specPrompt, domain, lang, type, tagsStr, planMarkdown]);
+  }, [specPrompt, domainStr, lang, type, tagsStr, planMarkdown]);
 
   async function handleGenerate() {
     try {
@@ -77,11 +79,35 @@ export function SpecStep({ plan }: { plan: Plan }) {
 
         <Card>
           <CardHeader><CardTitle>{t('planGeneration', 'filters')}</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            <Input placeholder="domain" value={domain} onChange={(e) => setDomain(e.target.value)} />
-            <Input placeholder="lang (e.g. fr)" value={lang} onChange={(e) => setLang(e.target.value)} />
-            <Input placeholder="type" value={type} onChange={(e) => setType(e.target.value)} />
-            <Input placeholder="tags (comma-separated)" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} />
+          <CardContent className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                {t('planGeneration', 'filterDomain')}
+                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterDomainTooltip')}</TooltipContent></Tooltip>
+              </div>
+              <Input placeholder="twake, linagora, lincloud…" value={domainStr} onChange={(e) => setDomainStr(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                {t('planGeneration', 'filterLang')}
+                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterLangTooltip')}</TooltipContent></Tooltip>
+              </div>
+              <Input placeholder="fr, en…" value={lang} onChange={(e) => setLang(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                {t('planGeneration', 'filterType')}
+                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterTypeTooltip')}</TooltipContent></Tooltip>
+              </div>
+              <Input placeholder="introduction, argument, pricing…" value={type} onChange={(e) => setType(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                {t('planGeneration', 'filterTags')}
+                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterTagsTooltip')}</TooltipContent></Tooltip>
+              </div>
+              <Input placeholder="produit:Twake, pu:4.50…" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -96,6 +122,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
             onChange={(e) => setRefinement(e.target.value)}
           />
           <Button className="mt-3" onClick={handleGenerate} disabled={generate.isPending}>
+            {generate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {plan.state.plan_markdown ? t('planGeneration', 'regeneratePlan') : t('planGeneration', 'generatePlan')}
           </Button>
         </CardContent>
@@ -115,6 +142,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
 
       <div className="flex justify-end">
         <Button onClick={handleValidate} disabled={validate.isPending}>
+          {validate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {t('planGeneration', 'validatePlan')}
         </Button>
       </div>

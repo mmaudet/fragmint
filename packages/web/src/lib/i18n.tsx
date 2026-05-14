@@ -155,6 +155,7 @@ const translations = {
     refinementInstructions: { fr: 'Instructions complémentaires', en: 'Refinement instructions' },
     validatePlan: { fr: 'Valider le plan', en: 'Validate plan' },
     validateAllSections: { fr: 'Valider toutes les sections', en: 'Validate all sections' },
+    generateSection: { fr: 'Générer le draft', en: 'Generate section' },
     generateAllSections: { fr: 'Générer tous les drafts', en: 'Generate all section drafts' },
     assemble: { fr: 'Assembler le document', en: 'Assemble document' },
     downloadMd: { fr: 'Télécharger .md', en: 'Download .md' },
@@ -234,7 +235,44 @@ const translations = {
       en: 'Failed to delete plan',
     },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
-    writerOverride: { fr: 'Instructions au rédacteur', en: 'Writer instructions' },
+    filterDomain: { fr: 'Domaines', en: 'Domains' },
+    filterDomainTooltip: {
+      fr: "Sujet du fragment (ex. twake, lincloud, linagora). Séparer par des virgules pour inclure plusieurs domaines.",
+      en: "Fragment subject matter (e.g. twake, lincloud, linagora). Separate with commas to include multiple domains.",
+    },
+    filterLang: { fr: 'Langue', en: 'Language' },
+    filterLangTooltip: {
+      fr: "Code ISO de la langue (ex. fr, en). Laissez vide pour toutes les langues.",
+      en: "ISO language code (e.g. fr, en). Leave empty for all languages.",
+    },
+    filterType: { fr: 'Type', en: 'Type' },
+    filterTypeTooltip: {
+      fr: "Nature du contenu du fragment (ex. introduction, argument, pricing). Laissez vide pour laisser le système inférer automatiquement le type adapté à chaque section.",
+      en: "Fragment content type (e.g. introduction, argument, pricing). Leave empty to let the system automatically infer the right type per section.",
+    },
+    filterTags: { fr: 'Tags', en: 'Tags' },
+    filterTagsTooltip: {
+      fr: "Mots-clés libres pour affiner la recherche (ex. produit:Twake). Séparer par des virgules.",
+      en: "Free-form keywords to narrow the search (e.g. produit:Twake). Separate with commas.",
+    },
+    writerOverride: { fr: 'Instructions globales au rédacteur', en: 'Global writer instructions' },
+    writerOverrideTooltip: {
+      fr: "Ces instructions s'appliquent à toutes les sections. Elles sont remplacées si une section a ses propres instructions.",
+      en: 'These instructions apply to all sections. They are overridden if a section has its own instructions.',
+    },
+    writerOverridePlaceholder: {
+      fr: 'Ex. : Adopte un ton formel et concis. Évite le jargon technique.',
+      en: 'E.g.: Use a formal and concise tone. Avoid technical jargon.',
+    },
+    sectionInstructions: { fr: 'Instructions spécifiques à cette section', en: 'Section-specific instructions' },
+    sectionInstructionsTooltip: {
+      fr: 'Optionnel. Si renseigné, remplace les instructions globales uniquement pour cette section.',
+      en: 'Optional. If set, overrides the global instructions for this section only.',
+    },
+    sectionInstructionsPlaceholder: {
+      fr: 'Ex. : Commence par un résumé en 2 phrases.',
+      en: 'E.g.: Start with a 2-sentence summary.',
+    },
   },
   collections: {
     select: { fr: 'Collection', en: 'Collection' },
