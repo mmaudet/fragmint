@@ -108,8 +108,9 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
                   {active.candidates.map((c) => (
                     <SectionFragmentCard
-                      key={c.fragment_id}
+                      key={`${active.id}-${c.fragment_id}`}
                       candidate={c}
+                      collectionSlug={plan.collection_slug ?? 'common'}
                       selection={active.selected.find((s) => s.fragment_id === c.fragment_id)}
                       onChange={(sel) => applySelectionChange(active, c.fragment_id, sel)}
                       onReject={() => applyCandidateReject(active, c.fragment_id)}

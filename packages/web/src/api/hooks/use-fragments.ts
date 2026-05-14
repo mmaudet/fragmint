@@ -29,6 +29,7 @@ export function useFragment(collectionSlug: string, id: string | null) {
     queryFn: () =>
       apiRequest<Fragment>('GET', collectionApiUrl(collectionSlug, `/fragments/${id}`)),
     enabled: !!id,
+    staleTime: 0,
   });
 }
 
