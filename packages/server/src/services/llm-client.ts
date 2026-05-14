@@ -111,9 +111,12 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
   ): Promise<Classification> {
     const prompt = `You are a content classification assistant. Classify the following text block.
 
-Choose the BEST matching type from this closed list: ${JSON.stringify(existingTypes)}.
-Choose the BEST matching domain from this closed list: ${JSON.stringify(existingDomains)}.
-If the text does not fit any option, use "other". Do not invent new values outside these lists.
+- type: the rhetorical function of the block. Choose the BEST match from: ${JSON.stringify(existingTypes)}.
+- domain: the SUBJECT MATTER (which product or thematic area this is about). Choose the BEST match from: ${JSON.stringify(existingDomains)}. Domain is about WHAT the text is about, not HOW it is written. A technical paragraph about Twake → domain "twake", not "technical".
+- tags: free-form keywords describing the nature and audience of the content (e.g. ["technical", "commercial", "legal", "sla", "security", "pricing"]).
+- confidence: your confidence in this classification (0–1).
+
+Do not invent domain or type values outside the provided lists. Use "other" if nothing fits.
 
 Text:
 ${blockText}
