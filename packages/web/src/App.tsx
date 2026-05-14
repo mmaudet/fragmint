@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth-context';
 import { I18nProvider } from '@/lib/i18n';
 import { CollectionProvider } from '@/lib/collection-context';
@@ -25,6 +26,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <I18nProvider>
+          <TooltipProvider>
           <CollectionProvider>
             <BrowserRouter basename="/ui">
               <Routes>
@@ -48,6 +50,7 @@ export default function App() {
             </BrowserRouter>
             <Toaster />
           </CollectionProvider>
+          </TooltipProvider>
         </I18nProvider>
       </AuthProvider>
     </QueryClientProvider>
