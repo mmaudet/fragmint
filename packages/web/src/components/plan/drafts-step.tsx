@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Loader2, Info } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-export function DraftsStep({ plan }: { plan: Plan }) {
+export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: () => void }) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [progress, setProgress] = useState<{ i: number; total: number } | null>(null);
@@ -20,6 +20,7 @@ export function DraftsStep({ plan }: { plan: Plan }) {
 
   const sections = plan.state.sections;
   const active = sections[activeIdx];
+  const allGenerated = sections.length > 0 && sections.every((s) => !!s.generated_markdown);
 
   const [activeMarkdown, setActiveMarkdown] = useState(active?.generated_markdown ?? '');
   const [sectionInstructions, setSectionInstructions] = useState(active?.writer_instructions ?? '');
@@ -90,17 +91,40 @@ export function DraftsStep({ plan }: { plan: Plan }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b p-3 flex items-center gap-3">
-        <Button onClick={generateAll} disabled={progress !== null}>
-          {progress && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {progress
-            ? `${progress.i} / ${progress.total} ✓`
-            : t('planGeneration', 'generateAllSections')}
-        </Button>
-        <Button variant="outline" onClick={() => assemble.mutate()} disabled={assemble.isPending}>
-          {assemble.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {t('planGeneration', 'assemble')}
-        </Button>
+      <div className="border-b p-3 space-y-2">
+        <div className="flex items-center gap-3">
+          <Button onClick={generateAll} disabled={progress !== null}>
+            {progress && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {progress
+              ? `${progress.i} / ${progress.total} ✓`
+              : allGenerated
+                ? t('planGeneration', 'regenerateAllSections')
+                : t('planGeneration', 'generateAllSections')}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              assemble.mutate(undefined, {
+                onSuccess: () => {
+                  toast.success(t('planGeneration', 'assembleSuccess'));
+                  onAssembled?.();
+                },
+                onError: (e: any) => toast.error(`${t('planGeneration', 'assembleError')} : ${e.message ?? e}`),
+              })
+            }
+            disabled={assemble.isPending}
+          >
+            {assemble.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {t('planGeneration', 'assemble')}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium">{t('planGeneration', allGenerated ? 'regenerateAllSections' : 'generateAllSections')}</span>
+          {' — '}{t('planGeneration', 'generateAllSectionsHint')}
+          {' · '}
+          <span className="font-medium">{t('planGeneration', 'assemble')}</span>
+          {' — '}{t('planGeneration', 'assembleHint')}
+        </p>
       </div>
 
       <div className="flex flex-1 overflow-hidden">

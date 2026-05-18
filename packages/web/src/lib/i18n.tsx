@@ -157,9 +157,27 @@ const translations = {
     validateAllSections: { fr: 'Valider toutes les sections', en: 'Validate all sections' },
     generateSection: { fr: 'Générer le draft', en: 'Generate section' },
     generateAllSections: { fr: 'Générer tous les drafts', en: 'Generate all section drafts' },
+    regenerateAllSections: { fr: 'Régénérer tous les drafts', en: 'Regenerate all section drafts' },
     assemble: { fr: 'Assembler le document', en: 'Assemble document' },
+    generateAllSectionsHint: {
+      fr: "Écrit le brouillon de chaque section à partir des fragments sélectionnés.",
+      en: "Writes each section's draft from the selected fragments.",
+    },
+    assembleHint: {
+      fr: "Concatène tous les drafts en un document Markdown final, prêt à exporter.",
+      en: "Concatenates all drafts into a final Markdown document, ready to export.",
+    },
+    assembleSuccess: {
+      fr: "Document assemblé — passez à l'étape Assemblage pour exporter.",
+      en: "Document assembled — go to the Assembly step to export.",
+    },
+    assembleError: {
+      fr: "Assemblage échoué",
+      en: "Assembly failed",
+    },
     downloadMd: { fr: 'Télécharger .md', en: 'Download .md' },
     downloadDocx: { fr: 'Télécharger .docx', en: 'Download .docx' },
+    assembleFirst: { fr: 'Assemblez d\'abord le document', en: 'Assemble the document first' },
     styleTemplate: { fr: 'Modèle de style', en: 'Style template' },
     defaultStyling: { fr: '(style par défaut)', en: '(default styling)' },
     uploadStyleTemplate: { fr: 'Importer un nouveau modèle', en: 'Upload new template' },
