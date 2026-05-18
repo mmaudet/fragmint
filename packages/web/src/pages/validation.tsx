@@ -226,7 +226,7 @@ export default function ValidationPage() {
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Fragments reviewés — prêts pour approbation finale.
+          Fragments vérifiés — prêts pour approbation finale.
         </p>
         {isLoadingReviewed ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

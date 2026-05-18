@@ -106,7 +106,7 @@ export default function InventoryPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                Reviewed <QualityBadge quality="reviewed" />
+                <QualityBadge quality="reviewed" />
               </CardTitle>
             </CardHeader>
             <CardContent>
