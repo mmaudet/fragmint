@@ -1,0 +1,42 @@
+id: tpl-lincloud-reveal
+name: "LinCloud Souverain — Présentation reveal.js"
+output_format: reveal
+carbone_template: lincloud-reveal.html
+version: "1.0"
+context_schema:
+  client:
+    type: string
+    required: true
+  date:
+    type: date
+    default: today
+  reference:
+    type: string
+    default: "LC-2026-001"
+fragments:
+  - key: introduction
+    type: introduction
+    domain: lincloud
+    lang: fr
+    count: 1
+  - key: arguments
+    type: argument
+    domain: lincloud
+    lang: fr
+    count: 6
+  - key: pricing
+    type: pricing
+    domain: lincloud
+    lang: fr
+    count: 1
+  - key: references
+    type: argument
+    domain: lincloud
+    lang: fr
+    count: 1
+    fallback: skip
+  - key: conclusion
+    type: conclusion
+    domain: lincloud
+    lang: fr
+    count: 1
