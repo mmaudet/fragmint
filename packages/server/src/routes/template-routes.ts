@@ -141,7 +141,10 @@ export function templateRoutes(
         request.ip,
       );
 
-      return reply.status(201).send({ data: result, meta: null, error: null });
+      const { validateDocxStyles } = await import('../services/docx-style-validator.js');
+      const warnings = validateDocxStyles(fileBuf);
+
+      return reply.status(201).send({ data: { ...result, warnings }, meta: null, error: null });
     },
   );
 

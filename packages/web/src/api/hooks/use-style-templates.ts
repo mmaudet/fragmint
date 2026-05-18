@@ -43,7 +43,7 @@ export function useUploadStyleTemplate() {
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const json = await res.json();
-      return json.data as { id: string };
+      return json.data as { id: string; warnings: { style: string; issue: string }[] };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
