@@ -119,7 +119,7 @@ export function fragmentRoutes(
   app.post(`${prefix}/fragments/inventory`, { preHandler: readHandlers }, async (request) => {
     const parsed = inventoryQuerySchema.safeParse(request.body);
     if (!parsed.success) return { data: null, meta: null, error: parsed.error.message };
-    const inventory = await fragmentService.inventory(parsed.data?.topic, parsed.data?.lang);
+    const inventory = await fragmentService.inventory(parsed.data?.topic, parsed.data?.lang, request.collection?.slug);
     return { data: inventory, meta: null, error: null };
   });
 

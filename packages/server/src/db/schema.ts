@@ -118,6 +118,7 @@ export const harvestJobs = sqliteTable('harvest_jobs', {
   created_by: text('created_by').notNull(),
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at').notNull(),
+  collection_slug: text('collection_slug'),
 });
 
 export const harvestCandidates = sqliteTable('harvest_candidates', {

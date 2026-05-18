@@ -54,7 +54,7 @@ export function harvestRoutes(
       });
     }
 
-    const jobId = await harvesterService.harvest(files, filenames, options, request.user.login);
+    const jobId = await harvesterService.harvest(files, filenames, options, request.user.login, request.collection?.slug);
 
     return reply.status(202).send({
       data: { job_id: jobId, status: 'processing', files: filenames },

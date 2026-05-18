@@ -75,6 +75,7 @@ export class HarvesterService {
     filenames: string[],
     options: { min_confidence: number },
     userId: string,
+    collectionSlug?: string,
   ): Promise<string> {
     const jobId = `hrv-${randomUUID()}`;
     const now = new Date().toISOString();
@@ -88,6 +89,7 @@ export class HarvesterService {
       created_by: userId,
       created_at: now,
       updated_at: now,
+      collection_slug: collectionSlug ?? null,
     });
 
     // Launch pipeline async without awaiting
@@ -304,6 +306,9 @@ export class HarvesterService {
     let merged = 0;
     let rejected = 0;
 
+    const jobRows = await this.db.select().from(harvestJobs).where(eq(harvestJobs.id, jobId)).limit(1);
+    const collectionSlug = jobRows[0]?.collection_slug ?? undefined;
+
     // Accepted candidates — create fragments
     for (const candidateId of validation.accepted) {
       const rows = await this.db
@@ -330,6 +335,9 @@ export class HarvesterService {
         },
         userId,
         'expert',
+        undefined,
+        undefined,
+        collectionSlug,
       );
 
       await this.db
@@ -366,6 +374,9 @@ export class HarvesterService {
         },
         userId,
         'expert',
+        undefined,
+        undefined,
+        collectionSlug,
       );
 
       await this.db
