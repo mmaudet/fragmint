@@ -238,8 +238,21 @@ export class FragmentService {
     if (!existing) throw new Error('Fragment not found');
 
     // Check write permission
-    if (existing.quality === 'approved' && !hasRole(userRole, 'expert')) {
-      throw new Error('Only expert+ can modify approved fragments');
+    const isContentEdit = !!(input.body !== undefined || input.tags !== undefined || input.domain !== undefined);
+    if (
+      isContentEdit &&
+      (existing.quality === 'approved' || existing.quality === 'reviewed') &&
+      !hasRole(userRole, 'expert')
+    ) {
+      throw new Error('Only expert+ can modify reviewed or approved fragments');
+    }
+    if (
+      isContentEdit &&
+      existing.quality === 'draft' &&
+      existing.author !== userId &&
+      !hasRole(userRole, 'expert')
+    ) {
+      throw new Error('Only the author or expert+ can modify a draft fragment');
     }
 
     // Quality transition validation
@@ -293,6 +306,7 @@ export class FragmentService {
       .set({
         domain: updatedFrontmatter.domain,
         quality: updatedFrontmatter.quality,
+        tags: JSON.stringify(updatedFrontmatter.tags ?? []),
         updated_at: updatedFrontmatter.updated_at,
         title: deriveTitle(newBody),
         body_excerpt: newBody.slice(0, 200),
