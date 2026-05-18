@@ -49,9 +49,8 @@ export default function AppLayout() {
   ];
 
   const navItems = [
-    { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
-    { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
+    { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
     { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
     { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
