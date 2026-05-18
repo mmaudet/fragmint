@@ -10,7 +10,7 @@ import { AddFragmentDialog } from './add-fragment-dialog';
 import { Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export function FragmentsStep({ plan }: { plan: Plan }) {
+export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?: () => void }) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
@@ -127,6 +127,7 @@ export function FragmentsStep({ plan }: { plan: Plan }) {
             onClick={async () => {
               try {
                 await validate.mutateAsync();
+                onValidated?.();
               } catch (e: any) {
                 toast.error(`Validation failed: ${e.message ?? e}`);
               }
