@@ -14,6 +14,7 @@ import ComposePage from '@/pages/compose';
 import ValidationPage from '@/pages/validation';
 import HarvestPage from '@/pages/harvest';
 import PlanGenerationPage from '@/pages/plan-generation';
+import HomePage from '@/pages/home';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,7 +32,7 @@ export default function App() {
             <BrowserRouter basename="/ui">
               <Routes>
                 <Route path="/login" element={<LoginPage />} />
-                <Route path="/" element={<Navigate to="/fragments" replace />} />
+                <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route
                   element={
                     <ProtectedRoute>
@@ -39,6 +40,7 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 >
+                  <Route path="/home" element={<HomePage />} />
                   <Route path="/fragments" element={<FragmentsPage />} />
                   <Route path="/inventory" element={<InventoryPage />} />
                   <Route path="/compose" element={<ComposePage />} />

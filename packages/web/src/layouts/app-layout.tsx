@@ -22,13 +22,13 @@ import { Separator } from '@/components/ui/separator';
 import {
   BookOpen,
   BarChart3,
-  FileText,
   CheckCircle,
   Upload,
   LogOut,
   ChevronDown,
   Lock,
   PenLine,
+  Home,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -45,9 +45,9 @@ export default function AppLayout() {
   }, [cols, setCollections]);
 
   const navItems = [
+    { to: '/home', label: t('nav', 'home'), icon: Home },
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
     { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
-    { to: '/compose', label: t('nav', 'composer'), icon: FileText },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
     { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
     { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
@@ -58,7 +58,9 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className="w-56 bg-slate-900 text-slate-300 flex flex-col">
         <div className="p-4 pb-3">
-          <h1 className="text-lg font-bold text-white">⬡ Fragmint</h1>
+          <NavLink to="/home" className="text-lg font-bold text-white hover:text-slate-200 transition-colors">
+            ⬡ Fragmint
+          </NavLink>
         </div>
         <Separator className="bg-slate-700" />
 
