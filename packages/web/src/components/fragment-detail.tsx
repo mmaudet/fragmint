@@ -3,14 +3,18 @@ import {
   useFragmentHistory,
   useReviewFragment,
   useApproveFragment,
+  useUpdateFragment,
 } from '@/api/hooks/use-fragments';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
+import { useState } from 'react';
 import { QualityBadge } from '@/components/quality-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
@@ -20,11 +24,20 @@ import {
   SheetFooter,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
+import { Pencil, Save, X } from 'lucide-react';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
   open: boolean;
   onClose: () => void;
+}
+
+function parseTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[];
+  if (typeof raw === 'string' && raw.length > 0) {
+    try { return JSON.parse(raw) as string[]; } catch { return []; }
+  }
+  return [];
 }
 
 export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProps) {
@@ -34,6 +47,11 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const { data: history } = useFragmentHistory(activeCollection, fragmentId);
   const reviewMutation = useReviewFragment(activeCollection);
   const approveMutation = useApproveFragment(activeCollection);
+  const updateMutation = useUpdateFragment(activeCollection);
+  const [editMode, setEditMode] = useState(false);
+  const [editBody, setEditBody] = useState('');
+  const [editDomain, setEditDomain] = useState('');
+  const [editTags, setEditTags] = useState('');
 
   const handleReview = () => {
     if (!fragmentId) return;
@@ -51,8 +69,28 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
     });
   };
 
+  const startEdit = () => {
+    if (!fragment) return;
+    setEditBody(fragment.body ?? fragment.body_excerpt ?? '');
+    setEditDomain(fragment.domain ?? '');
+    setEditTags(parseTags(fragment.tags).join(', '));
+    setEditMode(true);
+  };
+
+  const handleSave = () => {
+    if (!fragmentId) return;
+    const tags = editTags.split(',').map((t) => t.trim()).filter(Boolean);
+    updateMutation.mutate(
+      { id: fragmentId, input: { body: editBody, domain: editDomain, tags } },
+      {
+        onSuccess: () => { toast.success(t('fragments', 'updateSuccess')); setEditMode(false); },
+        onError: () => toast.error(t('fragments', 'updateError')),
+      },
+    );
+  };
+
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <Sheet open={open} onOpenChange={(v) => { if (!v) { setEditMode(false); onClose(); } }}>
       <SheetContent side="right" className="w-[500px] sm:max-w-lg overflow-y-auto">
         {isLoading ? (
           <div className="space-y-4 pt-6">
@@ -78,10 +116,48 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
             <div className="mt-6 space-y-6">
               {/* Body */}
               <div>
-                <h4 className="text-sm font-medium mb-2">{t('common', 'content')}</h4>
-                <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
-                  {fragment.body || fragment.body_excerpt || '\u2014'}
-                </pre>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium">{t('common', 'content')}</h4>
+                  {!editMode && (
+                    <Button variant="ghost" size="sm" onClick={startEdit}>
+                      <Pencil className="h-3 w-3 mr-1" />
+                      {t('planGeneration', 'edit')}
+                    </Button>
+                  )}
+                </div>
+                {editMode ? (
+                  <div className="space-y-3">
+                    <Textarea
+                      className="font-mono text-sm min-h-48"
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'domain')}</label>
+                        <Input value={editDomain} onChange={(e) => setEditDomain(e.target.value)} className="text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'tags')} (virgule)</label>
+                        <Input value={editTags} onChange={(e) => setEditTags(e.target.value)} className="text-sm" placeholder="tag1, tag2" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+                        <Save className="h-3 w-3 mr-1" />
+                        {updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
+                        <X className="h-3 w-3 mr-1" />
+                        {t('common', 'cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
+                    {fragment.body || fragment.body_excerpt || '\u2014'}
+                  </pre>
+                )}
               </div>
 
               <Separator />
@@ -125,21 +201,19 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
               </div>
 
               {/* Tags */}
-              {fragment.tags && fragment.tags.length > 0 && (
+              {(() => { const tags = parseTags(fragment.tags); return tags.length > 0 ? (
                 <>
                   <Separator />
                   <div>
                     <h4 className="text-sm font-medium mb-2">{t('common', 'tags')}</h4>
                     <div className="flex flex-wrap gap-1.5">
-                      {fragment.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
+                      {tags.map((tag) => (
+                        <Badge key={tag} variant="secondary">{tag}</Badge>
                       ))}
                     </div>
                   </div>
                 </>
-              )}
+              ) : null; })()}
 
               {/* History */}
               {history && history.length > 0 && (
