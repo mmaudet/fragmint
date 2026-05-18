@@ -21,7 +21,6 @@ export function SpecStep({ plan }: { plan: Plan }) {
   const [specPrompt, setSpecPrompt] = useState(plan.state.spec_prompt);
   const [domainStr, setDomainStr] = useState((plan.state.filters.domain ?? []).join(', '));
   const [lang, setLang] = useState(plan.state.filters.lang ?? '');
-  const [type, setType] = useState(plan.state.filters.type ?? '');
   const [tagsStr, setTagsStr] = useState((plan.state.filters.tags ?? []).join(', '));
   const [refinement, setRefinement] = useState('');
   const [planMarkdown, setPlanMarkdown] = useState(plan.state.plan_markdown);
@@ -36,7 +35,6 @@ export function SpecStep({ plan }: { plan: Plan }) {
         filters: {
           domain: domainStr.split(',').map((s) => s.trim()).filter(Boolean),
           lang: lang || undefined,
-          type: type || undefined,
           tags: tagsStr.split(',').map((s) => s.trim()).filter(Boolean),
         },
         plan_markdown: planMarkdown,
@@ -46,7 +44,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specPrompt, domainStr, lang, type, tagsStr, planMarkdown]);
+  }, [specPrompt, domainStr, lang, tagsStr, planMarkdown]);
 
   async function handleGenerate() {
     try {
@@ -93,13 +91,6 @@ export function SpecStep({ plan }: { plan: Plan }) {
                 <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterLangTooltip')}</TooltipContent></Tooltip>
               </div>
               <Input placeholder="fr, en…" value={lang} onChange={(e) => setLang(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                {t('planGeneration', 'filterType')}
-                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterTypeTooltip')}</TooltipContent></Tooltip>
-              </div>
-              <Input placeholder="introduction, argument, pricing…" value={type} onChange={(e) => setType(e.target.value)} />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
