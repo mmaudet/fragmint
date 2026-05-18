@@ -117,6 +117,15 @@ export class GitRepository {
   }
 
   private async exec(...args: string[]) {
-    return execFileAsync(GIT_BIN, args, { cwd: this.repoPath });
+    return execFileAsync(GIT_BIN, args, {
+      cwd: this.repoPath,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME ?? 'Fragmint',
+        GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL ?? 'fragmint@localhost',
+        GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? 'Fragmint',
+        GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? 'fragmint@localhost',
+      },
+    });
   }
 }
