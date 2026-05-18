@@ -148,3 +148,11 @@ export const plans = sqliteTable('plans', {
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at').notNull(),
 });
+
+export const planFragmentUsages = sqliteTable('plan_fragment_usages', {
+  id: text('id').primaryKey(),
+  plan_id: text('plan_id').notNull(),
+  section_id: text('section_id').notNull(),
+  fragment_id: text('fragment_id').notNull(),
+  used_at: text('used_at').notNull(),
+});

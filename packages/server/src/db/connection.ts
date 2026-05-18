@@ -86,6 +86,15 @@ export function createDb(path: string | ':memory:') {
     );
     CREATE INDEX IF NOT EXISTS plans_owner_idx ON plans(owner);
     CREATE INDEX IF NOT EXISTS plans_collection_idx ON plans(collection_slug);
+    CREATE TABLE IF NOT EXISTS plan_fragment_usages (
+      id TEXT PRIMARY KEY,
+      plan_id TEXT NOT NULL,
+      section_id TEXT NOT NULL,
+      fragment_id TEXT NOT NULL,
+      used_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS pfu_plan_idx ON plan_fragment_usages(plan_id);
+    CREATE INDEX IF NOT EXISTS pfu_fragment_idx ON plan_fragment_usages(fragment_id);
   `);
 
   // Add collection_slug to api_tokens if not already present

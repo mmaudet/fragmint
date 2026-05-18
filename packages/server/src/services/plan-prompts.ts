@@ -53,6 +53,8 @@ export interface BuildSectionArgs {
   lang: string;
   max_chars: number;
   writer_prompt_override?: string;
+  plan_title?: string;
+  spec_prompt?: string;
 }
 
 const WRITER_SYSTEM_BASE = `You are an expert technical writer producing one section of a larger
@@ -88,6 +90,11 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
   }
 
   const lines: string[] = [];
+  if (args.plan_title) lines.push(`Document title: ${args.plan_title}`);
+  if (args.spec_prompt) {
+    lines.push(`Document specification: ${args.spec_prompt.trim()}`);
+    lines.push('');
+  }
   lines.push(`Section title: ${args.section.title}`);
   lines.push(`Section description: ${args.section.description}`);
   lines.push('');

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, and, desc } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans, fragments } from '../db/schema.js';
+import { plans, fragments, planFragmentUsages } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -531,8 +531,24 @@ export class PlanService {
       lang: p.state.filters.lang ?? 'fr',
       max_chars: this.config.fragmentMaxChars,
       writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
+      plan_title: p.title,
+      spec_prompt: p.state.spec_prompt,
     });
     const out = await this.requireLlm().chatMessages(messages);
+
+    const now = new Date().toISOString();
+    await Promise.all(
+      section.selected.map((sel) =>
+        this.db.insert(planFragmentUsages).values({
+          id: randomUUID(),
+          plan_id: planId,
+          section_id: sectionId,
+          fragment_id: sel.fragment_id,
+          used_at: now,
+        }),
+      ),
+    );
+
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
     );
