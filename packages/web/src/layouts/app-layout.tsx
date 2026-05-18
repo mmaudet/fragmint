@@ -44,8 +44,11 @@ export default function AppLayout() {
     if (cols) setCollections(cols);
   }, [cols, setCollections]);
 
-  const navItems = [
+  const topNavItems = [
     { to: '/home', label: t('nav', 'home'), icon: Home },
+  ];
+
+  const navItems = [
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
     { to: '/inventory', label: t('nav', 'inventory'), icon: BarChart3 },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
@@ -63,6 +66,29 @@ export default function AppLayout() {
           </NavLink>
         </div>
         <Separator className="bg-slate-700" />
+
+        {/* Global nav — above collection scope */}
+        <nav className="p-2 pb-0 space-y-1">
+          {topNavItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  isActive
+                    ? 'bg-primary/20 text-white font-medium'
+                    : 'hover:bg-slate-800 hover:text-white',
+                )
+              }
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <Separator className="bg-slate-700 mt-2" />
 
         {/* Collection selector */}
         {collections.length > 0 && (

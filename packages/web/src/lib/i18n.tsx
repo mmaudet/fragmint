@@ -70,6 +70,11 @@ const translations = {
     statApproved: { fr: 'approuvés', en: 'approved' },
     statPending: { fr: 'à valider', en: 'pending validation' },
     statPlans: { fr: 'plans générés', en: 'generated plans' },
+    collectionsTitle: { fr: 'Collections', en: 'Collections' },
+    collectionsDesc: {
+      fr: "Vos contenus sont organisés en collections. common est la bibliothèque partagée par toute l'organisation. Vous pouvez créer des collections privées par équipe ou projet, avec des droits d'accès distincts (lecteur, contributeur, expert, admin). La composition peut puiser dans plusieurs collections à la fois.",
+      en: "Your contents are organised in collections. common is the library shared across the organisation. You can create private collections per team or project, with distinct access rights (reader, contributor, expert, admin). Composition can draw from multiple collections at once.",
+    },
   },
   quality: {
     draft: { fr: 'Brouillon', en: 'Draft' },

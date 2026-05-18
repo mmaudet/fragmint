@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, CheckCircle, PenLine, Library, ArrowRight } from 'lucide-react';
+import { Upload, CheckCircle, PenLine, Library, ArrowRight, Layers } from 'lucide-react';
 
 export default function HomePage() {
   const { t } = useI18n();
@@ -126,6 +126,17 @@ export default function HomePage() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Collections */}
+        <div className="flex gap-4 items-start p-5 rounded-xl border bg-background">
+          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0">
+            <Layers className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </div>
+          <div>
+            <h2 className="font-semibold mb-1">{t('home', 'collectionsTitle')}</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t('home', 'collectionsDesc')}</p>
           </div>
         </div>
       </div>
