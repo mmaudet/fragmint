@@ -4,10 +4,24 @@ import type { StyleTemplate } from '@/api/types';
 
 const KEY = ['style-templates'] as const;
 
+interface StyleTemplatesResponse {
+  templates: StyleTemplate[];
+  defaultName: string | null;
+}
+
 export function useStyleTemplates() {
-  return useQuery<StyleTemplate[]>({
+  return useQuery<StyleTemplatesResponse>({
     queryKey: KEY,
-    queryFn: () => apiRequest<StyleTemplate[]>('GET', '/v1/templates?kind=style_reference'),
+    queryFn: async () => {
+      const res = await fetch('/v1/templates?kind=style_reference', {
+        headers: { Authorization: `Bearer ${(await import('@/api/client')).getToken() ?? ''}` },
+      });
+      const json = await res.json();
+      return {
+        templates: json.data ?? [],
+        defaultName: json.meta?.default?.name ?? null,
+      };
+    },
   });
 }
 

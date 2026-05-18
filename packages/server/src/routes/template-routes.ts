@@ -1,5 +1,6 @@
 // packages/server/src/routes/template-routes.ts
 import { createReadStream } from 'node:fs';
+import { basename } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
 import type { TemplateService } from '../services/template-service.js';
@@ -14,6 +15,7 @@ export function templateRoutes(
   options?: {
     prefix?: string;
     collectionMiddleware?: any;
+    defaultReferenceDocPath?: string;
   },
 ) {
   const prefix = options?.prefix ?? '/v1';
@@ -27,6 +29,10 @@ export function templateRoutes(
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('admin')];
 
+  const defaultReferenceName = options?.defaultReferenceDocPath
+    ? basename(options.defaultReferenceDocPath)
+    : null;
+
   // List templates
   app.get(`${prefix}/templates`, { preHandler: readHandlers }, async (request) => {
     const query = request.query as Record<string, string>;
@@ -36,7 +42,11 @@ export function templateRoutes(
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
-    return { data: rows, meta: { count: rows.length }, error: null };
+    const meta: Record<string, unknown> = { count: rows.length };
+    if (query.kind === 'style_reference') {
+      meta.default = defaultReferenceName ? { name: defaultReferenceName } : null;
+    }
+    return { data: rows, meta, error: null };
   });
 
   // Get template by ID

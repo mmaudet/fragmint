@@ -239,7 +239,9 @@ export async function createServer(options?: {
     authenticate,
     searchService,
   );
-  templateRoutes(app, templateService, composerService, authenticate);
+  templateRoutes(app, templateService, composerService, authenticate, {
+    defaultReferenceDocPath: config.plan_docx_reference_path,
+  });
   harvestRoutes(app, harvesterService, authenticate);
   planRoutes(app, planService, templateService, config.store_path, authenticate);
 
