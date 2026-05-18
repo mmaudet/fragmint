@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { plans, fragments, planFragmentUsages } from '../db/schema.js';
 import {
@@ -20,7 +20,7 @@ import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js'
 import type { FragmentCandidate } from '../schema/plan.js';
 import { HARVESTER_TYPES, HARVESTER_DOMAINS } from './harvester-taxonomy.js';
 
-const SECTION_SCORE_THRESHOLD = 0.5;
+const SECTION_SCORE_THRESHOLD = 0.2;
 
 function toCandidate(r: SearchResult): FragmentCandidate {
   return {
@@ -193,15 +193,15 @@ export class PlanService {
     filters: PlanFilters,
     collectionSlug: string | null,
   ): Promise<FragmentCandidate[]> {
-    const effectiveType = filters.type ?? section.inferred_type;
     const results = await this.requireSearch().search(
       `${section.title}\n${section.description}`,
       {
         domain: filters.domain?.length ? filters.domain : undefined,
-        type: effectiveType ? [effectiveType] : undefined,
+        type: filters.type ? [filters.type] : undefined,
         lang: filters.lang,
         tags: filters.tags,
         collectionSlug: collectionSlug ?? undefined,
+        quality_min: 'reviewed',
       },
       5,
     );
@@ -538,15 +538,19 @@ export class PlanService {
 
     const now = new Date().toISOString();
     await Promise.all(
-      section.selected.map((sel) =>
-        this.db.insert(planFragmentUsages).values({
+      section.selected.map(async (sel) => {
+        await this.db.insert(planFragmentUsages).values({
           id: randomUUID(),
           plan_id: planId,
           section_id: sectionId,
           fragment_id: sel.fragment_id,
           used_at: now,
-        }),
-      ),
+        });
+        await this.db
+          .update(fragments)
+          .set({ uses: sql`${fragments.uses} + 1` })
+          .where(eq(fragments.id, sel.fragment_id));
+      }),
     );
 
     const updatedSections = p.state.sections.map((s) =>
