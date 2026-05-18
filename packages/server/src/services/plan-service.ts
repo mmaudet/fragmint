@@ -542,10 +542,10 @@ export class PlanService {
   async assemble(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
-    const parts: string[] = [`# ${p.title}`, ''];
+    const parts: string[] = [`---\ntitle: "${p.title.replace(/"/g, '\\"')}"\n---`, ''];
     for (const s of p.state.sections) {
       if (!s.generated_markdown) continue;
-      parts.push(`## ${s.title}`);
+      parts.push(`# ${s.title}`);
       parts.push('');
       parts.push(s.generated_markdown.trim());
       parts.push('');
