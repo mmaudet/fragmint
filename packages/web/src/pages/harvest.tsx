@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { HarvestCandidate } from '@/api/types';
 
 export default function HarvestPage() {
   const { t } = useI18n();
@@ -23,6 +25,7 @@ export default function HarvestPage() {
   const [dragOver, setDragOver] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>({});
   const [commitResult, setCommitResult] = useState<{ committed: number } | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<HarvestCandidate | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startHarvest = useStartHarvest(activeCollection);
@@ -296,7 +299,7 @@ export default function HarvestPage() {
             {commitResult.committed} {t('harvest', 'committed')}
           </span>
           <Link to="/validation">
-            <Button variant="outline" size="sm">
+            <Button variant="outline">
               {t('harvest', 'goToValidation')}
             </Button>
           </Link>
@@ -338,9 +341,61 @@ export default function HarvestPage() {
             decision={decisions[c.id]}
             onAccept={() => setDecision(c.id, 'accepted')}
             onReject={() => setDecision(c.id, 'rejected')}
+            onClick={() => setSelectedCandidate(c)}
           />
         ))}
       </div>
+
+      {/* Detail drawer */}
+      <Sheet open={!!selectedCandidate} onOpenChange={(v) => !v && setSelectedCandidate(null)}>
+        <SheetContent side="right" className="w-[480px] sm:max-w-lg overflow-y-auto">
+          {selectedCandidate && (
+            <>
+              <SheetHeader className="mb-4">
+                <SheetTitle>{selectedCandidate.title}</SheetTitle>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <Badge variant="outline" className="text-xs">{selectedCandidate.type}</Badge>
+                  <Badge variant="outline" className="text-xs">{selectedCandidate.lang}</Badge>
+                  <Badge variant="outline" className="text-xs">{selectedCandidate.domain}</Badge>
+                  <Badge className={cn('text-xs', selectedCandidate.confidence >= 0.8 ? 'bg-green-100 text-green-800' : selectedCandidate.confidence >= 0.65 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800')}>
+                    {Math.round(selectedCandidate.confidence * 100)}%
+                  </Badge>
+                </div>
+              </SheetHeader>
+
+              <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[60vh]">
+                {selectedCandidate.body}
+              </pre>
+
+              {selectedCandidate.duplicate_of && (
+                <div className="flex items-center gap-1 text-xs text-amber-600 mt-3">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>{t('harvest', 'duplicateWarning')} ({Math.round((selectedCandidate.duplicate_score ?? 0) * 100)}%)</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-6">
+                <Button
+                  className="flex-1"
+                  variant={decisions[selectedCandidate.id] === 'accepted' ? 'default' : 'outline'}
+                  onClick={() => { setDecision(selectedCandidate.id, 'accepted'); setSelectedCandidate(null); }}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  {t('harvest', 'accept')}
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant={decisions[selectedCandidate.id] === 'rejected' ? 'destructive' : 'outline'}
+                  onClick={() => { setDecision(selectedCandidate.id, 'rejected'); setSelectedCandidate(null); }}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  {t('harvest', 'reject')}
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -11,6 +11,7 @@ interface CandidateCardProps {
   decision?: 'accepted' | 'rejected';
   onAccept: () => void;
   onReject: () => void;
+  onClick?: () => void;
 }
 
 function confidenceColor(confidence: number) {
@@ -20,7 +21,7 @@ function confidenceColor(confidence: number) {
   return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
 }
 
-export function CandidateCard({ candidate, decision, onAccept, onReject }: CandidateCardProps) {
+export function CandidateCard({ candidate, decision, onAccept, onReject, onClick }: CandidateCardProps) {
   const { t } = useI18n();
 
   return (
@@ -29,7 +30,9 @@ export function CandidateCard({ candidate, decision, onAccept, onReject }: Candi
         'transition-colors',
         decision === 'accepted' && 'bg-green-50 dark:bg-green-950/30',
         decision === 'rejected' && 'opacity-50',
+        onClick && 'cursor-pointer hover:shadow-md',
       )}
+      onClick={onClick}
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
@@ -67,11 +70,11 @@ export function CandidateCard({ candidate, decision, onAccept, onReject }: Candi
 
         {candidate.status === 'pending' && !decision && (
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={onAccept}>
+            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={(e) => { e.stopPropagation(); onAccept(); }}>
               <Check className="h-3 w-3 mr-1" />
               {t('harvest', 'accept')}
             </Button>
-            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={onReject}>
+            <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={(e) => { e.stopPropagation(); onReject(); }}>
               <X className="h-3 w-3 mr-1" />
               {t('harvest', 'reject')}
             </Button>
@@ -84,7 +87,7 @@ export function CandidateCard({ candidate, decision, onAccept, onReject }: Candi
               size="sm"
               variant={decision === 'accepted' ? 'default' : 'outline'}
               className="flex-1 text-xs"
-              onClick={onAccept}
+              onClick={(e) => { e.stopPropagation(); onAccept(); }}
             >
               <Check className="h-3 w-3 mr-1" />
               {t('harvest', 'accept')}
@@ -93,7 +96,7 @@ export function CandidateCard({ candidate, decision, onAccept, onReject }: Candi
               size="sm"
               variant={decision === 'rejected' ? 'destructive' : 'outline'}
               className="flex-1 text-xs"
-              onClick={onReject}
+              onClick={(e) => { e.stopPropagation(); onReject(); }}
             >
               <X className="h-3 w-3 mr-1" />
               {t('harvest', 'reject')}
