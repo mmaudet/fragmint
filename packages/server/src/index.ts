@@ -262,6 +262,10 @@ export async function createServer(options?: {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
   });
+  planRoutes(app, planService, templateService, config.store_path, authenticate, {
+    prefix: collPrefix,
+    collectionMiddleware: requireCollRole('reader'),
+  });
 
   // Serve frontend static files
   const __dirname = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));

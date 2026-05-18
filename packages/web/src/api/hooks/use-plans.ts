@@ -1,30 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiRequest, getToken } from '@/api/client';
+import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
 import type { Plan, PlanFilters, PlanSection, PlanStatus } from '@/api/types';
 
-const KEY = ['plans'] as const;
-
-export function usePlans() {
+export function usePlans(collectionSlug: string) {
   return useQuery<Plan[]>({
-    queryKey: KEY,
-    queryFn: () => apiRequest<Plan[]>('GET', '/v1/plans'),
+    queryKey: ['plans', collectionSlug],
+    queryFn: () => apiRequest<Plan[]>('GET', collectionApiUrl(collectionSlug, '/plans')),
   });
 }
 
 export function usePlan(id: string | null) {
   return useQuery<Plan>({
-    queryKey: [...KEY, id],
+    queryKey: ['plans', id],
     enabled: !!id,
     queryFn: () => apiRequest<Plan>('GET', `/v1/plans/${id}`),
   });
 }
 
-export function useCreatePlan() {
+export function useCreatePlan(collectionSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { title?: string; spec_prompt: string; filters?: PlanFilters }) =>
-      apiRequest<Plan>('POST', '/v1/plans', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+      apiRequest<Plan>('POST', collectionApiUrl(collectionSlug, '/plans'), input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', collectionSlug] }),
   });
 }
 
@@ -46,28 +44,30 @@ export function useUpdatePlan(id: string) {
       }>,
     ) => apiRequest<Plan>('PATCH', `/v1/plans/${id}`, patch),
     onSuccess: (_data, patch) => {
-      qc.invalidateQueries({ queryKey: [...KEY, id] });
+      qc.invalidateQueries({ queryKey: ['plans', id] });
       if (patch.title !== undefined) {
-        qc.invalidateQueries({ queryKey: KEY });
+        qc.invalidateQueries({ queryKey: ['plans'] });
       }
     },
   });
 }
 
-export function useDeletePlan() {
+export function useDeletePlan(collectionSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiRequest<void>('DELETE', `/v1/plans/${id}`),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: KEY });
-      const previous = qc.getQueryData<Plan[]>(KEY);
-      qc.setQueryData<Plan[]>(KEY, (old) => (old ?? []).filter((p) => p.id !== id));
+      await qc.cancelQueries({ queryKey: ['plans', collectionSlug] });
+      const previous = qc.getQueryData<Plan[]>(['plans', collectionSlug]);
+      qc.setQueryData<Plan[]>(['plans', collectionSlug], (old) =>
+        (old ?? []).filter((p) => p.id !== id),
+      );
       return { previous };
     },
     onError: (_err, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(KEY, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(['plans', collectionSlug], ctx.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['plans', collectionSlug] }),
   });
 }
 
@@ -76,7 +76,7 @@ export function useGeneratePlan(id: string) {
   return useMutation({
     mutationFn: (input: { extra_instructions?: string }) =>
       apiRequest<Plan>('POST', `/v1/plans/${id}/generate-plan`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -84,7 +84,7 @@ export function useValidatePlan(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiRequest<Plan>('POST', `/v1/plans/${id}/validate-plan`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -95,7 +95,7 @@ export function useSectionSearch(id: string) {
       apiRequest<Plan>('POST', `/v1/plans/${id}/sections/${args.sectionId}/search`, {
         filters_override: args.filters_override,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -103,7 +103,7 @@ export function useValidateFragments(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiRequest<Plan>('POST', `/v1/plans/${id}/validate-fragments`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -122,7 +122,7 @@ export function useAddFragmentToSection(id: string) {
         `/v1/plans/${id}/sections/${sectionId}/add-fragment`,
         fragment_id ? { fragment_id } : { manual },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -131,7 +131,7 @@ export function useGenerateSection(id: string) {
   return useMutation({
     mutationFn: (sectionId: string) =>
       apiRequest<Plan>('POST', `/v1/plans/${id}/sections/${sectionId}/generate`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 
@@ -139,7 +139,7 @@ export function useAssemble(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiRequest<Plan>('POST', `/v1/plans/${id}/assemble`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, id] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
 

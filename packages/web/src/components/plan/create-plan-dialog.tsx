@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreatePlan } from '@/api/hooks/use-plans';
+import { useCollection } from '@/lib/collection-context';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,8 @@ export function CreatePlanDialog({
 }) {
   const [title, setTitle] = useState('');
   const [specPrompt, setSpecPrompt] = useState('');
-  const create = useCreatePlan();
+  const { activeCollection } = useCollection();
+  const create = useCreatePlan(activeCollection);
   const nav = useNavigate();
   const { t } = useI18n();
 
