@@ -228,7 +228,7 @@ export async function createServer(options?: {
   (app as unknown as { planService: PlanService }).planService = planService;
 
   // Routes
-  authRoutes(app, userService);
+  authRoutes(app, userService, authenticate);
   fragmentRoutes(app, fragmentService, authenticate);
   adminRoutes(
     app,

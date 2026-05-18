@@ -2,8 +2,13 @@
 import type { FastifyInstance } from 'fastify';
 import { loginSchema } from '../schema/api.js';
 import { UserService } from '../services/user-service.js';
+import type { buildAuthMiddleware } from '../auth/middleware.js';
 
-export function authRoutes(app: FastifyInstance, userService: UserService) {
+export function authRoutes(
+  app: FastifyInstance,
+  userService: UserService,
+  authenticate?: ReturnType<typeof buildAuthMiddleware>,
+) {
   app.post(
     '/v1/auth/login',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
@@ -27,4 +32,10 @@ export function authRoutes(app: FastifyInstance, userService: UserService) {
       return { data: { token, user }, meta: null, error: null };
     },
   );
+
+  if (authenticate) {
+    app.get('/v1/me', { preHandler: [authenticate] }, async (request) => {
+      return { data: request.user, meta: null, error: null };
+    });
+  }
 }
