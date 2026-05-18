@@ -17,6 +17,8 @@ const translations = {
     tags: { fr: 'Tags', en: 'Tags' },
     history: { fr: 'Historique', en: 'History' },
     noTitle: { fr: 'Sans titre', en: 'Untitled' },
+    save: { fr: 'Enregistrer', en: 'Save' },
+    cancel: { fr: 'Annuler', en: 'Cancel' },
     notFound: { fr: 'Fragment introuvable.', en: 'Fragment not found.' },
     domain: { fr: 'Domaine', en: 'Domain' },
     type: { fr: 'Type', en: 'Type' },
@@ -64,6 +66,9 @@ const translations = {
     reviewError: { fr: 'Erreur lors du review', en: 'Error during review' },
     approveSuccess: { fr: 'Fragment approuvé', en: 'Fragment approved' },
     approveError: { fr: "Erreur lors de l'approbation", en: 'Error during approval' },
+    updateSuccess: { fr: 'Fragment mis à jour', en: 'Fragment updated' },
+    updateError: { fr: 'Erreur lors de la mise à jour', en: 'Error updating fragment' },
+    permissionDenied: { fr: 'Droits insuffisants pour modifier ce fragment', en: 'Insufficient rights to edit this fragment' },
   },
   inventory: {
     title: { fr: 'Inventaire', en: 'Inventory' },

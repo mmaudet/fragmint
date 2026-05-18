@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useFragments,
   useFragment,
   useFragmentHistory,
   useReviewFragment,
   useApproveFragment,
+  useUpdateFragment,
 } from '@/api/hooks/use-fragments';
+import { apiRequest, collectionApiUrl } from '@/api/client';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
+import { useCurrentUser, canEditFragment, canReview, canApprove } from '@/api/hooks/use-current-user';
 import { FragmentCard } from '@/components/fragment-card';
 import { QualityBadge } from '@/components/quality-badge';
 import {
@@ -23,15 +26,30 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { CheckCircle, Eye, MessageSquare, BookOpen } from 'lucide-react';
+import { CheckCircle, MessageSquare, BookOpen, Pencil, Save, X } from 'lucide-react';
 
 type ActionMode = 'review' | 'approve';
+
+function parseTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[];
+  if (typeof raw === 'string' && raw.length > 0) {
+    try { return JSON.parse(raw) as string[]; } catch { return []; }
+  }
+  return [];
+}
 
 export default function ValidationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionMode, setActionMode] = useState<ActionMode>('review');
-  const navigate = useNavigate();
+  const [editMode, setEditMode] = useState(false);
+  const [editBody, setEditBody] = useState('');
+  const [editDomain, setEditDomain] = useState('');
+  const [editTags, setEditTags] = useState('');
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
+  const [selectedReviewedIds, setSelectedReviewedIds] = useState<Set<string>>(new Set());
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
@@ -46,20 +64,48 @@ export default function ValidationPage() {
 
   const reviewMutation = useReviewFragment(activeCollection);
   const approveMutation = useApproveFragment(activeCollection);
+  const updateMutation = useUpdateFragment(activeCollection);
+  const { data: currentUser } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const openSheet = (id: string, mode: ActionMode) => {
     setSelectedId(id);
     setActionMode(mode);
+    setEditMode(false);
+  };
+
+  const startEdit = () => {
+    if (!fragment) return;
+    setEditBody(fragment.body ?? fragment.body_excerpt ?? '');
+    setEditDomain(fragment.domain ?? '');
+    const rawTags = fragment.tags;
+    setEditTags(Array.isArray(rawTags) ? rawTags.join(', ') : typeof rawTags === 'string' ? rawTags : '');
+    setEditMode(true);
+  };
+
+  const handleSave = () => {
+    if (!selectedId) return;
+    const tags = editTags.split(',').map((t) => t.trim()).filter(Boolean);
+    updateMutation.mutate(
+      { id: selectedId, input: { body: editBody, domain: editDomain, tags } },
+      {
+        onSuccess: () => {
+          toast.success(t('fragments', 'updateSuccess'));
+          setEditMode(false);
+        },
+        onError: () => toast.error(t('fragments', 'updateError')),
+      },
+    );
   };
 
   const handleReview = () => {
     if (!selectedId) return;
     reviewMutation.mutate(selectedId, {
       onSuccess: () => {
-        toast.success('Fragment marqué comme reviewed');
+        toast.success(t('fragments', 'reviewSuccess'));
         setSelectedId(null);
       },
-      onError: () => toast.error('Erreur lors du passage en reviewed'),
+      onError: (err) => toast.error(err instanceof Error ? err.message : t('fragments', 'reviewError')),
     });
   };
 
@@ -79,10 +125,43 @@ export default function ValidationPage() {
     setSelectedId(null);
   };
 
-  const handleRead = () => {
-    if (!selectedId) return;
-    setSelectedId(null);
-    navigate('/fragments', { state: { fragmentId: selectedId } });
+  const toggleDraft = (id: string) =>
+    setSelectedDraftIds((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const toggleReviewed = (id: string) =>
+    setSelectedReviewedIds((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+  const handleBulkReview = async () => {
+    const ids = Array.from(selectedDraftIds);
+    if (!ids.length) return;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await apiRequest('POST', collectionApiUrl(activeCollection, `/fragments/${id}/review`));
+      } catch {
+        failed++;
+      }
+    }
+    setSelectedDraftIds(new Set());
+    await queryClient.invalidateQueries({ queryKey: ['fragments'] });
+    if (failed > 0) toast.error(`${failed} échec(s) sur ${ids.length}`);
+    else toast.success(`${ids.length} fragment(s) marqués reviewed`);
+  };
+
+  const handleBulkApprove = async () => {
+    const ids = Array.from(selectedReviewedIds);
+    if (!ids.length) return;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await apiRequest('POST', collectionApiUrl(activeCollection, `/fragments/${id}/approve`));
+      } catch {
+        failed++;
+      }
+    }
+    setSelectedReviewedIds(new Set());
+    await queryClient.invalidateQueries({ queryKey: ['fragments'] });
+    if (failed > 0) toast.error(`${failed} échec(s) sur ${ids.length}`);
+    else toast.success(`${ids.length} fragment(s) approuvés`);
   };
 
   const isLoading = isLoadingDraft || isLoadingReviewed;
@@ -95,10 +174,14 @@ export default function ValidationPage() {
 
       {/* Section 1 — À reviewer (draft) */}
       <section className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-lg font-semibold">À reviewer</h3>
-          {draftFragments && (
-            <Badge variant="secondary">{draftFragments.length}</Badge>
+          {draftFragments && <Badge variant="secondary">{draftFragments.length}</Badge>}
+          {selectedDraftIds.size > 0 && (
+            <Button size="sm" onClick={handleBulkReview} disabled={reviewMutation.isPending}>
+              <BookOpen className="mr-2 h-3.5 w-3.5" />
+              {t('fragments', 'markReviewed')} ({selectedDraftIds.size})
+            </Button>
           )}
         </div>
         <p className="text-sm text-muted-foreground">
@@ -118,6 +201,8 @@ export default function ValidationPage() {
                 fragment={f}
                 onClick={() => openSheet(f.id, 'review')}
                 selected={f.id === selectedId}
+                checked={selectedDraftIds.has(f.id)}
+                onCheckedChange={canReview(currentUser) ? () => toggleDraft(f.id) : undefined}
               />
             ))}
           </div>
@@ -130,10 +215,14 @@ export default function ValidationPage() {
 
       {/* Section 2 — À approuver (reviewed) */}
       <section className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-lg font-semibold">{t('validation', 'pendingApproval')}</h3>
-          {reviewedFragments && (
-            <Badge variant="secondary">{reviewedFragments.length}</Badge>
+          {reviewedFragments && <Badge variant="secondary">{reviewedFragments.length}</Badge>}
+          {selectedReviewedIds.size > 0 && (
+            <Button size="sm" onClick={handleBulkApprove} disabled={approveMutation.isPending}>
+              <CheckCircle className="mr-2 h-3.5 w-3.5" />
+              {t('common', 'approve')} ({selectedReviewedIds.size})
+            </Button>
           )}
         </div>
         <p className="text-sm text-muted-foreground">
@@ -153,6 +242,8 @@ export default function ValidationPage() {
                 fragment={f}
                 onClick={() => openSheet(f.id, 'approve')}
                 selected={f.id === selectedId}
+                checked={selectedReviewedIds.has(f.id)}
+                onCheckedChange={canApprove(currentUser) ? () => toggleReviewed(f.id) : undefined}
               />
             ))}
           </div>
@@ -187,10 +278,48 @@ export default function ValidationPage() {
 
               <div className="mt-6 space-y-6">
                 <div>
-                  <h4 className="text-sm font-medium mb-2">{t('common', 'content')}</h4>
-                  <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
-                    {fragment.body || fragment.body_excerpt || '—'}
-                  </pre>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium">{t('common', 'content')}</h4>
+                    {!editMode && (
+                      <Button variant="ghost" size="sm" onClick={startEdit}>
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Éditer
+                      </Button>
+                    )}
+                  </div>
+                  {editMode ? (
+                    <div className="space-y-3">
+                      <Textarea
+                        className="font-mono text-sm min-h-48"
+                        value={editBody}
+                        onChange={(e) => setEditBody(e.target.value)}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'domain')}</label>
+                          <Input value={editDomain} onChange={(e) => setEditDomain(e.target.value)} className="text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'tags')} (virgule)</label>
+                          <Input value={editTags} onChange={(e) => setEditTags(e.target.value)} className="text-sm" placeholder="tag1, tag2" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+                          <Save className="h-3 w-3 mr-1" />
+                          {updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
+                          <X className="h-3 w-3 mr-1" />
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
+                      {fragment.body || fragment.body_excerpt || '—'}
+                    </pre>
+                  )}
                 </div>
 
                 <Separator />
@@ -224,6 +353,20 @@ export default function ValidationPage() {
                   </table>
                 </div>
 
+                {(() => { const tags = parseTags(fragment.tags); return tags.length > 0 ? (
+                  <>
+                    <Separator />
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">{t('common', 'tags')}</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">{tag}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null; })()}
+
                 {history && history.length > 0 && (
                   <>
                     <Separator />
@@ -245,26 +388,28 @@ export default function ValidationPage() {
                 )}
               </div>
 
-              <SheetFooter className="mt-6 flex gap-2">
-                <Button variant="outline" onClick={handleRead}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  {t('validation', 'read')}
-                </Button>
-                <Button variant="outline" onClick={handleRequestChange}>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  {t('validation', 'requestChange')}
-                </Button>
-                {actionMode === 'review' ? (
-                  <Button onClick={handleReview} disabled={reviewMutation.isPending}>
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    {reviewMutation.isPending ? t('common', 'inProgress') : 'Marquer reviewed'}
-                  </Button>
-                ) : (
-                  <Button onClick={handleApprove} disabled={approveMutation.isPending}>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
-                  </Button>
-                )}
+              <SheetFooter className="sticky bottom-0 bg-background border-t mt-6 pt-4 flex flex-row justify-between">
+                <div>
+                  {!canEditFragment(currentUser, fragment.author) && (
+                    <Button variant="ghost" onClick={handleRequestChange}>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      {t('validation', 'requestChange')}
+                    </Button>
+                  )}
+                </div>
+                <div>
+                  {actionMode === 'review' ? (
+                    <Button onClick={handleReview} disabled={reviewMutation.isPending}>
+                      <BookOpen className="mr-2 h-4 w-4" />
+                      {reviewMutation.isPending ? t('common', 'inProgress') : t('fragments', 'markReviewed')}
+                    </Button>
+                  ) : (
+                    <Button onClick={handleApprove} disabled={approveMutation.isPending}>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
+                    </Button>
+                  )}
+                </div>
               </SheetFooter>
             </>
           ) : (

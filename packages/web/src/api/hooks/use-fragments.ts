@@ -84,3 +84,22 @@ export function useApproveFragment(collectionSlug: string) {
     },
   });
 }
+
+export interface UpdateFragmentInput {
+  body?: string;
+  domain?: string;
+  tags?: string[];
+  quality?: string;
+}
+
+export function useUpdateFragment(collectionSlug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateFragmentInput }) =>
+      apiRequest<Fragment>('PUT', collectionApiUrl(collectionSlug, `/fragments/${id}`), input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fragments'] });
+      qc.invalidateQueries({ queryKey: ['fragment'] });
+    },
+  });
+}
