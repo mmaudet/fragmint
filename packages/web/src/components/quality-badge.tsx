@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 const qualityStyles = {
   approved: 'bg-green-100 text-green-800 border-green-200',
@@ -13,9 +14,10 @@ interface QualityBadgeProps {
 }
 
 export function QualityBadge({ quality }: QualityBadgeProps) {
+  const { t } = useI18n();
   return (
     <Badge variant="outline" className={cn(qualityStyles[quality])}>
-      {quality}
+      {t('quality', quality as 'draft')}
     </Badge>
   );
 }

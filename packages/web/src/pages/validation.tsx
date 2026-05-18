@@ -144,7 +144,7 @@ export default function ValidationPage() {
     setSelectedDraftIds(new Set());
     await queryClient.invalidateQueries({ queryKey: ['fragments'] });
     if (failed > 0) toast.error(`${failed} échec(s) sur ${ids.length}`);
-    else toast.success(`${ids.length} fragment(s) marqués reviewed`);
+    else toast.success(`${ids.length} fragment(s) marqués comme vérifiés`);
   };
 
   const handleBulkApprove = async () => {
@@ -175,7 +175,7 @@ export default function ValidationPage() {
       {/* Section 1 — À reviewer (draft) */}
       <section className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <h3 className="text-lg font-semibold">À reviewer</h3>
+          <h3 className="text-lg font-semibold">{t('validation', 'pendingReview')}</h3>
           {draftFragments && <Badge variant="secondary">{draftFragments.length}</Badge>}
           {selectedDraftIds.size > 0 && (
             <Button size="sm" onClick={handleBulkReview} disabled={reviewMutation.isPending}>
