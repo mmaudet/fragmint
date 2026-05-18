@@ -55,9 +55,11 @@ export default function ValidationPage() {
 
   const { data: draftFragments, isLoading: isLoadingDraft } = useFragments(activeCollection, {
     quality: 'draft',
+    limit: 500,
   });
   const { data: reviewedFragments, isLoading: isLoadingReviewed } = useFragments(activeCollection, {
     quality: 'reviewed',
+    limit: 500,
   });
   const { data: fragment, isLoading: isLoadingDetail } = useFragment(activeCollection, selectedId);
   const { data: history } = useFragmentHistory(activeCollection, selectedId);
