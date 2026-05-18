@@ -573,14 +573,32 @@ export class FragmentService {
   }
 
   async reindex() {
-    const fragmentsDir = join(this.storePath, 'fragments');
-    const files = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
-    let indexed = 0;
+    // Build list of vaults to scan: common + all collection vaults
+    const collectionRows = await this.db.select({ slug: collections.slug, git_path: collections.git_path }).from(collections);
+    const vaults: Array<{ slug: string; path: string }> = [
+      { slug: 'common', path: this.storePath },
+      ...collectionRows.map((c) => ({ slug: c.slug, path: c.git_path })),
+    ];
 
-    for (const absPath of files) {
+    let indexed = 0;
+    const allFiles: Array<{ absPath: string; relPath: string; collectionSlug: string }> = [];
+
+    for (const vault of vaults) {
+      const fragmentsDir = join(vault.path, 'fragments');
+      let vaultFiles: string[];
+      try {
+        vaultFiles = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
+      } catch {
+        continue; // vault dir doesn't exist yet
+      }
+      for (const absPath of vaultFiles) {
+        allFiles.push({ absPath, relPath: relative(vault.path, absPath), collectionSlug: vault.slug });
+      }
+    }
+
+    for (const { absPath, relPath, collectionSlug } of allFiles) {
       try {
         const { frontmatter, body } = readFragment(absPath);
-        const relPath = relative(this.storePath, absPath);
         const title = deriveTitle(body);
 
         await this.db
@@ -597,7 +615,7 @@ export class FragmentService {
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
             file_path: relPath,
-            collection_slug: 'common',
+            collection_slug: collectionSlug,
             origin: frontmatter.origin ?? 'manual',
             parent_id: frontmatter.parent_id ?? null,
             translation_of: frontmatter.translation_of ?? null,
@@ -612,7 +630,7 @@ export class FragmentService {
               title,
               body_excerpt: body.slice(0, 200),
               file_path: relPath,
-              collection_slug: 'common',
+              collection_slug: collectionSlug,
               valid_from: frontmatter.valid_from ?? null,
               valid_until: frontmatter.valid_until ?? null,
             },
@@ -625,7 +643,7 @@ export class FragmentService {
 
     // Batch index into vector store
     const batchItems = [];
-    for (const absPath of files) {
+    for (const { absPath } of allFiles) {
       try {
         const { frontmatter, body } = readFragment(absPath);
         batchItems.push({
@@ -652,7 +670,7 @@ export class FragmentService {
       console.log(`Vector-indexed ${vectorResult.indexed} fragments`);
     }
 
-    return { indexed, total: files.length };
+    return { indexed, total: allFiles.length };
   }
 
   private walkDir(dir: string): string[] {
