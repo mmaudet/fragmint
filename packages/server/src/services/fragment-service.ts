@@ -470,13 +470,7 @@ export class FragmentService {
     return git.log(rows[0].file_path);
   }
 
-  async inventory(topic?: string, lang?: string, collectionSlug?: string) {
-    const collectionCondition = collectionSlug
-      ? collectionSlug === 'common'
-        ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))
-        : eq(fragments.collection_slug, collectionSlug)
-      : undefined;
-
+  async inventory(topic?: string, lang?: string) {
     const allFragments = await this.db
       .select({
         id: fragments.id,
@@ -486,8 +480,7 @@ export class FragmentService {
         quality: fragments.quality,
         translation_of: fragments.translation_of,
       })
-      .from(fragments)
-      .where(collectionCondition);
+      .from(fragments);
 
     const filtered = topic
       ? allFragments.filter((f) => f.domain.toLowerCase().includes(topic.toLowerCase()))
