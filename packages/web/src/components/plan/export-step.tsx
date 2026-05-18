@@ -33,6 +33,8 @@ export function ExportStep({ plan }: { plan: Plan }) {
   const [draft, setDraft] = useState(plan.state.draft_markdown ?? '');
   const [uploadOpen, setUploadOpen] = useState(false);
   const styleId = plan.state.export_style_template_id ?? '';
+  const defaultName = styleTemplates.data?.defaultName ?? null;
+  const hasDraft = !!plan.state.draft_markdown?.trim();
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -71,29 +73,41 @@ export function ExportStep({ plan }: { plan: Plan }) {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="outline" onClick={handleReassemble}>{t('planGeneration', 'assemble')}</Button>
-        <Button onClick={() => handleExport('md')}>{t('planGeneration', 'downloadMd')}</Button>
-
-        <Select
-          value={styleId || '__none__'}
-          onValueChange={(v) => update.mutate({ export_style_template_id: v === '__none__' ? null : v })}
-        >
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder={t('planGeneration', 'styleTemplate')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">{t('planGeneration', 'defaultStyling')}</SelectItem>
-            {(styleTemplates.data ?? []).map((tpl) => (
-              <SelectItem key={tpl.id} value={tpl.id}>{tpl.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button variant="ghost" size="sm" onClick={() => setUploadOpen(true)}>
-          + {t('planGeneration', 'uploadStyleTemplate')}
-        </Button>
-        <Button onClick={() => handleExport('docx')}>{t('planGeneration', 'downloadDocx')}</Button>
+      <div className="space-y-3">
+        <div>
+          <Button variant="outline" onClick={handleReassemble} disabled={assemble.isPending}>
+            {t('planGeneration', 'assemble')}
+          </Button>
+        </div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Select
+              value={styleId || '__none__'}
+              onValueChange={(v) => update.mutate({ export_style_template_id: v === '__none__' ? null : v })}
+            >
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder={t('planGeneration', 'styleTemplate')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">
+                  {defaultName
+                    ? <span>{defaultName} <span className="text-xs text-muted-foreground ml-1">(par défaut)</span></span>
+                    : t('planGeneration', 'defaultStyling')}
+                </SelectItem>
+                {(styleTemplates.data?.templates ?? []).map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id}>{tpl.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="ghost" size="sm" onClick={() => setUploadOpen(true)}>
+              + {t('planGeneration', 'uploadStyleTemplate')}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => handleExport('md')} disabled={!hasDraft} title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}>{t('planGeneration', 'downloadMd')}</Button>
+            <Button onClick={() => handleExport('docx')} disabled={!hasDraft} title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}>{t('planGeneration', 'downloadDocx')}</Button>
+          </div>
+        </div>
       </div>
 
       <Card>
