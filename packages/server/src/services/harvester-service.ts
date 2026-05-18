@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, harvestJobs, harvestCandidates, collections } from '../db/schema.js';
+import { fragments, harvestJobs, harvestCandidates } from '../db/schema.js';
 import type { LlmClient, SegmentBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
@@ -309,12 +309,6 @@ export class HarvesterService {
     const jobRows = await this.db.select().from(harvestJobs).where(eq(harvestJobs.id, jobId)).limit(1);
     const collectionSlug = jobRows[0]?.collection_slug ?? undefined;
 
-    let storePathOverride: string | undefined;
-    if (collectionSlug && collectionSlug !== 'common') {
-      const colRows = await this.db.select().from(collections).where(eq(collections.slug, collectionSlug)).limit(1);
-      if (colRows.length > 0) storePathOverride = colRows[0].git_path;
-    }
-
     // Accepted candidates — create fragments
     for (const candidateId of validation.accepted) {
       const rows = await this.db
@@ -342,7 +336,7 @@ export class HarvesterService {
         userId,
         'expert',
         undefined,
-        storePathOverride,
+        undefined,
         collectionSlug,
       );
 
@@ -381,7 +375,7 @@ export class HarvesterService {
         userId,
         'expert',
         undefined,
-        storePathOverride,
+        undefined,
         collectionSlug,
       );
 
