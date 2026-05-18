@@ -29,6 +29,7 @@ services:
       FRAGMINT_EMBEDDING_MODEL: ${FRAGMINT_EMBEDDING_MODEL}
       FRAGMINT_EMBEDDING_DIMENSIONS: ${FRAGMINT_EMBEDDING_DIMENSIONS}
       FRAGMINT_LLM_TIMEOUT: "300000"
+      FRAGMINT_PLAN_DOCX_REFERENCE: /data/vault/templates/reference-linagora.docx
       # Trust the bind-mounted vault repo despite host/container UID mismatch.
       # Git reads these on every invocation; no rebuild needed.
       GIT_CONFIG_COUNT: "1"
