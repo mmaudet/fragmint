@@ -292,6 +292,10 @@ const translations = {
       en: 'Failed to delete plan',
     },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
+    filtersHint: {
+      fr: "Optionnel — permet d'affiner la sélection des fragments.",
+      en: 'Optional — helps narrow down fragment selection.',
+    },
     filterDomain: { fr: 'Domaines', en: 'Domains' },
     filterDomainTooltip: {
       fr: "Sujet du fragment (ex. twake, lincloud, linagora). Séparer par des virgules pour inclure plusieurs domaines.",

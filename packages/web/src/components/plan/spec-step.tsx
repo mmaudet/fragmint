@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Plan } from '@/api/types';
 import { useGeneratePlan, useUpdatePlan, useValidatePlan } from '@/api/hooks/use-plans';
+import { useFacets } from '@/api/hooks/use-facets';
+import { useCollection } from '@/lib/collection-context';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChipSelect } from '@/components/chip-select';
 import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
 import { Loader2, Info } from 'lucide-react';
@@ -17,11 +20,13 @@ export function SpecStep({ plan }: { plan: Plan }) {
   const update = useUpdatePlan(plan.id);
   const generate = useGeneratePlan(plan.id);
   const validate = useValidatePlan(plan.id);
+  const { activeCollection } = useCollection();
+  const { data: facets } = useFacets(activeCollection ?? 'common');
 
   const [specPrompt, setSpecPrompt] = useState(plan.state.spec_prompt);
-  const [domainStr, setDomainStr] = useState((plan.state.filters.domain ?? []).join(', '));
-  const [lang, setLang] = useState(plan.state.filters.lang ?? '');
-  const [tagsStr, setTagsStr] = useState((plan.state.filters.tags ?? []).join(', '));
+  const [domain, setDomain] = useState<string[]>(plan.state.filters.domain ?? []);
+  const [lang, setLang] = useState(plan.state.filters.lang || 'any');
+  const [tags, setTags] = useState<string[]>(plan.state.filters.tags ?? []);
   const [refinement, setRefinement] = useState('');
   const [planMarkdown, setPlanMarkdown] = useState(plan.state.plan_markdown);
 
@@ -33,9 +38,9 @@ export function SpecStep({ plan }: { plan: Plan }) {
       update.mutate({
         spec_prompt: specPrompt,
         filters: {
-          domain: domainStr.split(',').map((s) => s.trim()).filter(Boolean),
-          lang: lang || undefined,
-          tags: tagsStr.split(',').map((s) => s.trim()).filter(Boolean),
+          domain,
+          lang: lang === 'any' ? undefined : lang || undefined,
+          tags,
         },
         plan_markdown: planMarkdown,
       });
@@ -44,7 +49,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specPrompt, domainStr, lang, tagsStr, planMarkdown]);
+  }, [specPrompt, domain, lang, tags, planMarkdown]);
 
   async function handleGenerate() {
     try {
@@ -76,28 +81,50 @@ export function SpecStep({ plan }: { plan: Plan }) {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>{t('planGeneration', 'filters')}</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{t('planGeneration', 'filters')}</CardTitle>
+            <p className="text-xs text-muted-foreground">{t('planGeneration', 'filtersHint')}</p>
+          </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterDomain')}
                 <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterDomainTooltip')}</TooltipContent></Tooltip>
               </div>
-              <Input placeholder="twake, linagora, lincloud…" value={domainStr} onChange={(e) => setDomainStr(e.target.value)} />
+              <ChipSelect
+                value={domain}
+                onChange={setDomain}
+                suggestions={facets?.domains ?? []}
+                placeholder="twake, linagora…"
+              />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterLang')}
                 <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterLangTooltip')}</TooltipContent></Tooltip>
               </div>
-              <Input placeholder="fr, en…" value={lang} onChange={(e) => setLang(e.target.value)} />
+              <Select value={lang} onValueChange={setLang}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Any language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="fr">French (fr)</SelectItem>
+                  <SelectItem value="en">English (en)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1">
+            <div className="col-span-2 space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterTags')}
                 <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterTagsTooltip')}</TooltipContent></Tooltip>
               </div>
-              <Input placeholder="produit:Twake, pu:4.50…" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} />
+              <ChipSelect
+                value={tags}
+                onChange={setTags}
+                suggestions={facets?.tags ?? []}
+                placeholder="produit:Twake, pu:4.50…"
+              />
             </div>
           </CardContent>
         </Card>
