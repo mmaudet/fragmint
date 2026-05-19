@@ -74,6 +74,13 @@ export function createDb(path: string | ':memory:') {
       duplicate_of TEXT, duplicate_score REAL,
       status TEXT NOT NULL DEFAULT 'pending', fragment_id TEXT
     );
+    CREATE TABLE IF NOT EXISTS jobs (
+      id TEXT PRIMARY KEY, type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      total INTEGER NOT NULL, done INTEGER NOT NULL DEFAULT 0,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS plans (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -95,6 +102,18 @@ export function createDb(path: string | ':memory:') {
     );
     CREATE INDEX IF NOT EXISTS pfu_plan_idx ON plan_fragment_usages(plan_id);
     CREATE INDEX IF NOT EXISTS pfu_fragment_idx ON plan_fragment_usages(fragment_id);
+    CREATE TABLE IF NOT EXISTS fragment_types (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS fragment_tags (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      category TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Add collection_slug to api_tokens if not already present

@@ -39,11 +39,6 @@ describe('fragmentFrontmatterSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects unknown type', () => {
-    const result = fragmentFrontmatterSchema.safeParse({ ...validFragment, type: 'unknown' });
-    expect(result.success).toBe(false);
-  });
-
   it('rejects negative generation', () => {
     const result = fragmentFrontmatterSchema.safeParse({ ...validFragment, generation: -1 });
     expect(result.success).toBe(false);

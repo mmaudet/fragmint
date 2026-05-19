@@ -2,8 +2,11 @@
 import type { FastifyInstance } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
 import { FragmentService } from '../services/fragment-service.js';
+import { JobService } from '../services/job-service.js';
 import { createFragmentSchema, updateFragmentSchema } from '../schema/fragment.js';
 import { searchQuerySchema, inventoryQuerySchema } from '../schema/api.js';
+import type { FragmintDb } from '../db/connection.js';
+import { fragmentTypes } from '../db/schema.js';
 
 export function fragmentRoutes(
   app: FastifyInstance,
@@ -12,9 +15,19 @@ export function fragmentRoutes(
   options?: {
     prefix?: string;
     collectionMiddleware?: any;
+    jobService?: JobService;
+    db?: FragmintDb;
   },
 ) {
   const prefix = options?.prefix ?? '/v1';
+  const jobService = options?.jobService;
+  const db = options?.db;
+
+  async function validateType(type: string): Promise<boolean> {
+    if (!db) return true;
+    const rows = await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes);
+    return rows.some((r) => r.slug === type);
+  }
   const readHandlers = options?.collectionMiddleware
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('reader')];
@@ -136,6 +149,8 @@ export function fragmentRoutes(
     const parsed = createFragmentSchema.safeParse(request.body);
     if (!parsed.success)
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+    if (!(await validateType(parsed.data.type)))
+      return reply.status(400).send({ data: null, meta: null, error: `Invalid type '${parsed.data.type}'` });
     const collection = (request as any).collection;
     const result = await fragmentService.create(
       parsed.data,
@@ -210,4 +225,28 @@ export function fragmentRoutes(
       return { data: { restored: true, commit }, meta: null, error: null };
     },
   );
+
+  // Bulk review
+  app.post(`${prefix}/fragments/bulk-review`, { preHandler: writeHandlers }, async (request, reply) => {
+    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
+    const { ids } = request.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+    const job = await jobService.create('bulk_review', ids.length, request.user.login);
+    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+    fragmentService.bulkReview(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
+      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+      .catch(() => jobService.fail(job.id));
+  });
+
+  // Bulk approve
+  app.post(`${prefix}/fragments/bulk-approve`, { preHandler: expertHandlers }, async (request, reply) => {
+    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
+    const { ids } = request.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+    const job = await jobService.create('bulk_approve', ids.length, request.user.login);
+    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+    fragmentService.bulkApprove(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
+      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+      .catch(() => jobService.fail(job.id));
+  });
 }

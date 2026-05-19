@@ -19,9 +19,11 @@ export const HARVESTER_TYPES = [
   'faq',                 // frequently asked question and answer
   'conclusion',          // summary, call to action, next steps
   'bio',                 // person or team presentation
-  'témoignage',          // client testimonial, quote, feedback
-  'reference-technique', // technical reference, architecture, spec
+  'testimonial',         // client testimonial, quote, feedback
+  'technical-reference', // technical reference, architecture, spec
   'methodology',         // process, step, project phase
   'engagement',          // commitment, SLA, guarantee
-  'cas-usage',           // use case, concrete example, scenario
+  'use-case',            // use case, concrete example, scenario
+  'technical',           // technical content: architecture, specs, configuration
+  'other',               // uncategorized content that fits no other type
 ];

@@ -8,11 +8,13 @@ export const FRAGMENT_TYPES = [
   'faq',
   'conclusion',
   'bio',
-  'témoignage',
-  'reference-technique',
+  'testimonial',
+  'technical-reference',
   'methodology',
   'engagement',
-  'cas-usage',
+  'use-case',
+  'technical',
+  'other',
 ] as const;
 
 export const QUALITY_VALUES = ['draft', 'reviewed', 'approved', 'deprecated'] as const;
@@ -37,7 +39,7 @@ export const ROLE_HIERARCHY: Record<string, number> = {
 
 export const fragmentFrontmatterSchema = z.object({
   id: z.string().regex(/^frag-[a-f0-9-]+$/),
-  type: z.enum(FRAGMENT_TYPES),
+  type: z.string().min(1),
   domain: z.string().min(1),
   tags: z.array(z.string()),
   lang: z.string().regex(/^[a-z]{2}$/),
@@ -70,7 +72,7 @@ export const fragmentFrontmatterSchema = z.object({
 export type FragmentFrontmatter = z.infer<typeof fragmentFrontmatterSchema>;
 
 export const createFragmentSchema = z.object({
-  type: z.enum(FRAGMENT_TYPES),
+  type: z.string().min(1),
   domain: z.string().min(1),
   tags: z.array(z.string()).default([]),
   lang: z.string().regex(/^[a-z]{2}$/),

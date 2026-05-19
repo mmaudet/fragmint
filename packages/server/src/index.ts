@@ -18,8 +18,10 @@ import {
   collectionMemberships,
   users,
   fragments,
+  fragmentTypes,
   toMilvusPartition,
 } from './db/schema.js';
+import { FRAGMENT_TYPES } from './schema/fragment.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import {
   UserService,
@@ -39,6 +41,9 @@ import { templateRoutes } from './routes/template-routes.js';
 import { harvestRoutes } from './routes/harvest-routes.js';
 import { planRoutes } from './routes/plan-routes.js';
 import { collectionRoutes } from './routes/collection-routes.js';
+import { jobRoutes } from './routes/job-routes.js';
+import { taxonomyRoutes } from './routes/taxonomy-routes.js';
+import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
 import { LlmClient } from './services/llm-client.js';
@@ -112,6 +117,15 @@ export async function createServer(options?: {
   // Auto-migrate collections
   await ensureCollections(db, config);
   await migrateFragmentCollectionSlug(db);
+
+  // Seed fragment_types if empty
+  const typeCount = await db.select({ c: count() }).from(fragmentTypes);
+  if (typeCount[0].c === 0) {
+    const now = new Date().toISOString();
+    for (const slug of FRAGMENT_TYPES) {
+      await db.insert(fragmentTypes).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+    }
+  }
 
   // Git init if needed
   const git = new GitRepository(storePath);
@@ -193,6 +207,7 @@ export async function createServer(options?: {
 
   // Auth middleware
   const authenticate = buildAuthMiddleware(db);
+  const jobService = new JobService(db);
 
   // Collection service and middleware
   const collectionService = new CollectionService(db, {
@@ -229,7 +244,8 @@ export async function createServer(options?: {
 
   // Routes
   authRoutes(app, userService, authenticate);
-  fragmentRoutes(app, fragmentService, authenticate);
+  fragmentRoutes(app, fragmentService, authenticate, { jobService, db });
+  jobRoutes(app, jobService, authenticate);
   adminRoutes(
     app,
     userService,
@@ -245,6 +261,8 @@ export async function createServer(options?: {
   harvestRoutes(app, harvesterService, authenticate);
   planRoutes(app, planService, templateService, config.store_path, authenticate);
 
+  taxonomyRoutes(app, db, authenticate);
+
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);
 
@@ -253,6 +271,8 @@ export async function createServer(options?: {
   fragmentRoutes(app, fragmentService, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    jobService,
+    db,
   });
   templateRoutes(app, templateService, composerService, authenticate, {
     prefix: collPrefix,

@@ -138,6 +138,18 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   fragment_id: text('fragment_id'),
 });
 
+export const jobs = sqliteTable('jobs', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  status: text('status').notNull().default('pending'),
+  total: integer('total').notNull(),
+  done: integer('done').notNull().default(0),
+  error_count: integer('error_count').notNull().default(0),
+  created_by: text('created_by').notNull(),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+});
+
 export const plans = sqliteTable('plans', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
@@ -155,4 +167,18 @@ export const planFragmentUsages = sqliteTable('plan_fragment_usages', {
   section_id: text('section_id').notNull(),
   fragment_id: text('fragment_id').notNull(),
   used_at: text('used_at').notNull(),
+});
+
+export const fragmentTypes = sqliteTable('fragment_types', {
+  slug: text('slug').primaryKey(),
+  label: text('label').notNull(),
+  description: text('description'),
+  created_at: text('created_at').notNull(),
+});
+
+export const fragmentTags = sqliteTable('fragment_tags', {
+  slug: text('slug').primaryKey(),
+  label: text('label').notNull(),
+  category: text('category'),
+  created_at: text('created_at').notNull(),
 });
