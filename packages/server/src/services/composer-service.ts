@@ -602,7 +602,7 @@ export class ComposerService {
       }
     } else {
       // Fallback: exact metadata match
-      const listResults = await this.fragmentService.list({
+      const { rows: listResults } = await this.fragmentService.list({
         type: slot.type,
         domain,
         lang,

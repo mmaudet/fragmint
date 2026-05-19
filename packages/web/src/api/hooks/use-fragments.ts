@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest, collectionApiUrl } from '@/api/client';
+import { apiRequest, apiRequestFull, collectionApiUrl } from '@/api/client';
 import type { Fragment, GitLogEntry } from '@/api/types';
 
 interface FragmentFilters {
@@ -16,11 +16,16 @@ export function useFragments(collectionSlug: string, filters: FragmentFilters = 
   for (const [k, v] of Object.entries(filters)) {
     if (v !== undefined && v !== '') params.set(k, String(v));
   }
-  return useQuery({
+  const query = useQuery({
     queryKey: ['fragments', collectionSlug, filters],
     queryFn: () =>
-      apiRequest<Fragment[]>('GET', collectionApiUrl(collectionSlug, `/fragments?${params}`)),
+      apiRequestFull<Fragment[]>('GET', collectionApiUrl(collectionSlug, `/fragments?${params}`)),
   });
+  return {
+    ...query,
+    data: query.data?.data,
+    total: (query.data?.meta?.total as number | undefined),
+  };
 }
 
 export function useFragment(collectionSlug: string, id: string | null) {

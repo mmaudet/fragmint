@@ -32,22 +32,23 @@ export function fragmentRoutes(
   app.get(`${prefix}/fragments`, { preHandler: readHandlers }, async (request) => {
     const query = request.query as Record<string, string>;
     const collection = request.collection;
-    const rows = await fragmentService.list({
+    const { rows, total } = await fragmentService.list({
       type: query.type,
       domain: query.domain,
       lang: query.lang,
       quality: query.quality,
       limit: query.limit ? parseInt(query.limit) : undefined,
+      offset: query.offset ? parseInt(query.offset) : undefined,
       collectionSlug: collection?.slug,
     });
-    return { data: rows, meta: { count: rows.length }, error: null };
+    return { data: rows, meta: { count: rows.length, total }, error: null };
   });
 
   // Export fragments as XLSX
   app.get(`${prefix}/fragments/export`, { preHandler: readHandlers }, async (request, reply) => {
     const query = request.query as Record<string, string>;
     const collection = request.collection;
-    const rows = await fragmentService.list({
+    const { rows } = await fragmentService.list({
       type: query.type,
       domain: query.domain,
       lang: query.lang,
@@ -113,6 +114,13 @@ export function fragmentRoutes(
     };
     const results = await fragmentService.search(parsed.data.query, filters, parsed.data.limit);
     return { data: results, meta: { count: results.length }, error: null };
+  });
+
+  // Facets (distinct domains + tags for autocomplete)
+  app.get(`${prefix}/fragments/facets`, { preHandler: readHandlers }, async (request) => {
+    const collection = request.collection;
+    const facets = await fragmentService.facets(collection?.slug);
+    return { data: facets, meta: null, error: null };
   });
 
   // Inventory

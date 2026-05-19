@@ -60,6 +60,33 @@ export async function apiRequest<T>(method: string, path: string, body?: unknown
   return json.data as T;
 }
 
+export async function apiRequestFull<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<{ data: T; meta: Record<string, unknown> }> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const hasBody = method !== 'GET' && method !== 'DELETE';
+  if (hasBody) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: hasBody ? JSON.stringify(body ?? {}) : undefined,
+  });
+
+  if (res.status === 401) {
+    setToken(null);
+    window.location.href = '/ui/login';
+    throw new Error('Session expired');
+  }
+
+  const json = (await res.json()) as ApiResponse<T>;
+  if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return { data: json.data as T, meta: (json.meta ?? {}) as Record<string, unknown> };
+}
+
 export function collectionApiUrl(slug: string, path: string): string {
   return `/v1/collections/${slug}${path}`;
 }

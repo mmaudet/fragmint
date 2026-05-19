@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, or, desc, like, isNull, lte, gte } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull, lte, gte, count } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -211,16 +211,20 @@ export class FragmentService {
 
     const limit = filters?.limit ?? 50;
     const offset = filters?.offset ?? 0;
+    const where = conditions.length ? and(...conditions) : undefined;
 
-    const rows = await this.db
-      .select()
-      .from(fragments)
-      .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(fragments.updated_at))
-      .limit(limit)
-      .offset(offset);
+    const [rows, [{ total }]] = await Promise.all([
+      this.db
+        .select()
+        .from(fragments)
+        .where(where)
+        .orderBy(desc(fragments.updated_at))
+        .limit(limit)
+        .offset(offset),
+      this.db.select({ total: count() }).from(fragments).where(where),
+    ]);
 
-    return rows;
+    return { rows, total };
   }
 
   async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]) {
@@ -468,6 +472,31 @@ export class FragmentService {
     const storePath = await this.resolveStorePath(rows[0].collection_slug);
     const git = this.resolveGit(storePath);
     return git.log(rows[0].file_path);
+  }
+
+  async facets(collectionSlug?: string) {
+    const condition = collectionSlug
+      ? collectionSlug === 'common'
+        ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))
+        : eq(fragments.collection_slug, collectionSlug)
+      : undefined;
+
+    const rows = await this.db
+      .select({ domain: fragments.domain, tags: fragments.tags })
+      .from(fragments)
+      .where(condition);
+
+    const domains = [...new Set(rows.map((r) => r.domain).filter(Boolean))].sort();
+    const tagSet = new Set<string>();
+    for (const row of rows) {
+      if (row.tags) {
+        try {
+          const parsed = JSON.parse(row.tags) as string[];
+          for (const t of parsed) tagSet.add(t);
+        } catch { /* skip malformed */ }
+      }
+    }
+    return { domains, tags: [...tagSet].sort() };
   }
 
   async inventory(topic?: string, lang?: string) {
