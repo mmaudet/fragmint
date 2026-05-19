@@ -108,6 +108,12 @@ export function createDb(path: string | ':memory:') {
       description TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fragment_domains (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS fragment_tags (
       slug TEXT PRIMARY KEY,
       label TEXT NOT NULL,

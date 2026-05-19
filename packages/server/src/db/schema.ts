@@ -176,6 +176,13 @@ export const fragmentTypes = sqliteTable('fragment_types', {
   created_at: text('created_at').notNull(),
 });
 
+export const fragmentDomains = sqliteTable('fragment_domains', {
+  slug: text('slug').primaryKey(),
+  label: text('label').notNull(),
+  description: text('description'),
+  created_at: text('created_at').notNull(),
+});
+
 export const fragmentTags = sqliteTable('fragment_tags', {
   slug: text('slug').primaryKey(),
   label: text('label').notNull(),

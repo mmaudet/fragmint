@@ -18,6 +18,7 @@ import { createDb } from '../db/connection.js';
 import {
   fragments as fragmentsTable,
   fragmentTypes as fragmentTypesTable,
+  fragmentDomains as fragmentDomainsTable,
   fragmentTags as fragmentTagsTable,
 } from '../db/schema.js';
 import { LlmClient } from '../services/llm-client.js';
@@ -239,12 +240,16 @@ async function main() {
   // 7. Seed fragment_types table
   const now = new Date().toISOString();
   for (const slug of FRAGMENT_TYPES) {
-    await db
-      .insert(fragmentTypesTable)
-      .values({ slug, label: slug, created_at: now })
-      .onConflictDoNothing();
+    await db.insert(fragmentTypesTable).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
   }
   console.log(`fragment_types: seeded ${FRAGMENT_TYPES.length} type(s)`);
+
+  // 7b. Seed fragment_domains from translated domains
+  const translatedDomains = new Set([...allDomains].map((d) => mapping[d] ?? d));
+  for (const slug of translatedDomains) {
+    await db.insert(fragmentDomainsTable).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+  }
+  console.log(`fragment_domains: seeded ${translatedDomains.size} domain(s)`);
 
   // 8. Seed fragment_tags table from all translated tags
   const translatedTags = new Set([...allTags].map((t) => mapping[t] ?? t));

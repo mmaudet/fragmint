@@ -109,12 +109,16 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     blockText: string,
     existingTypes: string[],
     existingDomains: string[],
+    knownTags: string[] = [],
   ): Promise<Classification> {
+    const tagHint = knownTags.length > 0
+      ? `Prefer tags from this known list when relevant: ${JSON.stringify(knownTags)}. You may add new tags if needed, but they MUST be in English.`
+      : 'MUST be in English, lowercase, single words or hyphen-separated. Never use French words.';
     const prompt = `You are a content classification assistant. Classify the following text block.
 
 - type: the rhetorical function of the block. Choose the BEST match from: ${JSON.stringify(existingTypes)}.
 - domain: the SUBJECT MATTER (which product or thematic area this is about). Choose the BEST match from: ${JSON.stringify(existingDomains)}. Domain is about WHAT the text is about, not HOW it is written. A technical paragraph about Twake → domain "twake", not "technical".
-- tags: keywords describing the nature and audience of the content. MUST be in English, lowercase, single words or hyphen-separated (e.g. ["technical", "commercial", "legal", "sla", "security", "pricing"]). Never use French words.
+- tags: keywords describing the nature and audience of the content. ${tagHint}
 - confidence: your confidence in this classification (0–1).
 
 Do not invent domain or type values outside the provided lists. Use "other" if nothing fits.

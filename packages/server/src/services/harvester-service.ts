@@ -7,11 +7,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, harvestJobs, harvestCandidates } from '../db/schema.js';
+import { fragments, harvestJobs, harvestCandidates, fragmentTypes, fragmentDomains, fragmentTags } from '../db/schema.js';
 import type { LlmClient, SegmentBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
-import { HARVESTER_DOMAINS, HARVESTER_TYPES } from './harvester-taxonomy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -107,10 +106,9 @@ export class HarvesterService {
     minConfidence: number,
   ): Promise<void> {
     try {
-      const dbTypes = (await this.db.selectDistinct({ type: fragments.type }).from(fragments)).map((r) => r.type);
-      const dbDomains = (await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)).map((r) => r.domain);
-      const existingTypes = [...new Set([...HARVESTER_TYPES, ...dbTypes])];
-      const existingDomains = [...new Set([...HARVESTER_DOMAINS, ...dbDomains])];
+      const existingTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map((r) => r.slug);
+      const existingDomains = (await this.db.select({ slug: fragmentDomains.slug }).from(fragmentDomains)).map((r) => r.slug);
+      const knownTags = (await this.db.select({ slug: fragmentTags.slug }).from(fragmentTags)).map((r) => r.slug);
 
       let totalCandidates = 0;
       let duplicatesCount = 0;
@@ -156,7 +154,7 @@ export class HarvesterService {
         let allBlocks: SegmentBlock[] = [];
 
         for (const chunk of chunks) {
-          const chunkBlocks = await this.llmClient.segment(chunk, HARVESTER_TYPES);
+          const chunkBlocks = await this.llmClient.segment(chunk, existingTypes);
           allBlocks.push(...chunkBlocks);
         }
 
@@ -168,7 +166,7 @@ export class HarvesterService {
 
           let classification;
           try {
-            classification = await this.llmClient.classify(text, existingTypes, existingDomains);
+            classification = await this.llmClient.classify(text, existingTypes, existingDomains, knownTags);
           } catch (classErr: any) {
             classification = {
               type: block.type || 'unknown',
