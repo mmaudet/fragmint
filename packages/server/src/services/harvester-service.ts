@@ -156,7 +156,7 @@ export class HarvesterService {
         let allBlocks: SegmentBlock[] = [];
 
         for (const chunk of chunks) {
-          const chunkBlocks = await this.llmClient.segment(chunk);
+          const chunkBlocks = await this.llmClient.segment(chunk, HARVESTER_TYPES);
           allBlocks.push(...chunkBlocks);
         }
 

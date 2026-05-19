@@ -41,7 +41,7 @@ describe('LlmClient', () => {
       makeChatResponse('```json\n' + JSON.stringify(blocks) + '\n```'),
     );
 
-    const result = await client.segment('# My Doc\nSome content');
+    const result = await client.segment('# My Doc\nSome content', ['paragraph', 'procedure']);
 
     expect(result).toEqual(blocks);
     expect(mockFetch).toHaveBeenCalledOnce();
@@ -50,7 +50,7 @@ describe('LlmClient', () => {
   it('segment() returns empty array on malformed response', async () => {
     mockFetch.mockResolvedValueOnce(makeChatResponse('This is not JSON at all, sorry!'));
 
-    const result = await client.segment('# Doc');
+    const result = await client.segment('# Doc', ['other']);
 
     expect(result).toEqual([]);
   });
