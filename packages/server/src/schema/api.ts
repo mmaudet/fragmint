@@ -7,6 +7,7 @@ export const searchQuerySchema = z.object({
       type: z.array(z.string()).optional(),
       domain: z.array(z.string()).optional(),
       lang: z.string().optional(),
+      quality: z.string().optional(),
       quality_min: z.string().optional(),
       tags: z.array(z.string()).optional(),
     })

@@ -21,6 +21,7 @@ export interface SearchFilters {
   type?: string[];
   domain?: string[];
   lang?: string;
+  quality?: string;
   quality_min?: string;
   tags?: string[];
   collectionSlug?: string;
@@ -231,8 +232,9 @@ export class SearchService {
             );
           }
 
-          // Exclude deprecated
+          // Exclude deprecated; optionally restrict to exact quality
           conditions.push(ne(fragments.quality, 'deprecated'));
+          if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
 
           const rows = await this.db
             .select()
@@ -316,6 +318,9 @@ export class SearchService {
     }
     if (filters?.lang) {
       conditions.push(eq(fragments.lang, filters.lang));
+    }
+    if (filters?.quality) {
+      conditions.push(eq(fragments.quality, filters.quality));
     }
     if (filters?.quality_min) {
       const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
