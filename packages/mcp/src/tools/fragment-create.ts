@@ -14,11 +14,11 @@ export const createDefinition: ToolDefinition = {
       type: {
         type: 'string',
         description:
-          'Fragment type: introduction, argument, pricing, clause, faq, conclusion, bio, témoignage',
+          'Fragment type: introduction, argument, pricing, clause, faq, conclusion, bio, testimonial, technical-reference, methodology, engagement, use-case, technical, other',
       },
       domain: {
         type: 'string',
-        description: 'Business domain (e.g. "souveraineté", "openrag", "twake")',
+        description: 'Business domain in English (e.g. "twake", "lincloud", "linagora")',
       },
       lang: { type: 'string', description: 'ISO 639-1 language code (e.g. "fr", "en")' },
       body: { type: 'string', description: 'Fragment content in Markdown' },

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
+import { useFragmentTypes } from '@/api/hooks/use-fragment-types';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { FragmentCard } from '@/components/fragment-card';
@@ -16,16 +17,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PAGE_SIZE = 20;
-const FRAGMENT_TYPES = [
-  'introduction',
-  'argument',
-  'pricing',
-  'clause',
-  'faq',
-  'conclusion',
-  'bio',
-  'témoignage',
-];
 const QUALITY_VALUES = ['draft', 'reviewed', 'approved'];
 const LANG_VALUES = ['fr', 'en'];
 
@@ -39,6 +30,7 @@ export default function FragmentsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { t } = useI18n();
   const { activeCollection } = useCollection();
+  const { data: fragmentTypes = [] } = useFragmentTypes();
 
   const filters = {
     ...(type && { type }),
@@ -92,9 +84,9 @@ export default function FragmentsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">{t('fragments', 'allTypes')}</SelectItem>
-            {FRAGMENT_TYPES.map((ft) => (
-              <SelectItem key={ft} value={ft}>
-                {ft}
+            {fragmentTypes.map((ft) => (
+              <SelectItem key={ft.slug} value={ft.slug}>
+                {ft.label}
               </SelectItem>
             ))}
           </SelectContent>
