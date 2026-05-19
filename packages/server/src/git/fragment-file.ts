@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import matter from 'gray-matter';
 import { v4 as uuidv4 } from 'uuid';
@@ -31,6 +31,7 @@ export function writeFragment(
   body: string,
 ): string {
   // Append short id suffix to avoid collisions when type+domain+lang are identical
+  mkdirSync(dirPath, { recursive: true });
   const idSuffix = frontmatter.id.slice(-8);
   const filename = `${toKebabCase(frontmatter.type)}-${toKebabCase(frontmatter.domain)}-${frontmatter.lang}-${idSuffix}.md`;
   const filePath = join(dirPath, filename);
