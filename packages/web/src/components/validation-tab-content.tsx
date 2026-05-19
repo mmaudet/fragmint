@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { Fragment } from '@/api/types';
 import { FragmentCard } from '@/components/fragment-card';
 import { SearchInput } from '@/components/search-input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 const PAGE_SIZE = 24;
 
@@ -30,6 +32,8 @@ interface ValidationTabContentProps {
   selectedIds: Set<string>;
   onCardClick: (id: string) => void;
   onToggle: ((id: string) => void) | undefined;
+  onSelectAll?: () => Promise<void>;
+  isAllSelected?: boolean;
   bulkAction: BulkAction | null;
 }
 
@@ -52,14 +56,33 @@ function Pagination({ page, total, onChange }: { page: number; total: number; on
 export function ValidationTabContent({
   fragments, total, isLoading, isSearching, page, onPageChange,
   search, onSearchChange, searchPlaceholder, description, emptyText,
-  selectedCardId, selectedIds, onCardClick, onToggle, bulkAction,
+  selectedCardId, selectedIds, onCardClick, onToggle, onSelectAll, isAllSelected, bulkAction,
 }: ValidationTabContentProps) {
+  const { t } = useI18n();
+  const [selectingAll, setSelectingAll] = useState(false);
+
+  const handleSelectAll = async () => {
+    if (!onSelectAll) return;
+    setSelectingAll(true);
+    try { await onSelectAll(); } finally { setSelectingAll(false); }
+  };
+
   return (
     <div className="space-y-4">
       <SearchInput value={search} onChange={onSearchChange} placeholder={searchPlaceholder} />
 
       <div className="flex items-center gap-3">
         <p className="text-sm text-muted-foreground flex-1">{description}</p>
+        {onSelectAll && !isLoading && fragments.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectAll}
+            disabled={selectingAll || bulkAction?.isPending}
+          >
+            {selectingAll ? '…' : isAllSelected ? t('validation', 'deselectAll') : t('validation', 'selectAll')}
+          </Button>
+        )}
         {bulkAction && bulkAction.count > 0 && (
           <Button size="sm" onClick={bulkAction.onClick} disabled={bulkAction.isPending}>
             {bulkAction.label} ({bulkAction.count})

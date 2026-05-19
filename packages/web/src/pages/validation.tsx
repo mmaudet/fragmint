@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth-context';
 import {
   useFragments,
   useSearchFragments,
@@ -9,7 +11,8 @@ import {
   useApproveFragment,
   useUpdateFragment,
 } from '@/api/hooks/use-fragments';
-import { apiRequest, collectionApiUrl } from '@/api/client';
+import { apiRequest, collectionApiUrl, apiRequestFull } from '@/api/client';
+import type { Fragment } from '@/api/types';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { useCurrentUser, canEditFragment, canReview, canApprove } from '@/api/hooks/use-current-user';
@@ -40,7 +43,13 @@ function parseTags(raw: unknown): string[] {
   return [];
 }
 
+const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
+const hasRole = (role: string, min: string) => (ROLE_LEVEL[role] ?? 0) >= (ROLE_LEVEL[min] ?? 999);
+
 export default function ValidationPage() {
+  const { user } = useAuth();
+  const role = user?.role ?? 'reader';
+
   const [activeTab, setActiveTab] = useState<TabKey>('review');
   const [search, setSearch] = useState('');
   const [draftPage, setDraftPage] = useState(0);
@@ -53,6 +62,7 @@ export default function ValidationPage() {
   const [editTags, setEditTags] = useState('');
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [selectedReviewedIds, setSelectedReviewedIds] = useState<Set<string>>(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
@@ -73,10 +83,63 @@ export default function ValidationPage() {
   const draftList = isSearching ? (draftSearch ?? []) : (draftFragments ?? []);
   const reviewedList = isSearching ? (reviewedSearch ?? []) : (reviewedFragments ?? []);
 
+  const draftCountForSelect = isSearching ? draftList.length : draftTotal;
+  const reviewedCountForSelect = isSearching ? reviewedList.length : reviewedTotal;
+  const isAllSelectedDraft = !!draftCountForSelect && selectedDraftIds.size >= draftCountForSelect;
+  const isAllSelectedReviewed = !!reviewedCountForSelect && selectedReviewedIds.size >= reviewedCountForSelect;
+
   const openSheet = (id: string, mode: ActionMode) => { setSelectedId(id); setActionMode(mode); setEditMode(false); };
   const switchTab = (tab: TabKey) => { setActiveTab(tab); setSearch(''); };
 
   const toggle = (set: Set<string>, id: string) => { const s = new Set(set); s.has(id) ? s.delete(id) : s.add(id); return s; };
+
+  const fetchAllIds = async (quality: 'draft' | 'reviewed') => {
+    const { data } = await apiRequestFull<Fragment[]>('GET', collectionApiUrl(activeCollection, `/fragments?quality=${quality}&limit=99999`));
+    return data.map((f) => f.id);
+  };
+
+  const handleSelectAllDraft = async () => {
+    if (isAllSelectedDraft) { setSelectedDraftIds(new Set()); return; }
+    const ids = isSearching ? (draftSearch ?? []).map((f) => f.id) : await fetchAllIds('draft');
+    setSelectedDraftIds(new Set(ids));
+  };
+
+  const handleSelectAllReviewed = async () => {
+    if (isAllSelectedReviewed) { setSelectedReviewedIds(new Set()); return; }
+    const ids = isSearching ? (reviewedSearch ?? []).map((f) => f.id) : await fetchAllIds('reviewed');
+    setSelectedReviewedIds(new Set(ids));
+  };
+
+  const startBulk = async (endpoint: string, ids: string[], clearFn: () => void) => {
+    clearFn();
+    setBulkPending(true);
+    try {
+      const { job_id } = await apiRequest<{ job_id: string }>('POST', collectionApiUrl(activeCollection, endpoint), { ids });
+      toast.info(t('validation', 'bulkProcessing'));
+      const poll = async (): Promise<void> => {
+        const job = await apiRequest<{ status: string; done: number; error_count: number }>('GET', `/v1/jobs/${job_id}`);
+        if (job.status === 'done' || job.status === 'error') {
+          if (job.status === 'done' || (job.status === 'error' && job.done > 0)) {
+            const msg = job.error_count > 0
+              ? `${job.done} ${t('validation', 'bulkDoneWithErrors')} ${job.error_count} ${t('validation', 'bulkErrors')}`
+              : `${job.done} ${t('validation', 'bulkDone')}`;
+            toast.success(msg);
+            queryClient.invalidateQueries({ queryKey: ['fragments'] });
+          } else {
+            toast.error(`${t('validation', 'bulkError')} (${job.error_count} fragment(s))`);
+            queryClient.invalidateQueries({ queryKey: ['fragments'] });
+          }
+          setBulkPending(false);
+        } else {
+          setTimeout(poll, 1000);
+        }
+      };
+      poll();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Erreur');
+      setBulkPending(false);
+    }
+  };
 
   const handleSave = () => {
     if (!selectedId) return;
@@ -102,21 +165,11 @@ export default function ValidationPage() {
     });
   };
 
-  const bulkAction = async (ids: string[], endpoint: string, onDone: () => void, successMsg: string) => {
-    let failed = 0;
-    for (const id of ids) {
-      try { await apiRequest('POST', collectionApiUrl(activeCollection, `/fragments/${id}/${endpoint}`)); }
-      catch { failed++; }
-    }
-    onDone();
-    await queryClient.invalidateQueries({ queryKey: ['fragments'] });
-    if (failed > 0) toast.error(`${failed} échec(s) sur ${ids.length}`);
-    else toast.success(successMsg);
-  };
+  if (!hasRole(role, 'contributor')) return <Navigate to="/home" replace />;
 
   const tabs = [
-    { key: 'review' as TabKey, label: t('validation', 'pendingReview'), count: draftTotal ?? draftList.length },
-    { key: 'approve' as TabKey, label: t('validation', 'pendingApproval'), count: reviewedTotal ?? reviewedList.length },
+    { key: 'review' as TabKey, label: t('validation', 'pendingReview'), count: draftTotal },
+    ...(hasRole(role, 'expert') ? [{ key: 'approve' as TabKey, label: t('validation', 'pendingApproval'), count: reviewedTotal }] : []),
   ];
 
   return (
@@ -129,7 +182,7 @@ export default function ValidationPage() {
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           >
             {tab.label}
-            <Badge variant={activeTab === tab.key ? 'default' : 'secondary'} className="text-xs">{tab.count}</Badge>
+            <Badge variant={activeTab === tab.key ? 'default' : 'secondary'} className="text-xs">{tab.count ?? '—'}</Badge>
           </button>
         ))}
       </div>
@@ -145,17 +198,19 @@ export default function ValidationPage() {
           search={search}
           onSearchChange={(v) => { setSearch(v); setDraftPage(0); }}
           searchPlaceholder={t('fragments', 'searchPlaceholder')}
-          description="Fragments ingérés par le harvester — à relire avant validation."
-          emptyText="Aucun fragment en attente de review."
+          description={t('validation', 'reviewTabDesc')}
+          emptyText={t('validation', 'noFragmentsPendingReview')}
           selectedCardId={selectedId}
           selectedIds={selectedDraftIds}
           onCardClick={(id) => openSheet(id, 'review')}
           onToggle={canReview(currentUser) ? (id) => setSelectedDraftIds((p) => toggle(p, id)) : undefined}
+          onSelectAll={canReview(currentUser) ? handleSelectAllDraft : undefined}
+          isAllSelected={isAllSelectedDraft}
           bulkAction={selectedDraftIds.size > 0 ? {
             label: <><BookOpen className="mr-2 h-3.5 w-3.5" />{t('fragments', 'markReviewed')}</>,
             count: selectedDraftIds.size,
-            onClick: () => bulkAction(Array.from(selectedDraftIds), 'review', () => setSelectedDraftIds(new Set()), `${selectedDraftIds.size} fragment(s) marqués comme vérifiés`),
-            isPending: reviewMutation.isPending,
+            onClick: () => startBulk('/fragments/bulk-review', Array.from(selectedDraftIds), () => setSelectedDraftIds(new Set())),
+            isPending: bulkPending,
           } : null}
         />
       )}
@@ -171,17 +226,19 @@ export default function ValidationPage() {
           search={search}
           onSearchChange={(v) => { setSearch(v); setReviewedPage(0); }}
           searchPlaceholder={t('fragments', 'searchPlaceholder')}
-          description="Fragments vérifiés — prêts pour approbation finale."
+          description={t('validation', 'approveTabDesc')}
           emptyText={t('validation', 'noFragmentsPending')}
           selectedCardId={selectedId}
           selectedIds={selectedReviewedIds}
           onCardClick={(id) => openSheet(id, 'approve')}
           onToggle={canApprove(currentUser) ? (id) => setSelectedReviewedIds((p) => toggle(p, id)) : undefined}
+          onSelectAll={canApprove(currentUser) ? handleSelectAllReviewed : undefined}
+          isAllSelected={isAllSelectedReviewed}
           bulkAction={selectedReviewedIds.size > 0 ? {
             label: <><CheckCircle className="mr-2 h-3.5 w-3.5" />{t('common', 'approve')}</>,
             count: selectedReviewedIds.size,
-            onClick: () => bulkAction(Array.from(selectedReviewedIds), 'approve', () => setSelectedReviewedIds(new Set()), `${selectedReviewedIds.size} fragment(s) approuvés`),
-            isPending: approveMutation.isPending,
+            onClick: () => startBulk('/fragments/bulk-approve', Array.from(selectedReviewedIds), () => setSelectedReviewedIds(new Set())),
+            isPending: bulkPending,
           } : null}
         />
       )}
@@ -215,7 +272,7 @@ export default function ValidationPage() {
                         setEditTags(Array.isArray(rt) ? rt.join(', ') : typeof rt === 'string' ? rt : '');
                         setEditMode(true);
                       }}>
-                        <Pencil className="h-3 w-3 mr-1" />Éditer
+                        <Pencil className="h-3 w-3 mr-1" />{t('validation', 'edit')}
                       </Button>
                     )}
                   </div>
@@ -237,7 +294,7 @@ export default function ValidationPage() {
                           <Save className="h-3 w-3 mr-1" />{updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
-                          <X className="h-3 w-3 mr-1" />Annuler
+                          <X className="h-3 w-3 mr-1" />{t('validation', 'cancel')}
                         </Button>
                       </div>
                     </div>

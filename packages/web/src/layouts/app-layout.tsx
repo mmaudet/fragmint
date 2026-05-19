@@ -48,10 +48,14 @@ export default function AppLayout() {
     { to: '/home', label: t('nav', 'home'), icon: Home },
   ];
 
+  const role = user?.role ?? 'reader';
+  const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
+  const hasRole = (min: string) => (ROLE_LEVEL[role] ?? 0) >= (ROLE_LEVEL[min] ?? 999);
+
   const navItems = [
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
-    { to: '/validation', label: t('nav', 'validation'), icon: CheckCircle },
+    ...(hasRole('contributor') ? [{ to: '/validation', label: t('nav', 'validation'), icon: CheckCircle }] : []),
     { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
 

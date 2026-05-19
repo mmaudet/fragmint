@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, or, desc, like, isNull, lte, gte, count } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull, lte, gte, count, inArray } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -472,6 +472,88 @@ export class FragmentService {
     const storePath = await this.resolveStorePath(rows[0].collection_slug);
     const git = this.resolveGit(storePath);
     return git.log(rows[0].file_path);
+  }
+
+  async bulkReview(
+    ids: string[],
+    userId: string,
+    ip: string | undefined,
+    onProgress?: (done: number) => void,
+  ): Promise<{ done: number; errors: number }> {
+    const now = new Date().toISOString();
+    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
+    const groups = new Map<string, Group>();
+    let errors = 0;
+
+    for (const id of ids) {
+      try {
+        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
+        if (!frag || frag.quality !== 'draft') continue;
+        const storePath = await this.resolveStorePath(frag.collection_slug);
+        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
+        frontmatter.quality = 'reviewed';
+        frontmatter.reviewed_by = userId;
+        frontmatter.updated_at = now;
+        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
+        const g = groups.get(storePath)!;
+        g.filePaths.push(frag.file_path);
+        g.ids.push(id);
+      } catch (e) { console.error(`[bulkReview] fragment ${id} failed:`, e); errors++; }
+    }
+
+    let done = 0;
+    for (const [, { git, filePaths, ids: gIds }] of groups) {
+      try {
+        const hash = await git.commitFiles(filePaths, `chore: bulk review ${gIds.length} fragments by ${userId}`);
+        await this.db.update(fragments).set({ quality: 'reviewed', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
+        await this.audit.log({ user_id: userId, role: 'contributor', action: 'bulk_review', fragment_id: gIds.join(','), ip_source: ip });
+        done += gIds.length;
+        onProgress?.(done);
+      } catch (e) { console.error(`[bulkReview] git commit failed:`, e); errors += gIds.length; }
+    }
+    return { done, errors };
+  }
+
+  async bulkApprove(
+    ids: string[],
+    userId: string,
+    ip: string | undefined,
+    onProgress?: (done: number) => void,
+  ): Promise<{ done: number; errors: number }> {
+    const now = new Date().toISOString();
+    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
+    const groups = new Map<string, Group>();
+    let errors = 0;
+
+    for (const id of ids) {
+      try {
+        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
+        if (!frag || frag.quality !== 'reviewed') continue;
+        const storePath = await this.resolveStorePath(frag.collection_slug);
+        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
+        frontmatter.quality = 'approved';
+        frontmatter.approved_by = userId;
+        frontmatter.updated_at = now;
+        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
+        const g = groups.get(storePath)!;
+        g.filePaths.push(frag.file_path);
+        g.ids.push(id);
+      } catch (e) { console.error(`[bulkApprove] fragment ${id} failed:`, e); errors++; }
+    }
+
+    let done = 0;
+    for (const [, { git, filePaths, ids: gIds }] of groups) {
+      try {
+        const hash = await git.commitFiles(filePaths, `chore: bulk approve ${gIds.length} fragments by ${userId}`);
+        await this.db.update(fragments).set({ quality: 'approved', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
+        await this.audit.log({ user_id: userId, role: 'expert', action: 'bulk_approve', fragment_id: gIds.join(','), ip_source: ip });
+        done += gIds.length;
+        onProgress?.(done);
+      } catch (e) { console.error(`[bulkApprove] git commit failed:`, e); errors += gIds.length; }
+    }
+    return { done, errors };
   }
 
   async facets(collectionSlug?: string) {
