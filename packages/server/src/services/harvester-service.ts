@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments, harvestJobs, harvestCandidates, fragmentTypes, fragmentDomains, fragmentTags } from '../db/schema.js';
-import type { LlmClient, SegmentBlock } from './llm-client.js';
+import type { LlmClient, CombinedBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
 
@@ -149,74 +149,59 @@ export class HarvesterService {
           .replace(/\n{3,}/g, '\n\n');
         const lang = HarvesterService.detectLanguage(markdown);
 
-        // Chunk the markdown for better LLM segmentation on long documents
+        // Parallel LLM calls — one segmentAndClassify per chunk
         const chunks = HarvesterService.chunkMarkdown(markdown);
-        let allBlocks: SegmentBlock[] = [];
+        const chunkResults = await Promise.all(
+          chunks.map((chunk) =>
+            this.llmClient.segmentAndClassify(chunk, existingTypes, existingDomains, knownTags),
+          ),
+        );
+        const blocks: CombinedBlock[] = HarvesterService.deduplicateBlocks(chunkResults.flat());
 
-        for (const chunk of chunks) {
-          const chunkBlocks = await this.llmClient.segment(chunk, existingTypes);
-          allBlocks.push(...chunkBlocks);
-        }
-
-        // Deduplicate blocks with similar bodies (overlap may produce duplicates)
-        const blocks = HarvesterService.deduplicateBlocks(allBlocks);
-
-        for (const block of blocks) {
-          const text = block.body;
-
-          let classification;
-          try {
-            classification = await this.llmClient.classify(text, existingTypes, existingDomains, knownTags);
-          } catch (classErr: any) {
-            classification = {
-              type: block.type || 'unknown',
-              domain: 'unknown',
-              tags: [],
-              confidence: 0.5,
-            };
-          }
-
-          if (classification.confidence < minConfidence) {
-            lowConfidenceCount++;
-          }
-
-          let duplicateOf: string | null = null;
-          let duplicateScore: number | null = null;
-
-          try {
-            const searchResults = await this.searchService.search(text, undefined, 1);
-            if (searchResults.length > 0) {
-              const topScore = searchResults[0].score;
-              if (topScore > 0.8) {
-                duplicateOf = searchResults[0].id;
-                duplicateScore = topScore;
-                duplicatesCount++;
+        // Parallel duplicate detection
+        const dupeChecks = await Promise.all(
+          blocks.map(async (block) => {
+            try {
+              const results = await this.searchService.search(block.body, undefined, 1);
+              if (results.length > 0 && results[0].score > 0.8) {
+                return { id: results[0].id, score: results[0].score };
               }
+            } catch {
+              // Milvus not available
             }
-          } catch {
-            // Milvus not available — skip duplicate detection
-          }
+            return null;
+          }),
+        );
 
-          const candidateId = `hcn-${randomUUID()}`;
-          await this.db.insert(harvestCandidates).values({
-            id: candidateId,
-            job_id: jobId,
-            title: block.title || 'Untitled',
-            body: text,
-            type: classification.type,
-            domain: classification.domain,
-            lang: block.lang || lang,
-            tags: JSON.stringify(classification.tags),
-            confidence: classification.confidence,
-            origin_source: filename,
-            origin_page: null,
-            duplicate_of: duplicateOf,
-            duplicate_score: duplicateScore,
-            status: 'pending',
-          });
-
-          totalCandidates++;
+        // Count stats
+        for (let j = 0; j < blocks.length; j++) {
+          if (blocks[j].confidence < minConfidence) lowConfidenceCount++;
+          if (dupeChecks[j]) duplicatesCount++;
         }
+
+        // Batch insert all candidates
+        if (blocks.length > 0) {
+          await this.db.insert(harvestCandidates).values(
+            blocks.map((block, j) => ({
+              id: `hcn-${randomUUID()}`,
+              job_id: jobId,
+              title: block.title || 'Untitled',
+              body: block.body,
+              type: block.type,
+              domain: block.domain,
+              lang: block.lang || lang,
+              tags: JSON.stringify(block.tags),
+              confidence: block.confidence,
+              origin_source: filename,
+              origin_page: null,
+              duplicate_of: dupeChecks[j]?.id ?? null,
+              duplicate_score: dupeChecks[j]?.score ?? null,
+              status: 'pending',
+            })),
+          );
+        }
+
+        totalCandidates += blocks.length;
       }
 
       const validCount = totalCandidates - duplicatesCount - lowConfidenceCount;
@@ -419,8 +404,8 @@ export class HarvesterService {
     return markdown.slice(startPos, endPos).trim();
   }
 
-  static readonly MAX_CHUNK_CHARS = 6000; // ~1500 tokens
-  static readonly OVERLAP_CHARS = 400; // ~100 tokens overlap
+  static readonly MAX_CHUNK_CHARS = 12000; // ~3000 tokens — larger chunks = fewer LLM calls
+  static readonly OVERLAP_CHARS = 400;
 
   static chunkMarkdown(markdown: string): string[] {
     if (markdown.length <= HarvesterService.MAX_CHUNK_CHARS) return [markdown];
@@ -444,7 +429,7 @@ export class HarvesterService {
     return chunks;
   }
 
-  static deduplicateBlocks(blocks: SegmentBlock[]): SegmentBlock[] {
+  static deduplicateBlocks<T extends { body: string }>(blocks: T[]): T[] {
     const seen = new Set<string>();
     return blocks.filter((b) => {
       // Use first 50 chars of body as dedup key

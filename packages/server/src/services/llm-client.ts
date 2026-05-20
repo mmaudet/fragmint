@@ -27,6 +27,16 @@ export interface Classification {
   confidence: number;
 }
 
+export interface CombinedBlock {
+  title: string;
+  body: string;
+  type: string;
+  lang: string;
+  domain: string;
+  tags: string[];
+  confidence: number;
+}
+
 export class LlmClient {
   constructor(private config: LlmClientConfig) {}
 
@@ -100,6 +110,47 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       const parsed = JSON.parse(json);
       if (!Array.isArray(parsed)) return [];
       return parsed as SegmentBlock[];
+    } catch {
+      return [];
+    }
+  }
+
+  async segmentAndClassify(
+    markdown: string,
+    validTypes: string[],
+    validDomains: string[],
+    knownTags: string[] = [],
+  ): Promise<CombinedBlock[]> {
+    const tagHint =
+      knownTags.length > 0
+        ? `Prefer tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. New tags must be English lowercase kebab-case.`
+        : 'English lowercase kebab-case only. Never use French words.';
+
+    const prompt = `You are a document analysis assistant. Extract reusable content blocks and classify each one.
+
+Extraction rules:
+- body: EXACT verbatim text. Do NOT translate, paraphrase, or summarize.
+- title: short label (3-8 words) in the SAME language as the body.
+- lang: ISO 639-1 code (fr, en, ...)
+
+Classification rules:
+- type: MUST be one of: ${JSON.stringify(validTypes)}
+- domain: SUBJECT MATTER only. MUST be one of: ${JSON.stringify(validDomains)}. A paragraph about Twake → "twake", not "technical".
+- tags: ${tagHint}
+- confidence: confidence in type + domain (0-1)
+
+Document:
+${markdown}
+
+Return ONLY a JSON array. Each element: { "title", "body", "type", "domain", "tags", "lang", "confidence" }`;
+
+    try {
+      const response = await this.chat(prompt);
+      const json = this.extractJson(response, true);
+      if (!json) return [];
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed)) return [];
+      return parsed as CombinedBlock[];
     } catch {
       return [];
     }
