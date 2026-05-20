@@ -155,17 +155,24 @@ async function main() {
     `Unique domains: ${[...allDomains].join(', ')}\nUnique tags: ${[...allTags].join(', ')}`,
   );
 
-  // 3. One LLM call to translate all values
+  // 3. Batch LLM calls to translate all values (batches of 50 to avoid timeout)
   console.log('\nCalling LLM to translate values...');
   const llm = new LlmClient({
     endpoint: llmEndpoint,
     model: llmModel,
     temperature: 0.1,
-    timeout: 60000,
+    timeout: 180000,
     apiKey: llmApiKey,
   });
 
-  const mapping = await translateValues(allValues, llm);
+  const BATCH_SIZE = 50;
+  const mapping: Record<string, string> = {};
+  for (let i = 0; i < allValues.length; i += BATCH_SIZE) {
+    const batch = allValues.slice(i, i + BATCH_SIZE);
+    console.log(`  Translating batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allValues.length / BATCH_SIZE)} (${batch.length} values)...`);
+    const batchMapping = await translateValues(batch, llm);
+    Object.assign(mapping, batchMapping);
+  }
 
   console.log('\nTranslation mapping:');
   for (const [orig, translated] of Object.entries(mapping)) {
