@@ -14,6 +14,9 @@ export interface MilvusFragment {
   tags: string[];
   access_read: string[];
   community_id: number;
+  function_type: string;  // '' when null
+  audience: string[];
+  maturity: string;        // '' when null
 }
 
 export interface MilvusSearchResult {
@@ -27,6 +30,9 @@ export interface MilvusFilters {
   lang?: string;
   quality_min?: string;
   tags?: string[];
+  function_type?: string[];
+  audience?: string[];
+  maturity?: string[];
 }
 
 const QUALITY_ORDER = ['draft', 'reviewed', 'approved'];
@@ -53,6 +59,20 @@ function buildFilterExpr(filters: MilvusFilters): string {
         .join(', ');
       parts.push(`quality in [${allowed}]`);
     }
+  }
+
+  if (filters.function_type?.length) {
+    const vals = filters.function_type.map((v) => `"${v}"`).join(', ');
+    parts.push(`function_type in [${vals}]`);
+  }
+  if (filters.audience?.length) {
+    filters.audience.forEach((a) => {
+      parts.push(`json_contains(audience, "${a}")`);
+    });
+  }
+  if (filters.maturity?.length) {
+    const vals = filters.maturity.map((v) => `"${v}"`).join(', ');
+    parts.push(`maturity in [${vals}]`);
   }
 
   // Always exclude deprecated
@@ -82,6 +102,15 @@ export class FragmintMilvusClient {
       if (storedDim && parseInt(storedDim) !== this.dimensions) {
         console.warn(`[milvus] dimension mismatch (stored=${storedDim}, configured=${this.dimensions}) — dropping and recreating collection`);
         await this.sdk.dropCollection({ collection_name: this.collectionName });
+      } else {
+        const fieldNames = (desc.schema?.fields ?? []).map((f: any) => f.name);
+        const missingFields = ['function_type', 'audience', 'maturity'].filter(
+          (f) => !fieldNames.includes(f),
+        );
+        if (missingFields.length > 0) {
+          console.warn(`[milvus] schema missing fields ${missingFields.join(', ')} — recreating collection`);
+          await this.sdk.dropCollection({ collection_name: this.collectionName });
+        }
       }
     }
 
@@ -102,6 +131,9 @@ export class FragmintMilvusClient {
           { name: 'tags', data_type: DataType.JSON },
           { name: 'access_read', data_type: DataType.JSON },
           { name: 'community_id', data_type: DataType.Int64 },
+          { name: 'function_type', data_type: DataType.VarChar, max_length: 64, default_value: '' },
+          { name: 'audience', data_type: DataType.JSON },
+          { name: 'maturity', data_type: DataType.VarChar, max_length: 32, default_value: '' },
         ],
       });
     }
@@ -119,6 +151,18 @@ export class FragmintMilvusClient {
     }
 
     for (const field of ['domain', 'type', 'lang', 'quality'] as const) {
+      try {
+        await this.sdk.createIndex({
+          collection_name: this.collectionName,
+          field_name: field,
+          index_type: 'INVERTED',
+        });
+      } catch {
+        /* already exists */
+      }
+    }
+
+    for (const field of ['function_type', 'maturity'] as const) {
       try {
         await this.sdk.createIndex({
           collection_name: this.collectionName,
