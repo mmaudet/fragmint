@@ -57,6 +57,13 @@ export class GitRepository {
     }
   }
 
+  async commitMove(message: string): Promise<string> {
+    await this.exec('add', '-A');
+    const { stdout } = await this.exec('commit', '-m', message);
+    const match = stdout.match(/\[[\w/.()\- ]+ ([a-f0-9]+)\]/);
+    return match ? match[1] : '';
+  }
+
   async rmFiles(filePaths: string[], message: string): Promise<string> {
     for (const fp of filePaths) {
       await this.exec('rm', '-f', fp);
@@ -117,15 +124,20 @@ export class GitRepository {
   }
 
   private async exec(...args: string[]) {
-    return execFileAsync(GIT_BIN, args, {
-      cwd: this.repoPath,
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME ?? 'Fragmint',
-        GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL ?? 'fragmint@localhost',
-        GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? 'Fragmint',
-        GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? 'fragmint@localhost',
-      },
-    });
+    try {
+      return await execFileAsync(GIT_BIN, args, {
+        cwd: this.repoPath,
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME ?? 'Fragmint',
+          GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL ?? 'fragmint@localhost',
+          GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? 'Fragmint',
+          GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? 'fragmint@localhost',
+        },
+      });
+    } catch (err: any) {
+      const stderr = err.stderr ? ` | stderr: ${err.stderr.trim()}` : '';
+      throw new Error(`git ${args[0]} failed${stderr}`);
+    }
   }
 }

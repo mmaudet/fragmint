@@ -1,5 +1,5 @@
 export interface CommitMessageParams {
-  action: 'create' | 'update' | 'approve' | 'deprecate' | 'translate' | 'generate' | 'harvest';
+  action: 'create' | 'update' | 'approve' | 'deprecate' | 'delete' | 'translate' | 'generate' | 'harvest';
   type: string;
   domain: string;
   description: string;

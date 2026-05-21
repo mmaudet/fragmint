@@ -206,6 +206,20 @@ export function fragmentRoutes(
     return { data: result, meta: null, error: null };
   });
 
+  // Delete
+  app.route({
+    method: 'DELETE',
+    url: `${prefix}/fragments/:id`,
+    preHandler: adminHandlers,
+    handler: async (request, reply) => {
+      const params = request.params as Record<string, string>;
+      const id = params.id;
+      console.log(`[DELETE fragment] id=${id} params=${JSON.stringify(params)}`);
+      const result = await fragmentService.delete(id, request.user.login, request.ip);
+      return reply.send({ data: result, meta: null, error: null });
+    },
+  });
+
   // Lineage
   app.get(`${prefix}/fragments/:id/lineage`, { preHandler: readHandlers }, async (request) => {
     const { id } = request.params as { id: string };
@@ -234,6 +248,18 @@ export function fragmentRoutes(
     const job = await jobService.create('bulk_review', ids.length, request.user.login);
     reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
     fragmentService.bulkReview(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
+      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+      .catch(() => jobService.fail(job.id));
+  });
+
+  // Bulk delete
+  app.post(`${prefix}/fragments/bulk-delete`, { preHandler: adminHandlers }, async (request, reply) => {
+    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
+    const { ids } = request.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+    const job = await jobService.create('bulk_delete', ids.length, request.user.login);
+    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+    fragmentService.bulkDelete(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
       .then(({ done, errors }) => jobService.complete(job.id, done, errors))
       .catch(() => jobService.fail(job.id));
   });
