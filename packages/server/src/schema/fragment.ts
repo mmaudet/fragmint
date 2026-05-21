@@ -55,6 +55,9 @@ export const fragmentFrontmatterSchema = z.object({
   generation: z.number().int().min(0),
   uses: z.number().int().default(0),
   last_used: z.string().nullable(),
+  function_type: z.string().nullable().optional().default(null),
+  audience: z.array(z.string()).optional().default([]),
+  maturity: z.string().nullable().optional().default(null),
   contexts: z.array(z.string()).optional(),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   origin_source: z.string().nullable().optional(),
@@ -80,6 +83,10 @@ export const createFragmentSchema = z.object({
   generation: z.number().int().min(0).default(0),
   valid_from: z.string().nullable().default(null),
   valid_until: z.string().nullable().default(null),
+  function_type: z.string().nullable().default(null),
+  audience: z.array(z.string()).default([]),
+  maturity: z.string().nullable().default(null),
+  harvest_confidence: z.number().min(0).max(1).nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   access: z
     .object({
@@ -96,7 +103,10 @@ export const updateFragmentSchema = z.object({
   body: z.string().min(1).optional(),
   type: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
-  lang: z.string().regex(/^[a-z]{2}$/).optional(),
+  lang: z
+    .string()
+    .regex(/^[a-z]{2}$/)
+    .optional(),
   tags: z.array(z.string()).optional(),
   quality: z.enum(QUALITY_VALUES).optional(),
   access: z
