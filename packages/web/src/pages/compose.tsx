@@ -3,6 +3,7 @@ import { useTemplates, useTemplate, useResolveSlots } from '@/api/hooks/use-temp
 import { useCompose } from '@/api/hooks/use-compose';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
+import { CollectionSelector } from '@/components/collection-selector';
 import { downloadBlob } from '@/api/client';
 import type { Template, ComposeResponse } from '@/api/types';
 import { StructuredDataEditor } from '@/components/structured-data-editor';
@@ -107,7 +108,10 @@ export default function ComposePage() {
 
   return (
     <div className="space-y-6 p-6">
-      <h2 className="text-2xl font-bold">{t('compose', 'title')}</h2>
+      <div className="flex items-center gap-6">
+        <h2 className="text-2xl font-bold">{t('compose', 'title')}</h2>
+        <CollectionSelector />
+      </div>
 
       {/* Section 1 - Template selection */}
       <Card>

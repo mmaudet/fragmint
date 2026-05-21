@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
 import type { Plan, PlanFilters, PlanSection, PlanStatus } from '@/api/types';
 
-export function usePlans(collectionSlug: string) {
+export function usePlans() {
   return useQuery<Plan[]>({
-    queryKey: ['plans', collectionSlug],
-    queryFn: () => apiRequest<Plan[]>('GET', collectionApiUrl(collectionSlug, '/plans')),
+    queryKey: ['plans'],
+    queryFn: () => apiRequest<Plan[]>('GET', '/v1/plans'),
   });
 }
 
@@ -17,12 +17,12 @@ export function usePlan(id: string | null) {
   });
 }
 
-export function useCreatePlan(collectionSlug: string) {
+export function useCreatePlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { title?: string; spec_prompt: string; filters?: PlanFilters }) =>
-      apiRequest<Plan>('POST', collectionApiUrl(collectionSlug, '/plans'), input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', collectionSlug] }),
+      apiRequest<Plan>('POST', '/v1/plans', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
 }
 
@@ -52,22 +52,20 @@ export function useUpdatePlan(id: string) {
   });
 }
 
-export function useDeletePlan(collectionSlug: string) {
+export function useDeletePlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiRequest<void>('DELETE', `/v1/plans/${id}`),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ['plans', collectionSlug] });
-      const previous = qc.getQueryData<Plan[]>(['plans', collectionSlug]);
-      qc.setQueryData<Plan[]>(['plans', collectionSlug], (old) =>
-        (old ?? []).filter((p) => p.id !== id),
-      );
+      await qc.cancelQueries({ queryKey: ['plans'] });
+      const previous = qc.getQueryData<Plan[]>(['plans']);
+      qc.setQueryData<Plan[]>(['plans'], (old) => (old ?? []).filter((p) => p.id !== id));
       return { previous };
     },
     onError: (_err, _id, ctx) => {
-      if (ctx?.previous) qc.setQueryData(['plans', collectionSlug], ctx.previous);
+      if (ctx?.previous) qc.setQueryData(['plans'], ctx.previous);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['plans', collectionSlug] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
 }
 

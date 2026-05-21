@@ -12,7 +12,7 @@ export default function HomePage() {
   const nav = useNavigate();
   const { activeCollection } = useCollection();
   const { data: inventory } = useInventory(activeCollection);
-  const { data: plans } = usePlans(activeCollection);
+  const { data: plans } = usePlans();
 
   const approved = inventory?.by_quality?.approved ?? 0;
   const pending = (inventory?.by_quality?.reviewed ?? 0) + (inventory?.by_quality?.draft ?? 0);

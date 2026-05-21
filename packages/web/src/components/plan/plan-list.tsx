@@ -5,14 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
-import { useCollection } from '@/lib/collection-context';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function PlanList({ onCreate }: { onCreate: () => void }) {
-  const { activeCollection } = useCollection();
-  const { data: plans, isLoading } = usePlans(activeCollection);
-  const remove = useDeletePlan(activeCollection);
+  const { data: plans, isLoading } = usePlans();
+  const remove = useDeletePlan();
   const nav = useNavigate();
   const { t } = useI18n();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
