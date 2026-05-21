@@ -42,14 +42,14 @@ export function CandidateCard({ candidate, decision, onAccept, onReject, onClick
           </Badge>
         </div>
         <div className="flex flex-wrap gap-1 mt-1">
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
             {candidate.type}
           </Badge>
           <Badge variant="outline" className="text-xs">
             {candidate.lang}
           </Badge>
-          {candidate.domain && (
-            <Badge variant="outline" className="text-xs">
+          {candidate.domain && candidate.domain !== candidate.type && (
+            <Badge variant="outline" className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
               {candidate.domain}
             </Badge>
           )}
