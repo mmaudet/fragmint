@@ -32,3 +32,7 @@ export function canReview(user: CurrentUser | undefined): boolean {
 export function canApprove(user: CurrentUser | undefined): boolean {
   return !!user && hasRole(user.role, 'expert');
 }
+
+export function canDelete(user: CurrentUser | undefined): boolean {
+  return !!user && hasRole(user.role, 'admin');
+}

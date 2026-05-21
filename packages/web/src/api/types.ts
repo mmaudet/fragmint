@@ -94,6 +94,7 @@ export interface HarvestJob {
   id: string;
   status: 'processing' | 'done' | 'error';
   files: string[];
+  collection_slug: string | null;
   stats: { total: number; duplicates: number; low_confidence: number; valid: number } | null;
   error: string | null;
   created_at: string;
