@@ -93,6 +93,9 @@ export class FragmentService {
       last_used: null,
       access: input.access,
       origin: input.origin,
+      function_type: (input as any).function_type ?? null,
+      audience: (input as any).audience ?? [],
+      maturity: (input as any).maturity ?? null,
     };
 
     const filePath = writeFragment(fragmentsDir, frontmatter, input.body);
@@ -133,6 +136,10 @@ export class FragmentService {
       translation_of: input.translation_of ?? null,
       valid_from: input.valid_from ?? null,
       valid_until: input.valid_until ?? null,
+      function_type: (input as any).function_type ?? null,
+      audience: (input as any).audience ? JSON.stringify((input as any).audience) : null,
+      maturity: (input as any).maturity ?? null,
+      harvest_confidence: (input as any).harvest_confidence ?? null,
     });
 
     await this.audit.log({
@@ -242,7 +249,13 @@ export class FragmentService {
     if (!existing) throw new Error('Fragment not found');
 
     // Check write permission
-    const isContentEdit = !!(input.body !== undefined || input.tags !== undefined || input.domain !== undefined || input.type !== undefined || input.lang !== undefined);
+    const isContentEdit = !!(
+      input.body !== undefined ||
+      input.tags !== undefined ||
+      input.domain !== undefined ||
+      input.type !== undefined ||
+      input.lang !== undefined
+    );
     if (
       isContentEdit &&
       (existing.quality === 'approved' || existing.quality === 'reviewed') &&
@@ -308,7 +321,11 @@ export class FragmentService {
 
     let commitHash: string;
     if (newRelPath !== existing.file_path) {
-      try { unlinkSync(join(storePath, existing.file_path)); } catch { /* already gone */ }
+      try {
+        unlinkSync(join(storePath, existing.file_path));
+      } catch {
+        /* already gone */
+      }
       commitHash = await git.commitMove(commitMsg);
     } else {
       commitHash = await git.commit(existing.file_path, commitMsg);
@@ -476,7 +493,12 @@ export class FragmentService {
 
   async delete(id: string, userId: string, ip?: string) {
     const [row] = await this.db
-      .select({ file_path: fragments.file_path, collection_slug: fragments.collection_slug, type: fragments.type, domain: fragments.domain })
+      .select({
+        file_path: fragments.file_path,
+        collection_slug: fragments.collection_slug,
+        type: fragments.type,
+        domain: fragments.domain,
+      })
       .from(fragments)
       .where(eq(fragments.id, id))
       .limit(1);
@@ -502,7 +524,13 @@ export class FragmentService {
     }
     await this.db.delete(fragments).where(eq(fragments.id, id));
     await this.searchService.removeFromIndex(id);
-    await this.audit.log({ user_id: userId, role: 'admin', action: 'delete', fragment_id: id, ip_source: ip });
+    await this.audit.log({
+      user_id: userId,
+      role: 'admin',
+      action: 'delete',
+      fragment_id: id,
+      ip_source: ip,
+    });
 
     return { id, deleted: true };
   }
@@ -540,22 +568,41 @@ export class FragmentService {
         frontmatter.reviewed_by = userId;
         frontmatter.updated_at = now;
         writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
+        if (!groups.has(storePath))
+          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
         const g = groups.get(storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
-      } catch (e) { console.error(`[bulkReview] fragment ${id} failed:`, e); errors++; }
+      } catch (e) {
+        console.error(`[bulkReview] fragment ${id} failed:`, e);
+        errors++;
+      }
     }
 
     let done = 0;
     for (const [, { git, filePaths, ids: gIds }] of groups) {
       try {
-        const hash = await git.commitFiles(filePaths, `chore: bulk review ${gIds.length} fragments by ${userId}`);
-        await this.db.update(fragments).set({ quality: 'reviewed', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
-        await this.audit.log({ user_id: userId, role: 'contributor', action: 'bulk_review', fragment_id: gIds.join(','), ip_source: ip });
+        const hash = await git.commitFiles(
+          filePaths,
+          `chore: bulk review ${gIds.length} fragments by ${userId}`,
+        );
+        await this.db
+          .update(fragments)
+          .set({ quality: 'reviewed', updated_at: now, git_hash: hash })
+          .where(inArray(fragments.id, gIds));
+        await this.audit.log({
+          user_id: userId,
+          role: 'contributor',
+          action: 'bulk_review',
+          fragment_id: gIds.join(','),
+          ip_source: ip,
+        });
         done += gIds.length;
         onProgress?.(done);
-      } catch (e) { console.error(`[bulkReview] git commit failed:`, e); errors += gIds.length; }
+      } catch (e) {
+        console.error(`[bulkReview] git commit failed:`, e);
+        errors += gIds.length;
+      }
     }
     return { done, errors };
   }
@@ -581,22 +628,41 @@ export class FragmentService {
         frontmatter.approved_by = userId;
         frontmatter.updated_at = now;
         writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
+        if (!groups.has(storePath))
+          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
         const g = groups.get(storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
-      } catch (e) { console.error(`[bulkApprove] fragment ${id} failed:`, e); errors++; }
+      } catch (e) {
+        console.error(`[bulkApprove] fragment ${id} failed:`, e);
+        errors++;
+      }
     }
 
     let done = 0;
     for (const [, { git, filePaths, ids: gIds }] of groups) {
       try {
-        const hash = await git.commitFiles(filePaths, `chore: bulk approve ${gIds.length} fragments by ${userId}`);
-        await this.db.update(fragments).set({ quality: 'approved', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
-        await this.audit.log({ user_id: userId, role: 'expert', action: 'bulk_approve', fragment_id: gIds.join(','), ip_source: ip });
+        const hash = await git.commitFiles(
+          filePaths,
+          `chore: bulk approve ${gIds.length} fragments by ${userId}`,
+        );
+        await this.db
+          .update(fragments)
+          .set({ quality: 'approved', updated_at: now, git_hash: hash })
+          .where(inArray(fragments.id, gIds));
+        await this.audit.log({
+          user_id: userId,
+          role: 'expert',
+          action: 'bulk_approve',
+          fragment_id: gIds.join(','),
+          ip_source: ip,
+        });
         done += gIds.length;
         onProgress?.(done);
-      } catch (e) { console.error(`[bulkApprove] git commit failed:`, e); errors += gIds.length; }
+      } catch (e) {
+        console.error(`[bulkApprove] git commit failed:`, e);
+        errors += gIds.length;
+      }
     }
     return { done, errors };
   }
@@ -616,11 +682,15 @@ export class FragmentService {
         const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
         if (!frag) continue;
         const storePath = await this.resolveStorePath(frag.collection_slug);
-        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
+        if (!groups.has(storePath))
+          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
         const g = groups.get(storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
-      } catch (e) { console.error(`[bulkDelete] fragment ${id} failed:`, e); errors++; }
+      } catch (e) {
+        console.error(`[bulkDelete] fragment ${id} failed:`, e);
+        errors++;
+      }
     }
 
     let done = 0;
@@ -629,10 +699,19 @@ export class FragmentService {
         await git.rmFiles(filePaths, `chore: bulk delete ${gIds.length} fragments by ${userId}`);
         await this.db.delete(fragments).where(inArray(fragments.id, gIds));
         for (const id of gIds) await this.searchService.removeFromIndex(id);
-        await this.audit.log({ user_id: userId, role: 'admin', action: 'bulk_delete', fragment_id: gIds.join(','), ip_source: ip });
+        await this.audit.log({
+          user_id: userId,
+          role: 'admin',
+          action: 'bulk_delete',
+          fragment_id: gIds.join(','),
+          ip_source: ip,
+        });
         done += gIds.length;
         onProgress?.(done);
-      } catch (e) { console.error(`[bulkDelete] git commit failed:`, e); errors += gIds.length; }
+      } catch (e) {
+        console.error(`[bulkDelete] git commit failed:`, e);
+        errors += gIds.length;
+      }
     }
     return { done, errors };
   }
@@ -656,7 +735,9 @@ export class FragmentService {
         try {
           const parsed = JSON.parse(row.tags) as string[];
           for (const t of parsed) tagSet.add(t);
-        } catch { /* skip malformed */ }
+        } catch {
+          /* skip malformed */
+        }
       }
     }
     return { domains, tags: [...tagSet].sort() };
