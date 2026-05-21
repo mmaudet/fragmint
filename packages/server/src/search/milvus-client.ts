@@ -75,7 +75,18 @@ export class FragmintMilvusClient {
   async ensureCollection(): Promise<void> {
     const exists = await this.sdk.hasCollection({ collection_name: this.collectionName });
 
-    if (!exists.value) {
+    if (exists.value) {
+      const desc = await this.sdk.describeCollection({ collection_name: this.collectionName });
+      const vectorField = desc.schema?.fields?.find((f: any) => f.name === 'vector');
+      const storedDim = vectorField?.type_params?.find((p: any) => p.key === 'dim')?.value;
+      if (storedDim && parseInt(storedDim) !== this.dimensions) {
+        console.warn(`[milvus] dimension mismatch (stored=${storedDim}, configured=${this.dimensions}) — dropping and recreating collection`);
+        await this.sdk.dropCollection({ collection_name: this.collectionName });
+      }
+    }
+
+    const stillExists = await this.sdk.hasCollection({ collection_name: this.collectionName });
+    if (!stillExists.value) {
       await this.sdk.createCollection({
         collection_name: this.collectionName,
         fields: [

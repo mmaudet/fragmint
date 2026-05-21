@@ -89,7 +89,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       fileConfig.embedding_model ??
       'nomic-embed-text-v2-moe',
     embedding_dimensions:
-      toNumber(process.env.FRAGMINT_EMBEDDING_DIMENSIONS) ?? fileConfig.embedding_dimensions ?? 768,
+      toNumber(process.env.FRAGMINT_EMBEDDING_DIMENSIONS) ?? fileConfig.embedding_dimensions ?? 1024,
     embedding_batch_size:
       toNumber(process.env.FRAGMINT_EMBEDDING_BATCH_SIZE) ?? fileConfig.embedding_batch_size ?? 32,
     embedding_max_tokens:
