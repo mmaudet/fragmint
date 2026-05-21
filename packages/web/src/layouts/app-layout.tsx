@@ -11,13 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import {
   BookOpen,
@@ -26,7 +19,6 @@ import {
   Upload,
   LogOut,
   ChevronDown,
-  Lock,
   PenLine,
   Home,
 } from 'lucide-react';
@@ -36,8 +28,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useI18n();
-  const { activeCollection, setActiveCollection, collections, setCollections, isReadOnly } =
-    useCollection();
+  const { setCollections } = useCollection();
   const { data: cols } = useCollections();
 
   useEffect(() => {
@@ -53,8 +44,8 @@ export default function AppLayout() {
   const hasRole = (min: string) => (ROLE_LEVEL[role] ?? 0) >= (ROLE_LEVEL[min] ?? 999);
 
   const navItems = [
-    { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
+    { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
     ...(hasRole('contributor') ? [{ to: '/validation', label: t('nav', 'validation'), icon: CheckCircle }] : []),
     { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
@@ -92,33 +83,6 @@ export default function AppLayout() {
         </nav>
 
         <Separator className="bg-slate-700 mt-2" />
-
-        {/* Collection selector */}
-        {collections.length > 0 && (
-          <div className="px-2 pt-2">
-            <Select value={activeCollection} onValueChange={setActiveCollection}>
-              <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-slate-200">
-                <div className="flex items-center gap-2">
-                  {!!isReadOnly && <Lock className="h-3 w-3 text-slate-400" />}
-                  <SelectValue placeholder={t('collections', 'select')} />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {collections.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>
-                    <span className="flex items-center gap-2">
-                      {c.name}
-                      {!!c.read_only && <Lock className="h-3 w-3 text-muted-foreground" />}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {!!isReadOnly && (
-              <p className="text-xs text-slate-500 mt-1 px-1">{t('collections', 'readOnly')}</p>
-            )}
-          </div>
-        )}
 
         <nav className="flex-1 p-2 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
