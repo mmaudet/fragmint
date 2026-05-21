@@ -21,6 +21,7 @@ export interface HarvestJobWithCandidates {
   files: string[];
   pipeline: string;
   min_confidence: number;
+  collection_slug: string | null;
   stats: Record<string, number> | null;
   error: string | null;
   created_by: string;
@@ -55,6 +56,8 @@ export interface ValidationInput {
     body?: string;
     domain?: string;
     type?: string;
+    lang?: string;
+    tags?: string[];
   }>;
   merged: Array<{ candidate: string; into: string }>;
   rejected: string[];
@@ -74,6 +77,7 @@ export class HarvesterService {
     filenames: string[],
     options: { min_confidence: number },
     userId: string,
+    collectionSlug: string | null = null,
   ): Promise<string> {
     const jobId = `hrv-${randomUUID()}`;
     const now = new Date().toISOString();
@@ -84,6 +88,7 @@ export class HarvesterService {
       files: JSON.stringify(filenames),
       pipeline: 'docx-pandoc-llm',
       min_confidence: options.min_confidence,
+      collection_slug: collectionSlug,
       created_by: userId,
       created_at: now,
       updated_at: now,
@@ -107,7 +112,11 @@ export class HarvesterService {
   ): Promise<void> {
     try {
       const existingTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map((r) => r.slug);
-      const existingDomains = (await this.db.select({ slug: fragmentDomains.slug }).from(fragmentDomains)).map((r) => r.slug);
+      const domainRows = await this.db.select({ slug: fragmentDomains.slug, description: fragmentDomains.description }).from(fragmentDomains);
+      const existingDomains = domainRows.map((r) => r.slug);
+      const domainHints: Record<string, string> = Object.fromEntries(
+        domainRows.filter((r) => r.description).map((r) => [r.slug, r.description!]),
+      );
       const knownTags = (await this.db.select({ slug: fragmentTags.slug }).from(fragmentTags)).map((r) => r.slug);
 
       let totalCandidates = 0;
@@ -151,14 +160,24 @@ export class HarvesterService {
 
         // Parallel LLM calls — one segmentAndClassify per chunk
         const chunks = HarvesterService.chunkMarkdown(markdown);
+        console.log(`[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${chunks.length} chunk(s)`);
+
+        const t0 = Date.now();
         const chunkResults = await Promise.all(
-          chunks.map((chunk) =>
-            this.llmClient.segmentAndClassify(chunk, existingTypes, existingDomains, knownTags),
-          ),
+          chunks.map(async (chunk, ci) => {
+            const tc = Date.now();
+            const result = await this.llmClient.segmentAndClassify(chunk, existingTypes, existingDomains, knownTags, domainHints);
+            console.log(`[harvest:${jobId}] chunk ${ci + 1}/${chunks.length}: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`);
+            return result;
+          }),
         );
+        console.log(`[harvest:${jobId}] LLM total: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
         const blocks: CombinedBlock[] = HarvesterService.deduplicateBlocks(chunkResults.flat());
+        console.log(`[harvest:${jobId}] ${blocks.length} block(s) after dedup`);
 
         // Parallel duplicate detection
+        const t1 = Date.now();
         const dupeChecks = await Promise.all(
           blocks.map(async (block) => {
             try {
@@ -172,6 +191,8 @@ export class HarvesterService {
             return null;
           }),
         );
+
+        console.log(`[harvest:${jobId}] dupe detection: ${((Date.now() - t1) / 1000).toFixed(1)}s`);
 
         // Count stats
         for (let j = 0; j < blocks.length; j++) {
@@ -253,6 +274,7 @@ export class HarvesterService {
       files: JSON.parse(job.files) as string[],
       pipeline: job.pipeline,
       min_confidence: job.min_confidence,
+      collection_slug: job.collection_slug ?? null,
       stats: job.stats ? (JSON.parse(job.stats) as Record<string, number>) : null,
       error: job.error,
       created_by: job.created_by,
@@ -298,27 +320,31 @@ export class HarvesterService {
       if (rows.length === 0) continue;
       const candidate = rows[0];
 
+      const tags = candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [];
+
       const result = await this.fragmentService.create(
         {
           type: candidate.type as any,
           domain: candidate.domain,
-          tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
+          tags,
           lang: candidate.lang,
           body: candidate.body,
           translation_of: null,
           parent_id: null,
           generation: 0,
           origin: 'harvested',
+          valid_from: null,
+          valid_until: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
         },
         userId,
         'expert',
       );
 
-      await this.db
-        .update(harvestCandidates)
-        .set({ status: 'accepted', fragment_id: result.id })
-        .where(eq(harvestCandidates.id, candidateId));
+      await Promise.all([
+        this.db.update(harvestCandidates).set({ status: 'accepted', fragment_id: result.id }).where(eq(harvestCandidates.id, candidateId)),
+        this._upsertTags(tags),
+      ]);
 
       committed++;
     }
@@ -334,27 +360,31 @@ export class HarvesterService {
       if (rows.length === 0) continue;
       const candidate = rows[0];
 
+      const tags = mod.tags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
+
       const result = await this.fragmentService.create(
         {
           type: (mod.type ?? candidate.type) as any,
           domain: mod.domain ?? candidate.domain,
-          tags: candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [],
-          lang: candidate.lang,
+          tags,
+          lang: mod.lang ?? candidate.lang,
           body: mod.body ?? candidate.body,
           translation_of: null,
           parent_id: null,
           generation: 0,
           origin: 'harvested',
+          valid_from: null,
+          valid_until: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
         },
         userId,
         'expert',
       );
 
-      await this.db
-        .update(harvestCandidates)
-        .set({ status: 'accepted', fragment_id: result.id })
-        .where(eq(harvestCandidates.id, mod.id));
+      await Promise.all([
+        this.db.update(harvestCandidates).set({ status: 'accepted', fragment_id: result.id }).where(eq(harvestCandidates.id, mod.id)),
+        this._upsertTags(tags),
+      ]);
 
       committed++;
     }
@@ -380,6 +410,15 @@ export class HarvesterService {
     }
 
     return { committed, merged, rejected };
+  }
+
+  private async _upsertTags(tags: string[]): Promise<void> {
+    if (tags.length === 0) return;
+    const now = new Date().toISOString();
+    await this.db
+      .insert(fragmentTags)
+      .values(tags.map((slug) => ({ slug, label: slug, created_at: now })))
+      .onConflictDoNothing();
   }
 
   static extractBlockText(markdown: string, startMarker: string, endMarker: string): string {

@@ -113,6 +113,7 @@ export const harvestJobs = sqliteTable('harvest_jobs', {
   files: text('files').notNull(),
   pipeline: text('pipeline').notNull(),
   min_confidence: real('min_confidence').notNull(),
+  collection_slug: text('collection_slug'),
   stats: text('stats'),
   error: text('error'),
   created_by: text('created_by').notNull(),
