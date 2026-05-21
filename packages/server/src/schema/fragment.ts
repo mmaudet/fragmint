@@ -9,11 +9,9 @@ export const FRAGMENT_TYPES = [
   'conclusion',
   'bio',
   'testimonial',
-  'technical-reference',
   'methodology',
   'engagement',
   'use-case',
-  'technical',
   'other',
 ] as const;
 
@@ -96,8 +94,10 @@ export type CreateFragmentInput = z.infer<typeof createFragmentSchema>;
 
 export const updateFragmentSchema = z.object({
   body: z.string().min(1).optional(),
-  tags: z.array(z.string()).optional(),
+  type: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
+  lang: z.string().regex(/^[a-z]{2}$/).optional(),
+  tags: z.array(z.string()).optional(),
   quality: z.enum(QUALITY_VALUES).optional(),
   access: z
     .object({

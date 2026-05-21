@@ -120,11 +120,16 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     validTypes: string[],
     validDomains: string[],
     knownTags: string[] = [],
+    domainHints: Record<string, string> = {},
   ): Promise<CombinedBlock[]> {
     const tagHint =
       knownTags.length > 0
         ? `Prefer tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. New tags must be English lowercase kebab-case.`
         : 'English lowercase kebab-case only. Never use French words.';
+
+    const domainList = validDomains
+      .map((d) => (domainHints[d] ? `"${d}": ${domainHints[d]}` : `"${d}"`))
+      .join('\n  ');
 
     const prompt = `You are a document analysis assistant. Extract reusable content blocks and classify each one.
 
@@ -135,9 +140,11 @@ Extraction rules:
 
 Classification rules:
 - type: MUST be one of: ${JSON.stringify(validTypes)}
-- domain: SUBJECT MATTER only. MUST be one of: ${JSON.stringify(validDomains)}. A paragraph about Twake → "twake", not "technical".
+- domain: which Linagora product or area the text is about. MUST be one of:
+  ${domainList}
+  Only use "twake", "lincloud", "linshare" when the text explicitly names or describes that product. Only use "linagora" when the text is explicitly about Linagora the company. Use "other" for client requirements, SLA specs, procurement content, or anything not clearly tied to a specific product.
 - tags: ${tagHint}
-- confidence: confidence in type + domain (0-1)
+- confidence: your confidence in the type + domain assignment (0-1)
 
 Document:
 ${markdown}

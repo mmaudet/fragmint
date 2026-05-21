@@ -130,8 +130,8 @@ export async function createServer(options?: {
   }
   const domainCount = await db.select({ c: count() }).from(fragmentDomains);
   if (domainCount[0].c === 0) {
-    for (const slug of HARVESTER_DOMAINS) {
-      await db.insert(fragmentDomains).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+    for (const { slug, description } of HARVESTER_DOMAINS) {
+      await db.insert(fragmentDomains).values({ slug, label: slug, description, created_at: now }).onConflictDoNothing();
     }
   }
 

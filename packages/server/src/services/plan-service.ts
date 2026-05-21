@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans, fragments, planFragmentUsages } from '../db/schema.js';
+import { plans, fragments, planFragmentUsages, fragmentTypes, fragmentDomains } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -18,7 +18,6 @@ import type { SearchResult, SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
-import { HARVESTER_TYPES, HARVESTER_DOMAINS } from './harvester-taxonomy.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
 
@@ -213,16 +212,11 @@ export class PlanService {
   private async inferSectionTypes(
     sections: { id: string; title: string; description: string }[],
   ): Promise<Map<string, string | undefined>> {
-    const dbTypes = (
-      await this.db.selectDistinct({ type: fragments.type }).from(fragments)
-    ).map((r) => r.type);
-    const dbDomains = (
-      await this.db.selectDistinct({ domain: fragments.domain }).from(fragments)
-    ).map((r) => r.domain);
-    const knownTypes = [...new Set([...HARVESTER_TYPES, ...dbTypes])].filter(
-      (t) => t !== 'unknown' && t !== 'other',
-    );
-    const knownDomains = [...new Set([...HARVESTER_DOMAINS, ...dbDomains])];
+    const knownTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes))
+      .map((r) => r.slug)
+      .filter((t) => t !== 'unknown' && t !== 'other');
+    const knownDomains = (await this.db.select({ slug: fragmentDomains.slug }).from(fragmentDomains))
+      .map((r) => r.slug);
 
     const llm = this.requireLlm();
     const entries = await Promise.all(

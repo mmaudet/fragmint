@@ -386,6 +386,7 @@ FRAGMINT_PORT                # API port (default: 3333)
 - Bug tracking: `.claude/mission/BUGS.md` (all bugs with status — fix ALL before new features)
 - Execution plan: `.claude/mission/PLAN.md` (20-day plan, current day status)
 - Eval methodology: `.claude/mission/EVALS.md` (golden dataset + LLM-as-a-judge patterns)
+- LLM Wiki pattern: `.claude/external-docs/llm-wiki-karpathy.md` (Karpathy — fondation conceptuelle : fragments=wiki pages, harvest=ingest, search=query, Git=log)
 
 ---
 
