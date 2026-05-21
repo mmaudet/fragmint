@@ -300,6 +300,9 @@ export class FragmentService {
       if (input.quality === 'reviewed') updatedFrontmatter.reviewed_by = userId;
     }
     if (input.access) updatedFrontmatter.access = input.access;
+    if (input.function_type !== undefined) updatedFrontmatter.function_type = input.function_type;
+    if (input.audience !== undefined) updatedFrontmatter.audience = input.audience;
+    if (input.maturity !== undefined) updatedFrontmatter.maturity = input.maturity;
     updatedFrontmatter.updated_at = new Date().toISOString();
 
     const newAbsPath = writeFragment(
@@ -344,6 +347,11 @@ export class FragmentService {
         body_excerpt: newBody.slice(0, 200),
         git_hash: commitHash,
         file_path: newRelPath,
+        function_type: updatedFrontmatter.function_type ?? null,
+        audience: updatedFrontmatter.audience
+          ? JSON.stringify(updatedFrontmatter.audience)
+          : null,
+        maturity: updatedFrontmatter.maturity ?? null,
       })
       .where(eq(fragments.id, id));
 

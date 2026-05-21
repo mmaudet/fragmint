@@ -116,6 +116,9 @@ export const updateFragmentSchema = z.object({
       approve: z.array(z.string()),
     })
     .optional(),
+  function_type: z.string().nullable().optional(),
+  audience: z.array(z.string()).optional(),
+  maturity: z.string().nullable().optional(),
 });
 
 export type UpdateFragmentInput = z.infer<typeof updateFragmentSchema>;
