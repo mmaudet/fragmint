@@ -2,7 +2,7 @@ import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-e
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, AlertTriangle, Save } from 'lucide-react';
+import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { HarvestCandidate } from '@/api/types';
@@ -13,9 +13,6 @@ export interface CandidateEdits {
   lang?: string;
   tags?: string[];
   body?: string;
-  function_type?: string | null;
-  maturity?: string | null;
-  audience?: string[];
 }
 
 interface Props {
@@ -71,9 +68,6 @@ export function CandidateDetailSheet({
             lang: current.lang,
             tags: current.tags ?? [],
             body: current.body ?? '',
-            function_type: current.function_type ?? null,
-            maturity: current.maturity ?? null,
-            audience: current.audience ?? [],
           }}
           types={types}
           domains={domains}
@@ -85,9 +79,6 @@ export function CandidateDetailSheet({
               lang: m.lang,
               tags: m.tags,
               body: m.body,
-              function_type: m.function_type,
-              maturity: m.maturity,
-              audience: m.audience,
             })
           }
         />
@@ -99,6 +90,63 @@ export function CandidateDetailSheet({
               {t('harvest', 'duplicateWarning')} (
               {Math.round((candidate.duplicate_score ?? 0) * 100)}%)
             </span>
+          </div>
+        )}
+
+        {candidate.quality_signals && candidate.quality_signals.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Signaux qualitatifs</p>
+            {candidate.quality_signals.map((s) => (
+              <div key={s.type} className={cn(
+                'flex items-start gap-2 text-xs rounded px-2 py-1',
+                s.level === 'ok' && 'text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-950/30',
+                s.level === 'warning' && 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30',
+                s.level === 'error' && 'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/30',
+                s.level === 'info' && 'text-muted-foreground bg-muted/40',
+              )}>
+                {s.level === 'ok' ? (
+                  <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5" />
+                ) : s.level === 'warning' ? (
+                  <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                ) : s.level === 'error' ? (
+                  <XCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                ) : (
+                  <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                )}
+                <span>{s.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {candidate.judge_result && (
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Évaluation LLM-as-judge
+            </p>
+            <div className={cn(
+              'text-xs rounded px-3 py-2 font-medium',
+              candidate.judge_result.overall_recommendation === 'accept' && 'bg-green-50 text-green-800 dark:bg-green-950/30',
+              candidate.judge_result.overall_recommendation === 'review' && 'bg-amber-50 text-amber-800 dark:bg-amber-950/30',
+              candidate.judge_result.overall_recommendation === 'reject' && 'bg-red-50 text-red-800 dark:bg-red-950/30',
+            )}>
+              {candidate.judge_result.overall_recommendation.toUpperCase()} — {candidate.judge_result.overall_reason}
+            </div>
+            {(['reusability', 'semantic_coherence', 'classification_accuracy'] as const).map((dim) => {
+              const v = candidate.judge_result![dim];
+              return (
+                <div key={dim} className="text-xs text-muted-foreground">
+                  <span className="font-medium capitalize">{dim.replace(/_/g, ' ')}</span>
+                  {' '}
+                  <span className={cn(
+                    v.verdict === 'pass' && 'text-green-700',
+                    v.verdict === 'partial' && 'text-amber-700',
+                    v.verdict === 'fail' && 'text-red-700',
+                  )}>[{v.verdict}]</span>
+                  {' '}{v.reason}
+                </div>
+              );
+            })}
           </div>
         )}
 

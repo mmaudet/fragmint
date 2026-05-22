@@ -112,6 +112,25 @@ export interface HarvestJob {
   created_at: string;
 }
 
+export interface CoherenceFlag {
+  type: 'subject_coherence' | 'entity_coverage' | 'duplicate_check' | 'prototype_distance';
+  level: 'ok' | 'warning' | 'error' | 'info';
+  message: string;
+}
+
+export interface JudgeVerdict {
+  verdict: 'pass' | 'partial' | 'fail';
+  reason: string;
+}
+
+export interface JudgeResult {
+  reusability: JudgeVerdict;
+  semantic_coherence: JudgeVerdict;
+  classification_accuracy: JudgeVerdict;
+  overall_recommendation: 'accept' | 'review' | 'reject';
+  overall_reason: string;
+}
+
 export interface HarvestCandidate {
   id: string;
   job_id: string;
@@ -132,6 +151,8 @@ export interface HarvestCandidate {
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
   fragment_id: string | null;
   trust_sources_json: string | null;
+  quality_signals: CoherenceFlag[];
+  judge_result: JudgeResult | null;
 }
 
 export interface HarvestJobWithCandidates extends HarvestJob {

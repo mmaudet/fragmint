@@ -5,8 +5,17 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { usePendingCandidates, useBulkAcceptCandidates } from '@/api/hooks/use-admin-harvest';
 import { TrustBadge, getTrustLevel, type TrustLevel } from '@/components/admin/harvest/trust-badge';
+import type { HarvestCandidate } from '@/api/types';
 
 const TRUST_PRIORITY: Record<TrustLevel, number> = { high: 0, mixed: 1, low: 2 };
+
+function signalSortKey(candidate: HarvestCandidate): number {
+  const signals = candidate.quality_signals ?? [];
+  if (signals.some((s) => s.level === 'error')) return -1000;
+  const warningCount = signals.filter((s) => s.level === 'warning').length;
+  if (warningCount > 0) return -warningCount;
+  return 0;
+}
 
 export default function AdminHarvestPage() {
   const [trustFilter, setTrustFilter] = useState<TrustLevel | 'all'>('all');
@@ -15,11 +24,11 @@ export default function AdminHarvestPage() {
 
   const sorted = useMemo(
     () =>
-      [...candidates].sort(
-        (a, b) =>
-          TRUST_PRIORITY[getTrustLevel(a.trust_sources_json)] -
-          TRUST_PRIORITY[getTrustLevel(b.trust_sources_json)],
-      ),
+      [...candidates].sort((a, b) => {
+        const signalDiff = signalSortKey(a) - signalSortKey(b);
+        if (signalDiff !== 0) return signalDiff;
+        return TRUST_PRIORITY[getTrustLevel(a.trust_sources_json)] - TRUST_PRIORITY[getTrustLevel(b.trust_sources_json)];
+      }),
     [candidates],
   );
 

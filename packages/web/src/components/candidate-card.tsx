@@ -67,6 +67,15 @@ export function CandidateCard({ candidate, decision, onAccept, onReject, onClick
           </div>
         )}
 
+        {(candidate.quality_signals ?? [])
+          .filter((s) => s.level === 'warning' || s.level === 'error')
+          .map((s) => (
+            <div key={s.type} className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              <span className="truncate">{s.message}</span>
+            </div>
+          ))}
+
         {candidate.status === 'pending' && !decision && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={(e) => { e.stopPropagation(); onAccept(); }}>
