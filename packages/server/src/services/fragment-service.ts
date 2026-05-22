@@ -93,9 +93,9 @@ export class FragmentService {
       last_used: null,
       access: input.access,
       origin: input.origin,
-      function_type: (input as any).function_type ?? null,
-      audience: (input as any).audience ?? [],
-      maturity: (input as any).maturity ?? null,
+      function_type: input.function_type ?? null,
+      audience: input.audience ?? [],
+      maturity: input.maturity ?? null,
     };
 
     const filePath = writeFragment(fragmentsDir, frontmatter, input.body);
@@ -136,9 +136,9 @@ export class FragmentService {
       translation_of: input.translation_of ?? null,
       valid_from: input.valid_from ?? null,
       valid_until: input.valid_until ?? null,
-      function_type: (input as any).function_type ?? null,
-      audience: (input as any).audience ? JSON.stringify((input as any).audience) : null,
-      maturity: (input as any).maturity ?? null,
+      function_type: input.function_type ?? null,
+      audience: input.audience ? JSON.stringify(input.audience) : null,
+      maturity: input.maturity ?? null,
       harvest_confidence: (input as any).harvest_confidence ?? null,
     });
 
@@ -161,9 +161,9 @@ export class FragmentService {
       access_read: input.access.read,
       created_at: now,
       updated_at: now,
-      function_type: (input as any).function_type ?? null,
-      audience: (input as any).audience ?? [],
-      maturity: (input as any).maturity ?? null,
+      function_type: input.function_type ?? null,
+      audience: input.audience ?? [],
+      maturity: input.maturity ?? null,
     });
 
     return { id, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
@@ -377,9 +377,9 @@ export class FragmentService {
       access_read: updatedFrontmatter.access.read,
       created_at: updatedFrontmatter.created_at,
       updated_at: updatedFrontmatter.updated_at,
-      function_type: (updatedFrontmatter as any).function_type ?? null,
-      audience: (updatedFrontmatter as any).audience ?? [],
-      maturity: (updatedFrontmatter as any).maturity ?? null,
+      function_type: updatedFrontmatter.function_type ?? null,
+      audience: updatedFrontmatter.audience ?? [],
+      maturity: updatedFrontmatter.maturity ?? null,
     });
 
     return { id, commit_hash: commitHash };
@@ -445,6 +445,9 @@ export class FragmentService {
       access_read: frontmatter.access.read,
       created_at: frontmatter.created_at,
       updated_at: frontmatter.updated_at,
+      function_type: frontmatter.function_type ?? null,
+      audience: frontmatter.audience ?? [],
+      maturity: frontmatter.maturity ?? null,
     });
 
     return { id, commit_hash: commitHash, quality: 'approved' };
@@ -921,6 +924,9 @@ export class FragmentService {
             access_read: frontmatter.access.read,
             created_at: frontmatter.created_at,
             updated_at: frontmatter.updated_at,
+            function_type: frontmatter.function_type ?? null,
+            audience: frontmatter.audience ?? [],
+            maturity: frontmatter.maturity ?? null,
           },
         });
       } catch {
