@@ -50,6 +50,7 @@ const translations = {
     validation: { fr: 'Validation', en: 'Validation' },
     harvest: { fr: 'Ingestion', en: 'Ingestion' },
     planGeneration: { fr: 'Plan', en: 'Plan' },
+    admin: { fr: 'Admin', en: 'Admin' },
     logout: { fr: 'Déconnexion', en: 'Logout' },
   },
   home: {
@@ -182,6 +183,11 @@ const translations = {
     bulkDoneWithErrors: { fr: 'traités,', en: 'processed,' },
     bulkErrors: { fr: 'erreur(s)', en: 'error(s)' },
     bulkError: { fr: 'Erreur pendant le traitement bulk', en: 'Error during bulk processing' },
+    deleteSelected: { fr: 'Supprimer', en: 'Delete' },
+    deleteSelectedConfirm: {
+      fr: 'Supprimer les fragments sélectionnés définitivement ?',
+      en: 'Permanently delete selected fragments?',
+    },
     gitHistory: { fr: 'Historique Git', en: 'Git history' },
     read: { fr: 'Lire', en: 'Read' },
     requestChange: { fr: 'Demander modification', en: 'Request change' },
@@ -216,6 +222,11 @@ const translations = {
     accept: { fr: 'Accepter', en: 'Accept' },
     reject: { fr: 'Rejeter', en: 'Reject' },
     error: { fr: "Erreur lors de l'analyse", en: 'Error during analysis' },
+    deleteJob: { fr: 'Supprimer le job', en: 'Delete job' },
+    deleteJobConfirm: {
+      fr: 'Supprimer ce job et tous ses candidats ?',
+      en: 'Delete this job and all its candidates?',
+    },
   },
   planGeneration: {
     title: { fr: 'Génération de plan', en: 'Plan generation' },
