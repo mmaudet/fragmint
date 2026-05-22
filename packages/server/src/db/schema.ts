@@ -27,6 +27,8 @@ export const fragments = sqliteTable('fragments', {
   function_type: text('function_type'),
   audience: text('audience'),
   maturity: text('maturity'),
+  superseded_by: text('superseded_by'),
+  supersedes: text('supersedes'),
 });
 
 export const auditLog = sqliteTable('audit_log', {
@@ -38,6 +40,8 @@ export const auditLog = sqliteTable('audit_log', {
   fragment_id: text('fragment_id'),
   diff_summary: text('diff_summary'),
   ip_source: text('ip_source'),
+  entity_type: text('entity_type'),
+  entity_id: text('entity_id'),
 });
 
 export const users = sqliteTable('users', {
@@ -122,6 +126,7 @@ export const harvestJobs = sqliteTable('harvest_jobs', {
   created_by: text('created_by').notNull(),
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at').notNull(),
+  upload_hints: text('upload_hints'),
 });
 
 export const harvestCandidates = sqliteTable('harvest_candidates', {
@@ -146,6 +151,7 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   entities_json: text('entities_json'),
   new_proposals: text('new_proposals'),
   metadata_status: text('metadata_status'),
+  trust_sources_json: text('trust_sources_json'),
 });
 
 export const jobs = sqliteTable('jobs', {
@@ -187,6 +193,7 @@ export const fragmentTypes = sqliteTable('fragment_types', {
   validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
+  trustSource: text('trust_source').notNull().default('human-direct'),
 });
 
 export const fragmentDomains = sqliteTable('fragment_domains', {
@@ -197,6 +204,7 @@ export const fragmentDomains = sqliteTable('fragment_domains', {
   validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
+  trustSource: text('trust_source').notNull().default('human-direct'),
 });
 
 export const fragmentTags = sqliteTable('fragment_tags', {
@@ -207,6 +215,7 @@ export const fragmentTags = sqliteTable('fragment_tags', {
   validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
+  trustSource: text('trust_source').notNull().default('human-direct'),
 });
 
 export const fragmentFunctions = sqliteTable('fragment_functions', {
@@ -217,6 +226,7 @@ export const fragmentFunctions = sqliteTable('fragment_functions', {
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   createdAt: text('created_at').notNull(),
+  trustSource: text('trust_source').notNull().default('human-direct'),
 });
 
 export const entities = sqliteTable('entities', {
@@ -230,9 +240,26 @@ export const entities = sqliteTable('entities', {
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   createdAt: text('created_at').notNull(),
+  trustSource: text('trust_source').notNull().default('human-direct'),
 });
 
 export const fragmentEntities = sqliteTable('fragment_entities', {
   fragment_id: text('fragment_id').notNull(),
   entity_id: integer('entity_id').notNull(),
 });
+
+export const supersedureProposals = sqliteTable('supersedure_proposals', {
+  id: text('id').primaryKey(),
+  newFragmentId: text('new_fragment_id').notNull(),
+  oldFragmentId: text('old_fragment_id').notNull(),
+  similarityScore: real('similarity_score').notNull(),
+  llmJudgment: text('llm_judgment').notNull(),
+  llmConfidence: real('llm_confidence').notNull(),
+  llmReasoning: text('llm_reasoning'),
+  elementsLostInNew: text('elements_lost_in_new'),
+  status: text('status').notNull().default('pending'),
+  resolvedBy: text('resolved_by'),
+  resolvedAt: text('resolved_at'),
+  createdAt: text('created_at').notNull(),
+});
+

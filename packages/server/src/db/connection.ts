@@ -255,6 +255,79 @@ export function createDb(path: string | ':memory:') {
     sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN metadata_status TEXT');
   } catch (_) {}
 
+  // Trust by Source — referential tables
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_types ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_domains ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_tags ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_functions ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE entities ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+
+  // Trust by Source — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN trust_sources_json TEXT');
+  } catch (_) {}
+
+  // Trust by Source — harvest_jobs (upload hints)
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN upload_hints TEXT');
+  } catch (_) {}
+
+  // Audit log enrichment
+  try {
+    sqlite.exec('ALTER TABLE audit_log ADD COLUMN entity_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE audit_log ADD COLUMN entity_id TEXT');
+  } catch (_) {}
+
+  // Supersedure links on fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN superseded_by TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN supersedes TEXT');
+  } catch (_) {}
+
+  // Supersedure proposals table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS supersedure_proposals (
+      id TEXT PRIMARY KEY,
+      new_fragment_id TEXT NOT NULL,
+      old_fragment_id TEXT NOT NULL,
+      similarity_score REAL NOT NULL,
+      llm_judgment TEXT NOT NULL,
+      llm_confidence REAL NOT NULL,
+      llm_reasoning TEXT,
+      elements_lost_in_new TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      resolved_by TEXT,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sp_new_fragment_idx ON supersedure_proposals(new_fragment_id);
+    CREATE INDEX IF NOT EXISTS sp_status_idx ON supersedure_proposals(status);
+  `);
+
   const db = drizzle(sqlite, { schema });
   return db;
 }
