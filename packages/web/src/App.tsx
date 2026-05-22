@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Component, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -26,6 +27,33 @@ import AdminUsersPage from '@/pages/admin/users';
 import { AdminPlaceholderPage } from '@/pages/admin/placeholder';
 import { AdminHomePage } from '@/pages/admin/home';
 
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error;
+      return (
+        <div className="flex flex-col items-center justify-center h-screen p-8 text-center">
+          <p className="text-destructive font-semibold text-lg mb-2">Something went wrong</p>
+          <p className="text-sm text-muted-foreground mb-4 font-mono bg-muted p-2 rounded max-w-xl break-all">
+            {err.message}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm underline text-primary"
+          >
+            Reload page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, refetchOnWindowFocus: false },
@@ -40,6 +68,7 @@ export default function App() {
           <TooltipProvider>
             <CollectionProvider>
               <BrowserRouter basename="/ui">
+                <ErrorBoundary>
                 <Routes>
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/" element={<Navigate to="/home" replace />} />
@@ -78,6 +107,7 @@ export default function App() {
                     <Route path="collections" element={<AdminCollectionsPage />} />
                   </Route>
                 </Routes>
+              </ErrorBoundary>
               </BrowserRouter>
               <Toaster />
             </CollectionProvider>
