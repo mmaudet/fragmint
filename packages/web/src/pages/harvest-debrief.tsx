@@ -2,9 +2,11 @@ import { useParams, Link } from 'react-router-dom';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useHarvestDebrief } from '@/api/hooks/use-harvest-debrief';
+import { useI18n } from '@/lib/i18n';
 
 export default function HarvestDebriefPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const { t } = useI18n();
   const { data, isLoading } = useHarvestDebrief(jobId ?? null);
 
   if (isLoading) {
@@ -32,22 +34,21 @@ export default function HarvestDebriefPage() {
         <CheckCircle className="h-12 w-12 text-green-500" />
       </div>
       <div>
-        <h1 className="text-2xl font-medium">Ingestion terminée</h1>
+        <h1 className="text-2xl font-medium">{t('harvest', 'debriefTitle')}</h1>
         <p className="text-muted-foreground mt-2">
           {data.fragments.total} fragments extraits.
-          {data.had_hints && ' Vos hints ont accéléré la classification.'}
+          {data.had_hints && ` ${t('harvest', 'debriefHints')}`}
         </p>
         <p className="text-sm text-muted-foreground mt-3">
-          Prochaine étape : l'admin va valider les fragments. Ils seront disponibles pour
-          composition une fois approuvés.
+          {t('harvest', 'debriefNextStep')}
         </p>
       </div>
       <div className="flex justify-center gap-3">
         <Button asChild variant="outline">
-          <Link to="/harvest">Nouvelle ingestion</Link>
+          <Link to="/harvest">{t('harvest', 'newIngestion')}</Link>
         </Button>
         <Button asChild>
-          <Link to="/fragments">Voir les fragments</Link>
+          <Link to="/validation">{t('harvest', 'goToValidation')}</Link>
         </Button>
       </div>
     </div>

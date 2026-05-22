@@ -175,7 +175,7 @@ const translations = {
     },
   },
   validation: {
-    title: { fr: 'Validation', en: 'Validation' },
+    title: { fr: 'Fragments à valider', en: 'Fragments to review' },
     pendingReview: { fr: 'À vérifier', en: 'Pending review' },
     pendingApproval: { fr: "En attente d'approbation", en: 'Pending approval' },
     noFragmentsPending: {
@@ -237,6 +237,16 @@ const translations = {
     commit: { fr: 'Commiter les acceptés', en: 'Commit accepted' },
     committed: { fr: 'fragments committés en draft', en: 'fragments committed as draft' },
     goToValidation: { fr: 'Aller à la Validation', en: 'Go to Validation' },
+    newIngestion: { fr: 'Nouvelle ingestion', en: 'New ingestion' },
+    debriefTitle: { fr: 'Ingestion terminée', en: 'Harvest complete' },
+    debriefHints: {
+      fr: 'Vos hints ont accéléré la classification.',
+      en: 'Your hints accelerated classification.',
+    },
+    debriefNextStep: {
+      fr: "Prochaine étape : validez ces fragments, puis un administrateur les approuvera pour les rendre disponibles à la composition.",
+      en: 'Next step: validate these fragments, then an administrator will approve them to make them available for composition.',
+    },
     duplicateWarning: { fr: 'doublon probable', en: 'probable duplicate' },
     saveEdits: { fr: 'Enregistrer les modifications', en: 'Save edits' },
     accept: { fr: 'Accepter', en: 'Accept' },
