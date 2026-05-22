@@ -15,3 +15,69 @@ export function detectExactDuplicate(
   );
   return match ? { id: match.id, score: 1.0 } : null;
 }
+
+export interface CoherenceFlag {
+  type: 'subject_coherence' | 'entity_coverage' | 'duplicate_check' | 'prototype_distance';
+  level: 'ok' | 'warning' | 'error' | 'info';
+  message: string;
+}
+
+const SUBJECT_KEYWORDS: Record<string, string[]> = {
+  'twake-mail': ['twake mail', 'twake', 'messagerie', 'apache james', 'jmap', 'mail'],
+  'twake-calendar': ['twake calendar', 'agenda', 'calendar', 'caldav'],
+  'twake-drive': ['twake drive', 'drive', 'partage de fichiers'],
+  'twake-chat': ['twake chat', 'matrix', 'chat', 'messagerie instantanée'],
+  linshare: ['linshare', 'partage sécurisé', 'fichiers volumineux'],
+  lincloud: ['lincloud', 'cloud souverain'],
+  linto: ['linto', 'voix', 'assistant'],
+  openrag: ['openrag', 'rag', 'retrieval'],
+  'linagora-corp': ['linagora', 'notre société', 'notre entreprise'],
+};
+
+export function checkSubjectCoherence(block: { domain: string; body: string }): CoherenceFlag {
+  const keywords = SUBJECT_KEYWORDS[block.domain];
+  if (!keywords) {
+    return { type: 'subject_coherence', level: 'info', message: `No keyword list for domain "${block.domain}"` };
+  }
+  const bodyLower = block.body.toLowerCase();
+  const matches = keywords.filter((kw) => bodyLower.includes(kw));
+  if (matches.length === 0) {
+    return { type: 'subject_coherence', level: 'warning', message: `Domain "${block.domain}" not mentioned in body` };
+  }
+  return { type: 'subject_coherence', level: 'ok', message: `Keywords found: ${matches.join(', ')}` };
+}
+
+const ENTITY_EXPECTATIONS: Record<string, string[]> = {
+  technical: ['technologies', 'products'],
+  commercial: ['products'],
+  reference: ['clients'],
+  legal: ['regulations', 'certifications'],
+};
+
+export function checkEntityCoverage(block: {
+  function_type: string | null | undefined;
+  entities: Record<string, string[]>;
+}): CoherenceFlag {
+  const expected = ENTITY_EXPECTATIONS[block.function_type ?? ''] ?? [];
+  if (expected.length === 0) {
+    return { type: 'entity_coverage', level: 'info', message: 'No entity expectations for this function' };
+  }
+  const missing = expected.filter((t) => !block.entities[t] || block.entities[t].length === 0);
+  if (missing.length > 0) {
+    return { type: 'entity_coverage', level: 'warning', message: `Missing expected entities: ${missing.join(', ')}` };
+  }
+  return { type: 'entity_coverage', level: 'ok', message: 'Expected entities present' };
+}
+
+export function computeQualitySignals(
+  block: { type: string; body: string; domain: string; function_type?: string | null; entities?: Record<string, string[]> },
+  dupResult: { id: string; score: number } | null,
+): CoherenceFlag[] {
+  return [
+    checkSubjectCoherence({ domain: block.domain, body: block.body }),
+    checkEntityCoverage({ function_type: block.function_type, entities: block.entities ?? {} }),
+    dupResult
+      ? { type: 'duplicate_check' as const, level: 'error' as const, message: `Exact duplicate of ${dupResult.id}` }
+      : { type: 'duplicate_check' as const, level: 'ok' as const, message: 'No duplicates detected' },
+  ];
+}

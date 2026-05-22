@@ -152,6 +152,8 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   new_proposals: text('new_proposals'),
   metadata_status: text('metadata_status'),
   trust_sources_json: text('trust_sources_json'),
+  quality_signals: text('quality_signals'),   // JSON: CoherenceFlag[]
+  judge_result: text('judge_result'),          // JSON: JudgeResult | null
 });
 
 export const jobs = sqliteTable('jobs', {

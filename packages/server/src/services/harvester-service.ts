@@ -7,6 +7,8 @@ import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
 import type { UploadHints } from '../schema/trust-source.js';
+import type { CoherenceFlag } from './quality-signals.js';
+import type { JudgeResult } from './quality-judge.js';
 import { runPipeline, extractBlockText, chunkMarkdown, deduplicateBlocks, detectLanguage, MAX_CHUNK_CHARS, OVERLAP_CHARS } from './harvester-pipeline.js';
 import { validate, bulkAccept as bulkAcceptCandidates } from './harvester-validation.js';
 
@@ -44,6 +46,8 @@ export interface HarvestCandidate {
   duplicate_score: number | null;
   status: string;
   fragment_id: string | null;
+  quality_signals: CoherenceFlag[];
+  judge_result: JudgeResult | null;
 }
 
 export interface ValidationInput {
@@ -160,6 +164,8 @@ export class HarvesterService {
         duplicate_score: c.duplicate_score,
         status: c.status,
         fragment_id: c.fragment_id,
+        quality_signals: c.quality_signals ? (JSON.parse(c.quality_signals) as CoherenceFlag[]) : [],
+        judge_result: c.judge_result ? (JSON.parse(c.judge_result) as JudgeResult) : null,
       })),
     };
   }

@@ -18,7 +18,9 @@ import {
   fragments,
   entities,
 } from '../db/schema.js';
-import { detectExactDuplicate } from './quality-signals.js';
+import { detectExactDuplicate, computeQualitySignals } from './quality-signals.js';
+import { shouldRunJudge, runQualityJudge } from './quality-judge.js';
+import type { JudgeResult } from './quality-judge.js';
 import type { LlmClient, CombinedBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import { type UploadHints, computeTrustSources, overallTrustSource } from '../schema/trust-source.js';
@@ -39,7 +41,7 @@ export async function runPipeline(
   jobId: string,
   files: Buffer[],
   filenames: string[],
-  minConfidence: number,
+  _minConfidence: number,
   uploadHints: UploadHints = {},
 ): Promise<void> {
   try {
@@ -84,7 +86,6 @@ export async function runPipeline(
 
     let totalCandidates = 0;
     let duplicatesCount = 0;
-    let lowConfidenceCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const buffer = files[i];
@@ -169,10 +170,35 @@ export async function runPipeline(
       console.log(`[harvest:${jobId}] dupe detection: ${((Date.now() - t1) / 1000).toFixed(1)}s`);
 
       // Count stats
-      blocks.forEach((b, j) => {
-        if (b.confidence < minConfidence) lowConfidenceCount++;
+      blocks.forEach((_b, j) => {
         if (dupeChecks[j]) duplicatesCount++;
       });
+
+      // Compute quality signals for all blocks
+      const qualitySignalsPerBlock = blocks.map((block, j) => {
+        const entities = (block.entities ?? {}) as Record<string, string[]>;
+        return computeQualitySignals(
+          { type: block.type, body: block.body, domain: block.domain, function_type: block.function_type, entities },
+          dupeChecks[j],
+        );
+      });
+
+      // Run LLM-as-judge on ambiguous fragments (warnings but not exact duplicates)
+      const judgeResults: (JudgeResult | null)[] = await Promise.all(
+        blocks.map(async (block, j) => {
+          const signals = qualitySignalsPerBlock[j];
+          if (!shouldRunJudge(signals, !!dupeChecks[j])) return null;
+          return runQualityJudge(llmClient, {
+            title: block.title || 'Untitled',
+            body: block.body,
+            domain: block.domain,
+            function_type: block.function_type,
+            type: block.type,
+            audience: block.audience,
+            entities: (block.entities ?? {}) as Record<string, string[]>,
+          }, signals);
+        }),
+      );
 
       // Compute trust sources per block
       const trustSourcesPerBlock = blocks.map((block) =>
@@ -213,6 +239,8 @@ export async function runPipeline(
             new_proposals: JSON.stringify(block.new_proposals ?? {}),
             metadata_status: getMetadataStatus(block),
             trust_sources_json: JSON.stringify(trustSourcesPerBlock[j]),
+            quality_signals: JSON.stringify(qualitySignalsPerBlock[j]),
+            judge_result: judgeResults[j] ? JSON.stringify(judgeResults[j]) : null,
             origin_source: filename,
             origin_page: null,
             duplicate_of: dupeChecks[j]?.id ?? null,
@@ -304,12 +332,10 @@ export async function runPipeline(
       totalCandidates += blocks.length;
     }
 
-    const validCount = totalCandidates - duplicatesCount - lowConfidenceCount;
     const stats = {
       total: totalCandidates,
       duplicates: duplicatesCount,
-      low_confidence: lowConfidenceCount,
-      valid: Math.max(0, validCount),
+      valid: totalCandidates - duplicatesCount,
     };
 
     await db

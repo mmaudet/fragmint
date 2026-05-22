@@ -287,6 +287,16 @@ export function createDb(path: string | ':memory:') {
     sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN trust_sources_json TEXT');
   } catch (_) {}
 
+  // Quality signals — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN quality_signals TEXT');
+  } catch (_) {}
+
+  // LLM-as-judge result — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN judge_result TEXT');
+  } catch (_) {}
+
   // Trust by Source — harvest_jobs (upload hints)
   try {
     sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN upload_hints TEXT');
