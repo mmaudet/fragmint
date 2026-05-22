@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useI18n } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,6 +43,7 @@ interface Props {
 }
 
 export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
+  const { t } = useI18n();
   const [tagInput, setTagInput] = useState('');
   const [editingBody, setEditingBody] = useState(false);
 
@@ -128,7 +130,7 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
           </Select>
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Maturity</label>
+          <label className="text-xs text-muted-foreground">{t('fragments', 'maturityLabel')}</label>
           <Select value={edits.maturity ?? undefined} onValueChange={(v) => set({ maturity: v || null })}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="—" />

@@ -9,6 +9,7 @@ import { RenameDialog } from './rename-dialog';
 import { MergeDialog } from './merge-dialog';
 import { ConvertToEntityDialog } from './convert-to-entity-dialog';
 import type { MetadataProposal } from '@/types/admin-metadata';
+import type { TrustSource } from '@/types/trust-source';
 
 interface Props {
   proposal: MetadataProposal;
@@ -36,6 +37,7 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
               {proposal.entity_type && <span className="mr-1">{proposal.entity_type}</span>}·{' '}
               {proposal.usage_count} fragments
             </Badge>
+            <TrustSourceBadge source={proposal.trust_source} />
             {proposal.flags.map((flag, i) => (
               <Badge
                 key={i}
@@ -103,5 +105,22 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
         <ConvertToEntityDialog proposal={proposal} open onOpenChange={setConvertOpen} />
       )}
     </Card>
+  );
+}
+
+function TrustSourceBadge({ source }: { source?: TrustSource }) {
+  if (!source || source === 'human-direct') return null;
+
+  const config: Record<Exclude<TrustSource, 'human-direct'>, { label: string; className: string }> = {
+    'llm-confirmed': { label: '✓ LLM confirmed', className: 'bg-green-100 text-green-800' },
+    'llm-deviation': { label: '⚠ LLM deviation', className: 'bg-amber-100 text-amber-800' },
+    'llm-inferred': { label: 'LLM inferred', className: 'bg-blue-100 text-blue-800' },
+  };
+
+  const c = config[source];
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded ${c.className}`}>
+      {c.label}
+    </span>
   );
 }

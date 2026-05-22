@@ -14,13 +14,6 @@ interface CandidateCardProps {
   onClick?: () => void;
 }
 
-function confidenceColor(confidence: number) {
-  if (confidence >= 0.8) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-  if (confidence >= 0.65)
-    return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-  return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-}
-
 export function CandidateCard({ candidate, decision, onAccept, onReject, onClick }: CandidateCardProps) {
   const { t } = useI18n();
 
@@ -37,9 +30,15 @@ export function CandidateCard({ candidate, decision, onAccept, onReject, onClick
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-bold text-sm leading-tight">{candidate.title}</h3>
-          <Badge className={cn('text-xs shrink-0', confidenceColor(candidate.confidence))}>
-            {Math.round(candidate.confidence * 100)}%
-          </Badge>
+          {candidate.duplicate_of ? (
+            <Badge className="text-xs shrink-0 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+              Doublon
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
+              OK
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-1 mt-1">
           <Badge variant="outline" className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">

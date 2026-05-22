@@ -2,12 +2,15 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AdminMetadataTab } from '@/components/admin/metadata/admin-metadata-tab';
+import { SupersedureTab } from '@/components/admin/supersedure/supersedure-tab';
+import { useSupersedureStats } from '@/api/hooks/use-supersedure-proposals';
 
 const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
 const hasRole = (role: string, min: string) => (ROLE_LEVEL[role] ?? 0) >= (ROLE_LEVEL[min] ?? 999);
 
 export default function AdminPage() {
   const { user } = useAuth();
+  const { data: supersedureStats } = useSupersedureStats();
   if (!hasRole(user?.role ?? 'reader', 'admin')) return <Navigate to="/home" replace />;
 
   return (
@@ -22,8 +25,11 @@ export default function AdminPage() {
           <TabsTrigger value="relations" disabled>
             Relations
           </TabsTrigger>
-          <TabsTrigger value="supersedure" disabled>
-            Supersedure
+          <TabsTrigger value="supersedure">
+            Remplacements
+            {supersedureStats && supersedureStats.pending > 0 && (
+              <span className="ml-1.5 text-xs opacity-70">({supersedureStats.pending})</span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="contradictions" disabled>
             Contradictions
@@ -37,6 +43,9 @@ export default function AdminPage() {
         </TabsList>
         <TabsContent value="metadata" className="mt-6">
           <AdminMetadataTab />
+        </TabsContent>
+        <TabsContent value="supersedure" className="mt-6">
+          <SupersedureTab />
         </TabsContent>
       </Tabs>
     </div>

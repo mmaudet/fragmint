@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq, and, like, count } from 'drizzle-orm';
+import { eq, and, like } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentTags,
@@ -11,6 +11,14 @@ import {
   fragments,
 } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
+import {
+  normalizeForComparison,
+  getPreviewForTag,
+  getPreviewForEntity,
+  computeFlagsForTag,
+  computeFlagsForEntity,
+  computeCounts,
+} from './admin-metadata-helpers.js';
 
 export function adminMetadataRoutes(
   app: FastifyInstance,
@@ -26,12 +34,14 @@ export function adminMetadataRoutes(
         kind,
         entity_type,
         search,
+        trust_source,
         limit = 50,
         offset = 0,
       } = (request.query ?? {}) as {
         kind?: string;
         entity_type?: string;
         search?: string;
+        trust_source?: string;
         limit?: number;
         offset?: number;
       };
@@ -41,15 +51,20 @@ export function adminMetadataRoutes(
       if (!kind || kind === 'tag') {
         const conditions: any[] = [eq(fragmentTags.validated, 0)];
         if (search) conditions.push(like(fragmentTags.label, `%${search}%`));
+        if (trust_source) conditions.push(eq(fragmentTags.trustSource, trust_source));
         const tags = await db
           .select()
           .from(fragmentTags)
           .where(and(...conditions))
           .limit(Number(limit))
           .offset(Number(offset));
+        const cachedValidatedTags = await db
+          .select({ slug: fragmentTags.slug, label: fragmentTags.label })
+          .from(fragmentTags)
+          .where(eq(fragmentTags.validated, 1));
         for (const tag of tags) {
           const preview = await getPreviewForTag(db, tag.slug);
-          const flags = await computeFlagsForTag(db, tag);
+          const flags = await computeFlagsForTag(db, tag, cachedValidatedTags);
           proposals.push({
             id: tag.slug,
             kind: 'tag',
@@ -59,6 +74,7 @@ export function adminMetadataRoutes(
             validated: !!tag.validated,
             proposed_by: tag.proposedBy,
             created_at: tag.created_at,
+            trust_source: tag.trustSource ?? 'llm-inferred',
             preview,
             flags,
           });
@@ -68,6 +84,7 @@ export function adminMetadataRoutes(
       if (!kind || kind === 'domain') {
         const conditions: any[] = [eq(fragmentDomains.validated, 0)];
         if (search) conditions.push(like(fragmentDomains.label, `%${search}%`));
+        if (trust_source) conditions.push(eq(fragmentDomains.trustSource, trust_source));
         const domains = await db
           .select()
           .from(fragmentDomains)
@@ -84,6 +101,7 @@ export function adminMetadataRoutes(
             validated: !!d.validated,
             proposed_by: d.proposedBy,
             created_at: d.created_at,
+            trust_source: d.trustSource ?? 'llm-inferred',
             preview: null,
             flags: [],
           });
@@ -94,15 +112,24 @@ export function adminMetadataRoutes(
         const conditions: any[] = [eq(entities.validated, 0)];
         if (entity_type) conditions.push(eq(entities.type, entity_type));
         if (search) conditions.push(like(entities.name, `%${search}%`));
+        if (trust_source) conditions.push(eq(entities.trustSource, trust_source));
         const ents = await db
           .select()
           .from(entities)
           .where(and(...conditions))
           .limit(Number(limit))
           .offset(Number(offset));
+        const cachedValidatedEntities = await db
+          .select({
+            type: entities.type,
+            normalizedName: entities.normalizedName,
+            canonicalName: entities.canonicalName,
+          })
+          .from(entities)
+          .where(eq(entities.validated, 1));
         for (const ent of ents) {
           const preview = await getPreviewForEntity(db, ent.id);
-          const flags = await computeFlagsForEntity(db, ent);
+          const flags = await computeFlagsForEntity(db, ent, cachedValidatedEntities);
           proposals.push({
             id: ent.id,
             kind: 'entity',
@@ -112,6 +139,7 @@ export function adminMetadataRoutes(
             validated: !!ent.validated,
             proposed_by: ent.proposedBy,
             created_at: ent.createdAt,
+            trust_source: ent.trustSource ?? 'llm-inferred',
             preview,
             flags,
           });
@@ -276,66 +304,6 @@ export function adminMetadataRoutes(
     },
   );
 
-  // POST /v1/admin/metadata/proposals/:id/convert-to-entity
-  // GOTCHA: better-sqlite3 doesn't support .returning() — insert then select back by unique key.
-  app.post(
-    '/v1/admin/metadata/proposals/:id/convert-to-entity',
-    { preHandler: [authenticate, requireRole('admin')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const parsed = z
-        .object({
-          entity_type: z.string(),
-          canonical_name: z.string(),
-          aliases: z.array(z.string()).default([]),
-        })
-        .safeParse(request.body);
-      if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
-      const { entity_type, canonical_name, aliases } = parsed.data;
-      const now = new Date().toISOString();
-
-      await db
-        .insert(entities)
-        .values({
-          type: entity_type,
-          name: canonical_name,
-          canonicalName: canonical_name,
-          normalizedName: normalizeForComparison(canonical_name),
-          aliases: JSON.stringify(aliases),
-          validated: 1,
-          proposedBy: 'admin',
-          usageCount: 0,
-          createdAt: now,
-        });
-      const [newEntity] = await db
-        .select()
-        .from(entities)
-        .where(and(eq(entities.canonicalName, canonical_name), eq(entities.type, entity_type)));
-
-      const fragmentsUsing = await db
-        .select()
-        .from(fragments)
-        .where(like(fragments.tags, `%"${id}"%`));
-      for (const f of fragmentsUsing) {
-        const tagsArr = JSON.parse(f.tags ?? '[]').filter((t: string) => t !== id);
-        await db
-          .update(fragments)
-          .set({ tags: JSON.stringify(tagsArr) })
-          .where(eq(fragments.id, f.id));
-        await db
-          .insert(fragmentEntities)
-          .values({ fragment_id: f.id, entity_id: newEntity.id })
-          .onConflictDoNothing();
-      }
-      await db.delete(fragmentTags).where(eq(fragmentTags.slug, id));
-      return {
-        success: true,
-        created_entity: newEntity,
-        affected_fragments: fragmentsUsing.length,
-      };
-    },
-  );
-
   // POST /v1/admin/metadata/proposals/:id/set-as-alias
   app.post(
     '/v1/admin/metadata/proposals/:id/set-as-alias',
@@ -354,6 +322,9 @@ export function adminMetadataRoutes(
         .select()
         .from(entities)
         .where(eq(entities.id, canonical_entity_id));
+      if (!proposal || !canonical) {
+        return reply.status(404).send({ data: null, meta: null, error: 'Entity not found' });
+      }
       const currentAliases = JSON.parse(canonical.aliases ?? '[]');
       await db
         .update(entities)
@@ -380,6 +351,9 @@ export function adminMetadataRoutes(
         .select()
         .from(entities)
         .where(eq(entities.id, Number(id)));
+      if (!old) {
+        return reply.status(404).send({ data: null, meta: null, error: 'Entity not found' });
+      }
       await db
         .update(entities)
         .set({ type: parsed.data.new_type })
@@ -388,49 +362,6 @@ export function adminMetadataRoutes(
         success: true,
         updated: { id: Number(id), old_type: old.type, new_type: parsed.data.new_type },
       };
-    },
-  );
-
-  // POST /v1/admin/metadata/bulk-action
-  app.post(
-    '/v1/admin/metadata/bulk-action',
-    { preHandler: [authenticate, requireRole('admin')] },
-    async (request) => {
-      const { action, items } = request.body as {
-        action: 'approve' | 'reject';
-        items: Array<{ id: string | number; kind: 'tag' | 'domain' | 'entity' }>;
-      };
-      const results = [];
-      for (const item of items) {
-        try {
-          if (item.kind === 'tag') {
-            action === 'approve'
-              ? await db
-                  .update(fragmentTags)
-                  .set({ validated: 1 })
-                  .where(eq(fragmentTags.slug, String(item.id)))
-              : await db.delete(fragmentTags).where(eq(fragmentTags.slug, String(item.id)));
-          } else if (item.kind === 'domain') {
-            action === 'approve'
-              ? await db
-                  .update(fragmentDomains)
-                  .set({ validated: 1 })
-                  .where(eq(fragmentDomains.slug, String(item.id)))
-              : await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, String(item.id)));
-          } else {
-            action === 'approve'
-              ? await db
-                  .update(entities)
-                  .set({ validated: 1 })
-                  .where(eq(entities.id, Number(item.id)))
-              : await db.delete(entities).where(eq(entities.id, Number(item.id)));
-          }
-          results.push({ id: item.id, success: true });
-        } catch (e: any) {
-          results.push({ id: item.id, success: false, error: e.message });
-        }
-      }
-      return { success: true, results };
     },
   );
 
@@ -462,132 +393,5 @@ export function adminMetadataRoutes(
     const rows = await db.select().from(fragmentFunctions).orderBy(fragmentFunctions.slug);
     return { data: rows, meta: { count: rows.length }, error: null };
   });
-}
 
-// --- Helpers ---
-
-export function normalizeForComparison(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function similarityRatio(a: string, b: string): number {
-  const longer = a.length > b.length ? a : b;
-  const shorter = a.length > b.length ? b : a;
-  if (longer.length === 0) return 1.0;
-  const mat = Array.from({ length: shorter.length + 1 }, (_, j) =>
-    Array.from({ length: longer.length + 1 }, (_, i) => (j === 0 ? i : i === 0 ? j : 0)),
-  );
-  for (let j = 1; j <= shorter.length; j++)
-    for (let i = 1; i <= longer.length; i++)
-      mat[j][i] =
-        longer[i - 1] === shorter[j - 1]
-          ? mat[j - 1][i - 1]
-          : Math.min(mat[j][i - 1] + 1, mat[j - 1][i] + 1, mat[j - 1][i - 1] + 1);
-  return (longer.length - mat[shorter.length][longer.length]) / longer.length;
-}
-
-async function getPreviewForTag(db: FragmintDb, slug: string): Promise<string> {
-  const [row] = await db
-    .select({ bodyExcerpt: fragments.body_excerpt })
-    .from(fragments)
-    .where(like(fragments.tags, `%"${slug}"%`))
-    .limit(1);
-  return (row?.bodyExcerpt ?? '').slice(0, 150);
-}
-
-async function getPreviewForEntity(db: FragmintDb, entityId: number): Promise<string> {
-  const [row] = await db
-    .select({ bodyExcerpt: fragments.body_excerpt })
-    .from(fragments)
-    .innerJoin(fragmentEntities, eq(fragmentEntities.fragment_id, fragments.id))
-    .where(eq(fragmentEntities.entity_id, entityId))
-    .limit(1);
-  return (row?.bodyExcerpt ?? '').slice(0, 150);
-}
-
-async function computeFlagsForTag(
-  db: FragmintDb,
-  tag: { slug: string; usageCount: number; label: string },
-): Promise<any[]> {
-  const flags = [];
-  if ((tag.usageCount ?? 0) < 3) flags.push({ type: 'info', label: 'Low usage' });
-  const entityKeywords = ['cert', 'iso', 'rgpd', 'cnb', 'james', 'jmap', 'secnum'];
-  if (entityKeywords.some((kw) => tag.slug.toLowerCase().includes(kw)))
-    flags.push({ type: 'warning', label: 'Possibly entity', suggestion: 'Convert to entity' });
-  const validatedTags = await db.select().from(fragmentTags).where(eq(fragmentTags.validated, 1));
-  for (const vt of validatedTags) {
-    if (similarityRatio(tag.slug, vt.slug) > 0.7 && tag.slug !== vt.slug) {
-      flags.push({ type: 'info', label: `Similar to ${vt.slug}`, merge_target: vt.slug });
-      break;
-    }
-  }
-  return flags;
-}
-
-async function computeFlagsForEntity(
-  db: FragmintDb,
-  ent: { id: number; type: string; name: string; normalizedName: string },
-): Promise<any[]> {
-  const flags = [];
-  const validatedEntities = await db
-    .select()
-    .from(entities)
-    .where(and(eq(entities.type, ent.type), eq(entities.validated, 1)));
-  for (const ve of validatedEntities) {
-    if (similarityRatio(ent.normalizedName, ve.normalizedName) > 0.6) {
-      flags.push({
-        type: 'warning',
-        label: `Canonical: ${ve.canonicalName}`,
-        suggestion: `Set as alias of ${ve.canonicalName}`,
-      });
-      break;
-    }
-  }
-  const typeKeywords: Record<string, string[]> = {
-    technology: ['protocol', 'api', 'sdk', 'framework', 'james', 'jmap'],
-    certification: ['cert', 'iso', 'rgpd', 'secnumcloud', 'hds'],
-  };
-  for (const [correctType, kws] of Object.entries(typeKeywords)) {
-    if (ent.type !== correctType && kws.some((kw) => ent.name.toLowerCase().includes(kw))) {
-      flags.push({
-        type: 'warning',
-        label: 'Wrong type?',
-        suggestion: `Reclassify as ${correctType}`,
-        reclassify_to: correctType,
-      });
-      break;
-    }
-  }
-  return flags;
-}
-
-async function computeCounts(db: FragmintDb) {
-  const tagCount = await db
-    .select({ value: count() })
-    .from(fragmentTags)
-    .where(eq(fragmentTags.validated, 0));
-  const entityCount = await db
-    .select({ value: count() })
-    .from(entities)
-    .where(eq(entities.validated, 0));
-  const domainCount = await db
-    .select({ value: count() })
-    .from(fragmentDomains)
-    .where(eq(fragmentDomains.validated, 0));
-  const entitiesByType = await db
-    .select({ type: entities.type, value: count() })
-    .from(entities)
-    .where(eq(entities.validated, 0))
-    .groupBy(entities.type);
-  return {
-    tags: tagCount[0]?.value ?? 0,
-    entities: entityCount[0]?.value ?? 0,
-    domains: domainCount[0]?.value ?? 0,
-    entities_by_type: entitiesByType.reduce((acc: any, r) => ({ ...acc, [r.type]: r.value }), {}),
-  };
 }

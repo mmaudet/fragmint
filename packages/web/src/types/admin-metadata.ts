@@ -1,3 +1,5 @@
+import type { TrustSource } from './trust-source';
+
 export type ProposalKind = 'tag' | 'domain' | 'entity';
 
 export type EntityType =
@@ -29,6 +31,7 @@ export interface MetadataProposal {
   created_at: string;
   preview?: string;
   flags: ProposalFlag[];
+  trust_source?: TrustSource;
 }
 
 export interface ProposalCounts {

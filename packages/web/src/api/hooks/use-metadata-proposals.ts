@@ -6,6 +6,7 @@ import type {
   ProposalsResponse,
   ValidatedReferenceValue,
 } from '@/types/admin-metadata';
+import type { TrustSource } from '@/types/trust-source';
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['admin', 'metadata'] });
@@ -19,10 +20,13 @@ export function useMetadataProposals(
     search?: string;
     limit?: number;
     offset?: number;
+    trust_source?: TrustSource;
   } = {},
 ) {
   const qs = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][],
+    Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)]),
   ).toString();
   return useQuery<ProposalsResponse>({
     queryKey: ['admin', 'metadata', 'proposals', params],
