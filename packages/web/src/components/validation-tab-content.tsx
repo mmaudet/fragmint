@@ -44,6 +44,7 @@ interface ValidationTabContentProps {
   onSelectAll?: () => Promise<void>;
   isAllSelected?: boolean;
   bulkAction: BulkAction | null;
+  secondaryBulkAction?: BulkAction | null;
 }
 
 function Pagination({
@@ -88,6 +89,7 @@ export function ValidationTabContent({
   fragments, total, isLoading, isSearching, page, onPageChange, pageSize, onPageSizeChange,
   search, onSearchChange, searchPlaceholder, description, emptyText,
   selectedCardId, selectedIds, onCardClick, onToggle, onSelectAll, isAllSelected, bulkAction,
+  secondaryBulkAction,
 }: ValidationTabContentProps) {
   const { t } = useI18n();
   const [selectingAll, setSelectingAll] = useState(false);
@@ -117,6 +119,16 @@ export function ValidationTabContent({
         {bulkAction && bulkAction.count > 0 && (
           <Button size="sm" onClick={bulkAction.onClick} disabled={bulkAction.isPending}>
             {bulkAction.label} ({bulkAction.count})
+          </Button>
+        )}
+        {secondaryBulkAction && secondaryBulkAction.count > 0 && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={secondaryBulkAction.onClick}
+            disabled={secondaryBulkAction.isPending}
+          >
+            {secondaryBulkAction.label} ({secondaryBulkAction.count})
           </Button>
         )}
       </div>

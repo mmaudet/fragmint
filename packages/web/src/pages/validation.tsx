@@ -13,8 +13,9 @@ import { ValidationTabContent } from '@/components/validation-tab-content';
 import { FragmentDetail } from '@/components/fragment-detail';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { CheckCircle, BookOpen } from 'lucide-react';
+import { CheckCircle, BookOpen, Loader2, Trash2 } from 'lucide-react';
 
 type TabKey = 'review' | 'approve';
 
@@ -36,6 +37,9 @@ export default function ValidationPage() {
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [selectedReviewedIds, setSelectedReviewedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [deletePending, setDeletePending] = useState(false);
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
@@ -107,6 +111,61 @@ export default function ValidationPage() {
     }
   };
 
+  const isAdmin = (currentUser?.role ?? '') === 'admin';
+
+  const handleBulkDelete = (ids: string[]) => {
+    setPendingDeleteIds(ids);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (pendingDeleteIds.length === 0) return;
+    const endpoint = isAdmin ? '/fragments/bulk-delete' : '/fragments/bulk-delete-own';
+    setDeleteConfirmOpen(false);
+    setDeletePending(true);
+    try {
+      const result = await apiRequest<{ job_id: string | null; done?: number }>(
+        'POST',
+        collectionApiUrl(activeCollection, endpoint),
+        { ids: pendingDeleteIds },
+      );
+      if (!result.job_id) {
+        toast.info(t('validation', 'noOwned'));
+        setDeletePending(false);
+        return;
+      }
+      toast.info(t('validation', 'bulkProcessing'));
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        try {
+          const job = await apiRequest<{ status: string; done: number; error_count: number }>(
+            'GET',
+            `/v1/jobs/${result.job_id}`,
+          );
+          if (job.status === 'done' || job.status === 'error') {
+            toast.success(`${job.done} ${t('fragments', 'bulkDeleteSuccess')}`);
+            queryClient.invalidateQueries({ queryKey: ['fragments'] });
+            setSelectedDraftIds(new Set());
+            setSelectedReviewedIds(new Set());
+            setDeletePending(false);
+          } else if (++attempts < 120) {
+            setTimeout(poll, 1000);
+          } else {
+            toast.error(t('validation', 'pollTimeout'));
+            setDeletePending(false);
+          }
+        } catch (e: any) {
+          toast.error(e.message ?? 'Erreur');
+          setDeletePending(false);
+        }
+      };
+      poll();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Erreur');
+      setDeletePending(false);
+    }
+  };
+
   if (!hasRole(role, 'contributor')) return <Navigate to="/home" replace />;
 
   const tabs = [
@@ -159,6 +218,16 @@ export default function ValidationPage() {
             onClick: () => startBulk('/fragments/bulk-review', Array.from(selectedDraftIds), () => setSelectedDraftIds(new Set())),
             isPending: bulkPending,
           } : null}
+          secondaryBulkAction={
+            selectedDraftIds.size > 0 && (isAdmin || canReview(currentUser))
+              ? {
+                  label: <><Trash2 className="mr-2 h-3.5 w-3.5" />{t('validation', 'deleteSelected')}</>,
+                  count: selectedDraftIds.size,
+                  onClick: () => handleBulkDelete(Array.from(selectedDraftIds)),
+                  isPending: deletePending,
+                }
+              : null
+          }
         />
       )}
 
@@ -189,6 +258,16 @@ export default function ValidationPage() {
             onClick: () => startBulk('/fragments/bulk-approve', Array.from(selectedReviewedIds), () => setSelectedReviewedIds(new Set())),
             isPending: bulkPending,
           } : null}
+          secondaryBulkAction={
+            selectedReviewedIds.size > 0 && (isAdmin || canApprove(currentUser))
+              ? {
+                  label: <><Trash2 className="mr-2 h-3.5 w-3.5" />{t('validation', 'deleteSelected')}</>,
+                  count: selectedReviewedIds.size,
+                  onClick: () => handleBulkDelete(Array.from(selectedReviewedIds)),
+                  isPending: deletePending,
+                }
+              : null
+          }
         />
       )}
 
@@ -197,6 +276,35 @@ export default function ValidationPage() {
         open={!!selectedId}
         onClose={() => setSelectedId(null)}
       />
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('validation', 'deleteSelected')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            {t('validation', 'deleteSelectedConfirm')}
+            {!isAdmin && (
+              <span className="block mt-1 text-xs opacity-70">
+                Seuls vos propres fragments non approuvés seront supprimés.
+              </span>
+            )}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              {t('validation', 'cancel')}
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deletePending}>
+              {deletePending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1" />
+              )}
+              {t('validation', 'deleteSelected')} ({pendingDeleteIds.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

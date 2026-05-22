@@ -20,10 +20,19 @@ import {
   fragments,
   fragmentTypes,
   fragmentDomains,
+  fragmentTags,
+  fragmentFunctions,
+  entities,
   toMilvusPartition,
 } from './db/schema.js';
 import { FRAGMENT_TYPES } from './schema/fragment.js';
-import { HARVESTER_DOMAINS } from './services/harvester-taxonomy.js';
+import {
+  HARVESTER_DOMAINS,
+  HARVESTER_FUNCTIONS,
+  HARVESTER_DOMAINS_GRANULAR,
+  INITIAL_ENTITIES,
+  INITIAL_TAGS,
+} from './services/harvester-taxonomy.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import {
   UserService,
@@ -45,6 +54,7 @@ import { planRoutes } from './routes/plan-routes.js';
 import { collectionRoutes } from './routes/collection-routes.js';
 import { jobRoutes } from './routes/job-routes.js';
 import { taxonomyRoutes } from './routes/taxonomy-routes.js';
+import { adminMetadataRoutes } from './routes/admin-metadata-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -125,13 +135,67 @@ export async function createServer(options?: {
   const typeCount = await db.select({ c: count() }).from(fragmentTypes);
   if (typeCount[0].c === 0) {
     for (const slug of FRAGMENT_TYPES) {
-      await db.insert(fragmentTypes).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+      await db
+        .insert(fragmentTypes)
+        .values({ slug, label: slug, created_at: now })
+        .onConflictDoNothing();
     }
   }
   const domainCount = await db.select({ c: count() }).from(fragmentDomains);
   if (domainCount[0].c === 0) {
     for (const { slug, description } of HARVESTER_DOMAINS) {
-      await db.insert(fragmentDomains).values({ slug, label: slug, description, created_at: now }).onConflictDoNothing();
+      await db
+        .insert(fragmentDomains)
+        .values({ slug, label: slug, description, created_at: now })
+        .onConflictDoNothing();
+    }
+  }
+
+  // Seed fragment_functions if empty
+  const fnCount = await db.select({ c: count() }).from(fragmentFunctions);
+  if (fnCount[0].c === 0) {
+    for (const { slug, label, description } of HARVESTER_FUNCTIONS) {
+      await db
+        .insert(fragmentFunctions)
+        .values({ slug, label, description, createdAt: now })
+        .onConflictDoNothing();
+    }
+  }
+
+  // Seed granular domain slugs (add new ones, keep existing)
+  for (const { slug, label, description } of HARVESTER_DOMAINS_GRANULAR) {
+    await db
+      .insert(fragmentDomains)
+      .values({ slug, label, description, created_at: now })
+      .onConflictDoNothing();
+  }
+
+  // Seed initial validated tags
+  for (const { slug, label, category } of INITIAL_TAGS) {
+    await db
+      .insert(fragmentTags)
+      .values({ slug, label, category, created_at: now })
+      .onConflictDoNothing();
+  }
+
+  // Seed initial entities (admin-validated)
+  const entityCount = await db.select({ c: count() }).from(entities);
+  if (entityCount[0].c === 0) {
+    for (const e of INITIAL_ENTITIES) {
+      const normalized = e.canonicalName.toLowerCase().replace(/[\s\-.]+/g, '-');
+      await db
+        .insert(entities)
+        .values({
+          type: e.type,
+          name: e.canonicalName,
+          canonicalName: e.canonicalName,
+          normalizedName: normalized,
+          aliases: JSON.stringify(e.aliases),
+          validated: 1,
+          proposedBy: 'admin',
+          createdAt: now,
+        })
+        .onConflictDoNothing();
     }
   }
 
@@ -266,10 +330,11 @@ export async function createServer(options?: {
   templateRoutes(app, templateService, composerService, authenticate, {
     defaultReferenceDocPath: config.plan_docx_reference_path,
   });
-  harvestRoutes(app, harvesterService, authenticate);
+  harvestRoutes(app, harvesterService, authenticate, { db });
   planRoutes(app, planService, templateService, config.store_path, authenticate);
 
   taxonomyRoutes(app, db, authenticate);
+  adminMetadataRoutes(app, db, authenticate);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);
@@ -289,6 +354,7 @@ export async function createServer(options?: {
   harvestRoutes(app, harvesterService, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    db,
   });
   planRoutes(app, planService, templateService, config.store_path, authenticate, {
     prefix: collPrefix,

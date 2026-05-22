@@ -61,3 +61,13 @@ export function useValidateCandidates(collectionSlug: string) {
       ),
   });
 }
+
+export function useDeleteHarvestJob(collectionSlug: string) {
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      apiRequest<{ deleted: boolean }>(
+        'DELETE',
+        collectionApiUrl(collectionSlug, `/harvest/jobs/${jobId}`),
+      ),
+  });
+}

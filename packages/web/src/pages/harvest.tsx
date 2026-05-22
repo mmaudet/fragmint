@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { CollectionSelector } from '@/components/collection-selector';
-import { useStartHarvest, useHarvestJob, useValidateCandidates } from '@/api/hooks/use-harvest';
+import { useStartHarvest, useHarvestJob, useValidateCandidates, useDeleteHarvestJob } from '@/api/hooks/use-harvest';
 import { useDomains, useTypes } from '@/api/hooks/use-taxonomy';
 import { CandidateCard } from '@/components/candidate-card';
 import { CandidateDetailSheet } from '@/components/candidate-detail-sheet';
@@ -13,9 +13,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 import type { HarvestCandidate } from '@/api/types';
 
 export default function HarvestPage() {
@@ -67,6 +69,10 @@ export default function HarvestPage() {
   const startHarvest = useStartHarvest(activeCollection);
   const { data: job, isLoading: jobLoading } = useHarvestJob(activeCollection, jobId);
   const validateMutation = useValidateCandidates(activeCollection);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteJobMutation = useDeleteHarvestJob(activeCollection);
 
   // Sync active collection from job metadata when job loads
   if (job?.collection_slug && job.collection_slug !== activeCollection) {
@@ -166,6 +172,23 @@ export default function HarvestPage() {
         onError: (err) => toast.error(err.message),
       },
     );
+  };
+
+  const handleDeleteJob = () => {
+    if (!jobId) return;
+    deleteJobMutation.mutate(jobId, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false);
+        sessionStorage.removeItem(`harvest-decisions-${jobId}`);
+        sessionStorage.removeItem(`harvest-mods-${jobId}`);
+        setJobId(null);
+        setFiles([]);
+        _setDecisions({});
+        _setModifications({});
+        toast.success(t('harvest', 'deleteJob'));
+      },
+      onError: (err) => toast.error(err.message),
+    });
   };
 
   // ─── Phase 1: Upload ───
@@ -401,6 +424,17 @@ export default function HarvestPage() {
             )}
             {t('harvest', 'commit')} ({acceptedCount})
           </Button>
+          {isAdmin && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={deleteJobMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {t('harvest', 'deleteJob')}
+            </Button>
+          )}
         </div>
       )}
 
@@ -465,6 +499,34 @@ export default function HarvestPage() {
         onReject={() => selectedCandidate && setDecision(selectedCandidate.id, 'rejected')}
         onClose={() => setSelectedCandidate(null)}
       />
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('harvest', 'deleteJob')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            {t('harvest', 'deleteJobConfirm')}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              {t('validation', 'cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteJob}
+              disabled={deleteJobMutation.isPending}
+            >
+              {deleteJobMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1" />
+              )}
+              {t('harvest', 'deleteJob')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
