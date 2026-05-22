@@ -42,7 +42,29 @@ export function fragmentRoutes(
     : [authenticate, requireRole('admin')];
 
   // List fragments
-  app.get(`${prefix}/fragments`, { preHandler: readHandlers }, async (request) => {
+  app.get(
+    `${prefix}/fragments`,
+    {
+      preHandler: readHandlers,
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            domain: { type: 'string' },
+            lang: { type: 'string' },
+            quality: { type: 'string' },
+            limit: { type: 'string' },
+            offset: { type: 'string' },
+            function_type: { type: 'string' },
+            audience: { type: 'string' },
+            maturity: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
     const query = request.query as Record<string, string>;
     const collection = request.collection;
     const { rows, total } = await fragmentService.list({
