@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
 import type { HarvestJobWithCandidates, ValidateResult } from '@/api/types';
+import type { UploadHints } from '@/types/trust-source';
 
 export function useHarvestJob(collectionSlug: string, jobId: string | null) {
   return useQuery({
@@ -19,12 +20,24 @@ export function useHarvestJob(collectionSlug: string, jobId: string | null) {
 
 export function useStartHarvest(collectionSlug: string) {
   return useMutation({
-    mutationFn: async ({ files, minConfidence }: { files: File[]; minConfidence: number }) => {
+    mutationFn: async ({
+      files,
+      uploadHints,
+    }: {
+      files: File[];
+      uploadHints?: UploadHints;
+    }) => {
       const form = new FormData();
       for (const file of files) {
         form.append('files', file);
       }
-      form.append('options', JSON.stringify({ min_confidence: minConfidence }));
+      form.append('options', JSON.stringify({ min_confidence: 0 }));
+      if (uploadHints) {
+        const hasHints = Object.values(uploadHints).some(
+          (v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0),
+        );
+        if (hasHints) form.append('upload_hints', JSON.stringify(uploadHints));
+      }
 
       const token = getToken();
       const headers: Record<string, string> = {};
