@@ -312,6 +312,23 @@ export function fragmentRoutes(
       .catch(() => jobService.fail(job.id));
   });
 
+  // Bulk delete own (contributor/expert — only deletes fragments authored by the requester, non-approved)
+  app.post(`${prefix}/fragments/bulk-delete-own`, { preHandler: writeHandlers }, async (request, reply) => {
+    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
+    const { ids } = request.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0)
+      return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+    const ownedIds = await fragmentService.filterOwnedIds(ids, request.user.login);
+    if (ownedIds.length === 0)
+      return reply.code(202).send({ data: { job_id: null, done: 0 }, meta: null, error: null });
+    const job = await jobService.create('bulk_delete', ownedIds.length, request.user.login);
+    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+    fragmentService
+      .bulkDelete(ownedIds, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
+      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+      .catch(() => jobService.fail(job.id));
+  });
+
   // Bulk approve
   app.post(`${prefix}/fragments/bulk-approve`, { preHandler: expertHandlers }, async (request, reply) => {
     if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });

@@ -1,5 +1,5 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, or, desc, like, isNull, lte, gte, count, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull, lte, gte, count, inArray, ne } from 'drizzle-orm';
 import { join, relative } from 'node:path';
 import { readdirSync, unlinkSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
@@ -745,6 +745,21 @@ export class FragmentService {
       }
     }
     return { done, errors };
+  }
+
+  async filterOwnedIds(ids: string[], authorLogin: string): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: fragments.id })
+      .from(fragments)
+      .where(
+        and(
+          inArray(fragments.id, ids),
+          eq(fragments.author, authorLogin),
+          ne(fragments.quality, 'approved'),
+        ),
+      );
+    return rows.map((r) => r.id);
   }
 
   async facets(collectionSlug?: string) {
