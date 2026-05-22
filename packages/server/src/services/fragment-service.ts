@@ -703,6 +703,7 @@ export class FragmentService {
     userId: string,
     ip: string | undefined,
     onProgress?: (done: number) => void,
+    role: string = 'admin',
   ): Promise<{ done: number; errors: number }> {
     type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
     const groups = new Map<string, Group>();
@@ -732,7 +733,7 @@ export class FragmentService {
         for (const id of gIds) await this.searchService.removeFromIndex(id);
         await this.audit.log({
           user_id: userId,
-          role: 'admin',
+          role,
           action: 'bulk_delete',
           fragment_id: gIds.join(','),
           ip_source: ip,

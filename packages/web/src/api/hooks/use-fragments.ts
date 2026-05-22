@@ -7,6 +7,9 @@ interface FragmentFilters {
   domain?: string;
   lang?: string;
   quality?: string;
+  function_type?: string;
+  audience?: string;
+  maturity?: string;
   limit?: number;
   offset?: number;
 }
