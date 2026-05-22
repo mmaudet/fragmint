@@ -109,12 +109,16 @@ export interface HarvestCandidate {
   domain: string;
   lang: string;
   tags: string[];
+  function_type: string | null;
+  audience: string[];
+  maturity: string | null;
   confidence: number;
   origin_source: string;
   origin_page: number | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
+  fragment_id: string | null;
 }
 
 export interface HarvestJobWithCandidates extends HarvestJob {
