@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
+import { useI18n } from '@/lib/i18n';
 import {
   Tag,
   GitBranch,
@@ -9,23 +10,39 @@ import {
   Layers,
   ArrowLeft,
   Shield,
+  LogOut,
+  ChevronDown,
+  HelpCircle,
+  FileStack,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useSupersedureStats } from '@/api/hooks/use-supersedure-proposals';
 
 const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
 
 const adminNavItems = [
+  { to: '/admin/harvest', label: 'Harvest', icon: FileStack },
   { to: '/admin/metadata', label: 'Metadata', icon: Tag },
   { to: '/admin/relations', label: 'Relations', icon: GitBranch },
-  { to: '/admin/supersedure', label: 'Supersedure', icon: ArrowLeftRight },
+  { to: '/admin/supersedure', label: 'Remplacements', icon: ArrowLeftRight },
   { to: '/admin/contradictions', label: 'Contradictions', icon: AlertTriangle },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/collections', label: 'Collections', icon: Layers },
 ];
 
 export default function AdminLayout() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { lang, setLang, t } = useI18n();
+  const { data: supersedureStats } = useSupersedureStats();
   if ((ROLE_LEVEL[user?.role ?? 'reader'] ?? 0) < ROLE_LEVEL['admin']) {
     return <Navigate to="/home" replace />;
   }
@@ -57,14 +74,36 @@ export default function AdminLayout() {
               }
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {to === '/admin/supersedure' &&
+                supersedureStats &&
+                supersedureStats.pending > 0 && (
+                  <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                    {supersedureStats.pending}
+                  </span>
+                )}
             </NavLink>
           ))}
         </nav>
 
         <Separator className="bg-red-800" />
 
-        <div className="p-3">
+        <div className="p-3 space-y-2">
+          <NavLink
+            to="/admin"
+            end
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors',
+                isActive
+                  ? 'bg-red-800 text-white font-medium'
+                  : 'text-red-300 hover:text-white hover:bg-red-900',
+              )
+            }
+          >
+            <HelpCircle className="h-4 w-4" />
+            Guide
+          </NavLink>
           <Link
             to="/home"
             className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-300 hover:text-white hover:bg-red-900 transition-colors"
@@ -72,6 +111,44 @@ export default function AdminLayout() {
             <ArrowLeft className="h-4 w-4" />
             Fragmint
           </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <div className="flex gap-1">
+              <Button
+                variant={lang === 'fr' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setLang('fr')}
+                className="h-7 px-2 text-xs"
+              >
+                FR
+              </Button>
+              <Button
+                variant={lang === 'en' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setLang('en')}
+                className="h-7 px-2 text-xs"
+              >
+                EN
+              </Button>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-between text-red-200 hover:text-white hover:bg-red-900"
+              >
+                <span className="text-sm truncate">{user?.display_name || user?.login}</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={logout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                {t('nav', 'logout')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
