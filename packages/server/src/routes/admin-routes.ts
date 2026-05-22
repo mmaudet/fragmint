@@ -40,6 +40,32 @@ export function adminRoutes(
     },
   );
 
+  app.patch(
+    '/v1/users/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as { role?: string; display_name?: string; active?: number };
+      const patch: { role?: string; display_name?: string; active?: number } = {};
+      if (body.role !== undefined) patch.role = body.role;
+      if (body.display_name !== undefined) patch.display_name = body.display_name;
+      if (body.active !== undefined) patch.active = body.active;
+      const user = await userService.update(id, patch);
+      if (!user) return reply.status(404).send({ data: null, meta: null, error: 'Not found' });
+      return { data: user, meta: null, error: null };
+    },
+  );
+
+  app.delete(
+    '/v1/users/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const result = await userService.delete(id);
+      return { data: result, meta: null, error: null };
+    },
+  );
+
   // Tokens
   app.get('/v1/tokens', { preHandler: [authenticate, requireRole('admin')] }, async () => {
     const tokens = await tokenService.list();

@@ -61,6 +61,21 @@ export class UserService {
     return rows;
   }
 
+  async update(id: string, patch: { role?: string; display_name?: string; active?: number }) {
+    await this.db.update(users).set(patch).where(eq(users.id, id));
+    const rows = await this.db
+      .select({ id: users.id, login: users.login, display_name: users.display_name, role: users.role, active: users.active, created_at: users.created_at, last_login: users.last_login })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async delete(id: string) {
+    await this.db.delete(users).where(eq(users.id, id));
+    return { deleted: true };
+  }
+
   async exists(login: string): Promise<boolean> {
     const rows = await this.db
       .select({ id: users.id })

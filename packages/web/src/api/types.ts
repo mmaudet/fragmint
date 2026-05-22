@@ -1,3 +1,5 @@
+import type { UploadHints } from '@/types/trust-source';
+
 export interface ApiResponse<T> {
   data: T | null;
   meta: { count?: number } | null;
@@ -70,6 +72,16 @@ export interface User {
   display_name: string;
 }
 
+export interface AdminUser {
+  id: string;
+  login: string;
+  display_name: string;
+  role: string;
+  active: number;
+  created_at: string;
+  last_login: string | null;
+}
+
 export interface LoginResponse {
   token: string;
   user: User;
@@ -119,10 +131,12 @@ export interface HarvestCandidate {
   duplicate_score: number | null;
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
   fragment_id: string | null;
+  trust_sources_json: string | null;
 }
 
 export interface HarvestJobWithCandidates extends HarvestJob {
   candidates: HarvestCandidate[];
+  upload_hints?: UploadHints;
 }
 
 export interface ValidateResult {
