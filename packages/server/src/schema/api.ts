@@ -10,6 +10,9 @@ export const searchQuerySchema = z.object({
       quality: z.string().optional(),
       quality_min: z.string().optional(),
       tags: z.array(z.string()).optional(),
+      function_type: z.array(z.string()).optional(),
+      audience: z.array(z.string()).optional(),
+      maturity: z.array(z.string()).optional(),
     })
     .optional(),
   limit: z.number().int().min(1).max(100).default(20),

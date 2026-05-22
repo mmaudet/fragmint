@@ -29,6 +29,9 @@ export interface SearchFilters {
   tags?: string[];
   collectionSlug?: string;
   valid_at?: string;
+  function_type?: string[];
+  audience?: string[];
+  maturity?: string[];
 }
 
 export interface SearchResult {
@@ -218,6 +221,9 @@ export class SearchService {
           domain: filters?.domain,
           lang: filters?.lang,
           quality_min: filters?.quality_min,
+          function_type: filters?.function_type,
+          audience: filters?.audience,
+          maturity: filters?.maturity,
         };
         const milvusResults = await this.milvusClient.search(
           vector,
@@ -342,6 +348,17 @@ export class SearchService {
       for (const tag of filters.tags) {
         conditions.push(like(fragments.tags, `%${tag}%`));
       }
+    }
+    if (filters?.function_type?.length) {
+      conditions.push(inArray(fragments.function_type, filters.function_type));
+    }
+    if (filters?.audience?.length) {
+      for (const aud of filters.audience) {
+        conditions.push(like(fragments.audience, `%${aud}%`));
+      }
+    }
+    if (filters?.maturity?.length) {
+      conditions.push(inArray(fragments.maturity, filters.maturity));
     }
 
     // Filter by collection

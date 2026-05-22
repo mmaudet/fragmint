@@ -53,6 +53,9 @@ export function fragmentRoutes(
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
       collectionSlug: collection?.slug,
+      function_type: query.function_type ? query.function_type.split(',') : undefined,
+      audience: query.audience ? query.audience.split(',') : undefined,
+      maturity: query.maturity ? query.maturity.split(',') : undefined,
     });
     return { data: rows, meta: { count: rows.length, total }, error: null };
   });

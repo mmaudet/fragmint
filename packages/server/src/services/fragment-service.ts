@@ -191,12 +191,26 @@ export class FragmentService {
     filePathPrefix?: string;
     collectionSlug?: string;
     valid_at?: string;
+    function_type?: string[];
+    audience?: string[];
+    maturity?: string[];
   }) {
     const conditions = [];
     if (filters?.type) conditions.push(eq(fragments.type, filters.type));
     if (filters?.domain) conditions.push(eq(fragments.domain, filters.domain));
     if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
     if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
+    if (filters?.function_type?.length) {
+      conditions.push(inArray(fragments.function_type, filters.function_type));
+    }
+    if (filters?.audience?.length) {
+      for (const aud of filters.audience) {
+        conditions.push(like(fragments.audience, `%${aud}%`));
+      }
+    }
+    if (filters?.maturity?.length) {
+      conditions.push(inArray(fragments.maturity, filters.maturity));
+    }
     if (filters?.collectionSlug) {
       if (filters.collectionSlug === 'common') {
         // Match both collection_slug='common' and NULL (legacy fragments)
