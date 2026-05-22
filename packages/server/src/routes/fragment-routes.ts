@@ -83,7 +83,27 @@ export function fragmentRoutes(
   });
 
   // Export fragments as XLSX
-  app.get(`${prefix}/fragments/export`, { preHandler: readHandlers }, async (request, reply) => {
+  app.get(
+    `${prefix}/fragments/export`,
+    {
+      preHandler: readHandlers,
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            domain: { type: 'string' },
+            lang: { type: 'string' },
+            quality: { type: 'string' },
+            function_type: { type: 'string' },
+            audience: { type: 'string' },
+            maturity: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
     const query = request.query as Record<string, string>;
     const collection = request.collection;
     const { rows } = await fragmentService.list({
@@ -92,6 +112,9 @@ export function fragmentRoutes(
       lang: query.lang,
       quality: query.quality,
       collectionSlug: collection?.slug,
+      function_type: query.function_type ? query.function_type.split(',') : undefined,
+      audience: query.audience ? query.audience.split(',') : undefined,
+      maturity: query.maturity ? query.maturity.split(',') : undefined,
     });
 
     const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');

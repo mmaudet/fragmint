@@ -353,9 +353,9 @@ export class SearchService {
       conditions.push(inArray(fragments.function_type, filters.function_type));
     }
     if (filters?.audience?.length) {
-      for (const aud of filters.audience) {
-        conditions.push(like(fragments.audience, `%${aud}%`));
-      }
+      conditions.push(
+        or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))),
+      );
     }
     if (filters?.maturity?.length) {
       conditions.push(inArray(fragments.maturity, filters.maturity));
