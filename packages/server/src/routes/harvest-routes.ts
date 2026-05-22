@@ -1,11 +1,12 @@
 // packages/server/src/routes/harvest-routes.ts
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { requireRole } from '../auth/middleware.js';
 import type { HarvesterService, ValidationInput } from '../services/harvester-service.js';
 import type { FragmintDb } from '../db/connection.js';
 import { harvestCandidates, harvestJobs, fragmentDomains, fragmentTags } from '../db/schema.js';
+import { type UploadHints, UploadHintsSchema } from '../schema/trust-source.js';
 
 export function harvestRoutes(
   app: FastifyInstance,
@@ -37,6 +38,7 @@ export function harvestRoutes(
     const files: Buffer[] = [];
     const filenames: string[] = [];
     let options: { min_confidence: number } = { min_confidence: 0.5 };
+    let uploadHints: UploadHints | undefined;
 
     const parts = request.parts();
     for await (const part of parts) {
@@ -54,6 +56,17 @@ export function harvestRoutes(
           options = JSON.parse(part.value as string);
         } catch {
           return reply.status(400).send({ data: null, meta: null, error: 'Invalid options JSON' });
+        }
+      } else if (part.type === 'field' && part.fieldname === 'upload_hints') {
+        try {
+          const parsed = JSON.parse(part.value as string);
+          const result = UploadHintsSchema.safeParse(parsed);
+          if (!result.success) {
+            return reply.status(400).send({ data: null, meta: null, error: 'Invalid upload_hints: ' + result.error.issues[0]?.message });
+          }
+          uploadHints = result.data;
+        } catch {
+          return reply.status(400).send({ data: null, meta: null, error: 'Invalid upload_hints JSON' });
         }
       }
     }
@@ -73,6 +86,7 @@ export function harvestRoutes(
       options,
       request.user.login,
       collectionSlug,
+      uploadHints,
     );
 
     return reply.status(202).send({
@@ -185,6 +199,157 @@ export function harvestRoutes(
           meta: null,
           error: null,
         };
+      },
+    );
+  }
+
+  // GET /v1/harvest/jobs/:id/debrief — trust source stats for a job
+  if (db) {
+    app.get(
+      `${prefix}/harvest/jobs/:id/debrief`,
+      { preHandler: expertHandlers },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+
+        const [jobRow] = await db
+          .select({ status: harvestJobs.status, upload_hints: harvestJobs.upload_hints })
+          .from(harvestJobs)
+          .where(eq(harvestJobs.id, id))
+          .limit(1);
+
+        if (!jobRow) {
+          return reply.status(404).send({ data: null, meta: null, error: 'Job not found' });
+        }
+
+        const candidateRows = await db
+          .select({ trust_sources_json: harvestCandidates.trust_sources_json })
+          .from(harvestCandidates)
+          .where(eq(harvestCandidates.job_id, id));
+
+        const byTrust = { high: 0, mixed: 0, low: 0 };
+        const byTrustSource = { 'human-direct': 0, 'llm-confirmed': 0, 'llm-deviation': 0, 'llm-inferred': 0 };
+
+        for (const row of candidateRows) {
+          const sources = row.trust_sources_json
+            ? (JSON.parse(row.trust_sources_json) as Record<string, string>)
+            : {};
+          const vals = Object.values(sources);
+          let worst = 'human-direct';
+          if (vals.includes('llm-deviation')) worst = 'llm-deviation';
+          else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
+          else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
+
+          byTrustSource[worst as keyof typeof byTrustSource]++;
+          if (worst === 'human-direct' || worst === 'llm-confirmed') byTrust.high++;
+          else if (worst === 'llm-deviation') byTrust.mixed++;
+          else byTrust.low++;
+        }
+
+        const autoValidated = byTrustSource['human-direct'] + byTrustSource['llm-confirmed'];
+        const toReview = byTrustSource['llm-deviation'] + byTrustSource['llm-inferred'];
+
+        return reply.send({
+          data: {
+            job_id: id,
+            job_status: jobRow.status,
+            upload_hints: jobRow.upload_hints ? JSON.parse(jobRow.upload_hints) : null,
+            had_hints: !!jobRow.upload_hints,
+            fragments: {
+              total: candidateRows.length,
+              by_trust: byTrust,
+            },
+            metadata: {
+              auto_validated: autoValidated,
+              to_review: toReview,
+              breakdown: byTrustSource,
+            },
+          },
+          meta: null,
+          error: null,
+        });
+      },
+    );
+
+    // GET /v1/admin/harvest/candidates — list pending candidates for admin validation
+    app.get(
+      `${prefix}/admin/harvest/candidates`,
+      { preHandler: adminHandlers },
+      async (request) => {
+        const { job_id, trust_level, limit = 50, offset = 0 } = (request.query ?? {}) as {
+          job_id?: string;
+          trust_level?: 'high' | 'mixed' | 'low';
+          limit?: number;
+          offset?: number;
+        };
+
+        const conditions: ReturnType<typeof eq>[] = [eq(harvestCandidates.status, 'pending')];
+        if (job_id) conditions.push(eq(harvestCandidates.job_id, job_id));
+
+        const rows = await db
+          .select()
+          .from(harvestCandidates)
+          .where(and(...conditions))
+          .orderBy(harvestCandidates.job_id)
+          .limit(Number(limit))
+          .offset(Number(offset));
+
+        const filtered = trust_level
+          ? rows.filter((c) => {
+              const vals = Object.values(
+                c.trust_sources_json ? (JSON.parse(c.trust_sources_json) as Record<string, string>) : {},
+              );
+              let worst = 'human-direct';
+              if (vals.includes('llm-deviation')) worst = 'llm-deviation';
+              else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
+              else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
+              if (trust_level === 'high') return worst === 'human-direct' || worst === 'llm-confirmed';
+              if (trust_level === 'mixed') return worst === 'llm-deviation';
+              return worst === 'llm-inferred';
+            })
+          : rows;
+
+        return { data: filtered, meta: { total: filtered.length }, error: null };
+      },
+    );
+
+    // POST /v1/admin/harvest/candidates/bulk-accept
+    app.post(
+      `${prefix}/admin/harvest/candidates/bulk-accept`,
+      { preHandler: adminHandlers },
+      async (request, reply) => {
+        const parsed = z
+          .object({ candidate_ids: z.array(z.string()).min(1) })
+          .safeParse(request.body);
+        if (!parsed.success) {
+          return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+        }
+        const { candidate_ids } = parsed.data;
+
+        const candidates = await db
+          .select()
+          .from(harvestCandidates)
+          .where(inArray(harvestCandidates.id, candidate_ids));
+
+        for (const c of candidates) {
+          const vals = Object.values(
+            c.trust_sources_json ? (JSON.parse(c.trust_sources_json) as Record<string, string>) : {},
+          );
+          let worst = 'human-direct';
+          if (vals.includes('llm-deviation')) worst = 'llm-deviation';
+          else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
+          else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
+          const isHigh = worst === 'human-direct' || worst === 'llm-confirmed';
+          if (!isHigh) {
+            return reply.status(400).send({
+              data: null,
+              meta: null,
+              error: `Candidate ${c.id} is not trust-high, refusing bulk accept`,
+            });
+          }
+        }
+
+        const accepted = await harvesterService.bulkAccept(candidates, request.user.login);
+        return reply.send({ data: { accepted }, meta: null, error: null });
       },
     );
   }

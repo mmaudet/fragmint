@@ -1,4 +1,5 @@
 // packages/server/src/services/llm-client.ts
+import type { UploadHints } from '../schema/trust-source.js';
 
 export interface LlmClientConfig {
   endpoint: string;
@@ -139,6 +140,7 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     domainHints: Record<string, string> = {},
     validFunctions: string[] = [],
     validEntities: Array<{ type: string; canonicalName: string }> = [],
+    uploadHints: UploadHints = {},
   ): Promise<CombinedBlock[]> {
     const functionList =
       validFunctions.length > 0
@@ -162,6 +164,25 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       knownTags.length > 0
         ? `Use tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. For new tags not in the list, prefix with "NEW:" (e.g. "NEW:edge-computing"). All tags must be English lowercase kebab-case.`
         : 'English lowercase kebab-case only. Prefix unknown ones with "NEW:".';
+
+    const hasAnyHint = !!(
+      uploadHints.domain ||
+      uploadHints.function_type ||
+      uploadHints.maturity ||
+      uploadHints.audience?.length ||
+      uploadHints.tags?.length ||
+      uploadHints.entities?.length
+    );
+    const hintsBlock = hasAnyHint
+      ? `\n# Operator hints (high confidence — prefer these unless content clearly contradicts them)\n${
+          uploadHints.domain ? `- domain: ${uploadHints.domain}\n` : ''
+        }${uploadHints.function_type ? `- function_type: ${uploadHints.function_type}\n` : ''
+        }${uploadHints.audience?.length ? `- audience: ${uploadHints.audience.join(', ')}\n` : ''
+        }${uploadHints.maturity ? `- maturity: ${uploadHints.maturity}\n` : ''
+        }${uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
+        }${uploadHints.entities?.length ? `- entities (suggested): ${uploadHints.entities.join(', ')}\n` : ''
+        }`
+      : '';
 
     const prompt = `You are a document analysis assistant for Linagora, a French open-source software company.
 Extract reusable content blocks from the document and classify each one using structured metadata.
@@ -195,9 +216,14 @@ ${entityBlock || '  (no referential available — use best judgment)'}
   If you detect an entity NOT in the referential above, add it to new_proposals.entities with "NEW:" prefix.
 
 ## tags — ${tagHint}
-
+${hintsBlock}
 # Document
 ${markdown}
+
+## confidence — your confidence that ALL classification fields are correct (0–1).
+  Scale: 0.95+ only when all metadata is unambiguous. 0.70-0.94 when confident
+  but some ambiguity exists. 0.50-0.69 when uncertain. Below 0.50 when likely
+  misclassified. Default toward lower values when unsure.
 
 Return ONLY a valid JSON array. Each element must contain ALL fields:
 [
@@ -220,7 +246,7 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
       "domains": [],
       "entities": {}
     },
-    "confidence": 0.85
+    "confidence": 0.72
   }
 ]`;
 
@@ -252,6 +278,9 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
 - domain: the SUBJECT MATTER (which product or thematic area this is about). Choose the BEST match from: ${JSON.stringify(existingDomains)}. Domain is about WHAT the text is about, not HOW it is written. A technical paragraph about Twake → domain "twake", not "technical".
 - tags: keywords describing the nature and audience of the content. ${tagHint}
 - confidence: your confidence in this classification (0–1).
+  Scale: 0.95+ only when all metadata is unambiguous. 0.70-0.94 when confident
+  but some ambiguity exists. 0.50-0.69 when uncertain. Below 0.50 when likely
+  misclassified. Default toward lower values when unsure.
 
 Do not invent domain or type values outside the provided lists. Use "other" if nothing fits.
 
