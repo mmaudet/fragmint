@@ -31,9 +31,25 @@ export interface CombinedBlock {
   title: string;
   body: string;
   type: string;
-  lang: string;
   domain: string;
+  function_type: string;
+  audience: string[];
+  maturity: string;
+  lang: string;
   tags: string[];
+  entities: {
+    clients: string[];
+    products: string[];
+    technologies: string[];
+    partners: string[];
+    certifications: string[];
+    regulations: string[];
+  };
+  new_proposals: {
+    tags: string[];
+    domains: string[];
+    entities: Partial<Record<string, string[]>>;
+  };
   confidence: number;
 }
 
@@ -121,35 +137,92 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     validDomains: string[],
     knownTags: string[] = [],
     domainHints: Record<string, string> = {},
+    validFunctions: string[] = [],
+    validEntities: Array<{ type: string; canonicalName: string }> = [],
   ): Promise<CombinedBlock[]> {
-    const tagHint =
-      knownTags.length > 0
-        ? `Prefer tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. New tags must be English lowercase kebab-case.`
-        : 'English lowercase kebab-case only. Never use French words.';
+    const functionList =
+      validFunctions.length > 0
+        ? validFunctions.join(' | ')
+        : 'technical | commercial | legal | operational | strategic | reference';
 
     const domainList = validDomains
       .map((d) => (domainHints[d] ? `"${d}": ${domainHints[d]}` : `"${d}"`))
       .join('\n  ');
 
-    const prompt = `You are a document analysis assistant. Extract reusable content blocks and classify each one.
+    const entityListByType = validEntities.reduce<Record<string, string[]>>((acc, e) => {
+      if (!acc[e.type]) acc[e.type] = [];
+      acc[e.type].push(e.canonicalName);
+      return acc;
+    }, {});
+    const entityBlock = Object.entries(entityListByType)
+      .map(([type, names]) => `  ${type}s: ${names.join(', ')}`)
+      .join('\n');
 
-Extraction rules:
-- body: EXACT verbatim text. Do NOT translate, paraphrase, or summarize.
-- title: short label (3-8 words) in the SAME language as the body.
-- lang: ISO 639-1 code (fr, en, ...)
+    const tagHint =
+      knownTags.length > 0
+        ? `Use tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. For new tags not in the list, prefix with "NEW:" (e.g. "NEW:edge-computing"). All tags must be English lowercase kebab-case.`
+        : 'English lowercase kebab-case only. Prefix unknown ones with "NEW:".';
 
-Classification rules:
-- type: MUST be one of: ${JSON.stringify(validTypes)}
-- domain: which Linagora product or area the text is about. MUST be one of:
+    const prompt = `You are a document analysis assistant for Linagora, a French open-source software company.
+Extract reusable content blocks from the document and classify each one using structured metadata.
+
+# Extraction rules
+- body: EXACT verbatim text from the document. Do NOT translate, paraphrase, or summarize.
+- title: short English label (3-8 words) describing the block content.
+- lang: ISO 639-1 code of the body language (fr, en, ...)
+
+# Classification rules
+
+## domain — the Linagora product or area this block is about. MUST be one of:
   ${domainList}
-  Only use "twake", "lincloud", "linshare" when the text explicitly names or describes that product. Only use "linagora" when the text is explicitly about Linagora the company. Use "other" for client requirements, SLA specs, procurement content, or anything not clearly tied to a specific product.
-- tags: ${tagHint}
-- confidence: your confidence in the type + domain assignment (0-1)
+  Use "other" for client requirements, SLA specs, procurement content, or anything not clearly tied to one product.
+  If the content clearly belongs to a Linagora product NOT in the list, add it to new_proposals.domains with "NEW:" prefix.
 
-Document:
+## function_type — the rhetorical function of this block. MUST be one of:
+  ${functionList}
+
+## type — the content type. MUST be one of:
+  ${JSON.stringify(validTypes)}
+
+## audience — who this block targets. JSON array with 1-3 values from:
+  ["technical", "decision-maker", "user", "legal"]
+
+## maturity — lifecycle stage of the described feature/offer. MUST be one of:
+  production | beta | roadmap | archive
+
+## entities — use canonical names from the referential. Use exact spelling.
+${entityBlock || '  (no referential available — use best judgment)'}
+  If you detect an entity NOT in the referential above, add it to new_proposals.entities with "NEW:" prefix.
+
+## tags — ${tagHint}
+
+# Document
 ${markdown}
 
-Return ONLY a JSON array. Each element: { "title", "body", "type", "domain", "tags", "lang", "confidence" }`;
+Return ONLY a valid JSON array. Each element must contain ALL fields:
+[
+  {
+    "title": "...",
+    "body": "...",
+    "domain": "...",
+    "function_type": "...",
+    "type": "...",
+    "audience": ["technical"],
+    "maturity": "production",
+    "lang": "fr",
+    "tags": ["open-source"],
+    "entities": {
+      "clients": [], "products": [], "technologies": [],
+      "partners": [], "certifications": [], "regulations": []
+    },
+    "new_proposals": {
+      "tags": [],
+      "domains": [],
+      "entities": {}
+    },
+    "confidence": 0.85
+  }
+]`;
 
     try {
       const response = await this.chat(prompt);
@@ -169,9 +242,10 @@ Return ONLY a JSON array. Each element: { "title", "body", "type", "domain", "ta
     existingDomains: string[],
     knownTags: string[] = [],
   ): Promise<Classification> {
-    const tagHint = knownTags.length > 0
-      ? `Prefer tags from this known list when relevant: ${JSON.stringify(knownTags)}. You may add new tags if needed, but they MUST be in English.`
-      : 'MUST be in English, lowercase, single words or hyphen-separated. Never use French words.';
+    const tagHint =
+      knownTags.length > 0
+        ? `Prefer tags from this known list when relevant: ${JSON.stringify(knownTags)}. You may add new tags if needed, but they MUST be in English.`
+        : 'MUST be in English, lowercase, single words or hyphen-separated. Never use French words.';
     const prompt = `You are a content classification assistant. Classify the following text block.
 
 - type: the rhetorical function of the block. Choose the BEST match from: ${JSON.stringify(existingTypes)}.

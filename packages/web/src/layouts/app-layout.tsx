@@ -21,6 +21,7 @@ import {
   ChevronDown,
   PenLine,
   Home,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -81,6 +82,27 @@ export default function AppLayout() {
             </NavLink>
           ))}
         </nav>
+
+        {hasRole('admin') && (
+          <div className="px-2 pt-2">
+            <NavLink
+              to="/admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                  isActive
+                    ? 'bg-red-900/60 text-red-200 border-red-700'
+                    : 'text-red-400 border-red-900/50 hover:bg-red-900/40 hover:text-red-200',
+                )
+              }
+            >
+              <Shield className="h-3.5 w-3.5" />
+              Admin
+            </NavLink>
+          </div>
+        )}
 
         <Separator className="bg-slate-700 mt-2" />
 

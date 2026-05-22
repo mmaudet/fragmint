@@ -120,6 +120,36 @@ export function createDb(path: string | ':memory:') {
       category TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fragment_functions (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      description TEXT,
+      validated INTEGER NOT NULL DEFAULT 1,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      proposed_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL CHECK(type IN ('client','product','technology','partner','certification','regulation','metric')),
+      name TEXT NOT NULL,
+      canonical_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      aliases TEXT,
+      validated INTEGER NOT NULL DEFAULT 0,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      proposed_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TEXT NOT NULL,
+      UNIQUE(type, normalized_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, validated);
+    CREATE TABLE IF NOT EXISTS fragment_entities (
+      fragment_id TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      PRIMARY KEY (fragment_id, entity_id),
+      FOREIGN KEY (fragment_id) REFERENCES fragments(id) ON DELETE CASCADE,
+      FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+    );
   `);
 
   // Add collection_slug to api_tokens if not already present
@@ -158,6 +188,72 @@ export function createDb(path: string | ':memory:') {
   } catch (_) {
     // Index already exists — ignore
   }
+
+  // Enrich fragment_types with validation columns
+  try {
+    sqlite.exec('ALTER TABLE fragment_types ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragment_types ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_types ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
+  } catch (_) {}
+
+  // Enrich fragment_domains
+  try {
+    sqlite.exec('ALTER TABLE fragment_domains ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragment_domains ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_domains ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'",
+    );
+  } catch (_) {}
+
+  // Enrich fragment_tags
+  try {
+    sqlite.exec('ALTER TABLE fragment_tags ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragment_tags ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
+  } catch (_) {}
+
+  // New columns on fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN function_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN audience TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN maturity TEXT');
+  } catch (_) {}
+
+  // New columns on harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN function_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN audience TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN maturity TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN entities_json TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN new_proposals TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN metadata_status TEXT');
+  } catch (_) {}
 
   const db = drizzle(sqlite, { schema });
   return db;

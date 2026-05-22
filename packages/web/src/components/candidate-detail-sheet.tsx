@@ -13,6 +13,9 @@ export interface CandidateEdits {
   lang?: string;
   tags?: string[];
   body?: string;
+  function_type?: string | null;
+  maturity?: string | null;
+  audience?: string[];
 }
 
 interface Props {
@@ -62,10 +65,31 @@ export function CandidateDetailSheet({
         </SheetHeader>
 
         <FragmentMetaEditor
-          edits={{ type: current.type, domain: current.domain, lang: current.lang, tags: current.tags ?? [], body: current.body ?? '' }}
+          edits={{
+            type: current.type,
+            domain: current.domain,
+            lang: current.lang,
+            tags: current.tags ?? [],
+            body: current.body ?? '',
+            function_type: current.function_type ?? null,
+            maturity: current.maturity ?? null,
+            audience: current.audience ?? [],
+          }}
           types={types}
           domains={domains}
-          onChange={(m: MetaEdits) => onEditsChange({ ...edits, type: m.type, domain: m.domain, lang: m.lang, tags: m.tags, body: m.body })}
+          onChange={(m: MetaEdits) =>
+            onEditsChange({
+              ...edits,
+              type: m.type,
+              domain: m.domain,
+              lang: m.lang,
+              tags: m.tags,
+              body: m.body,
+              function_type: m.function_type,
+              maturity: m.maturity,
+              audience: m.audience,
+            })
+          }
         />
 
         {candidate.duplicate_of && (

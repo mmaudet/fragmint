@@ -12,6 +12,16 @@ import {
 import { Eye, Pencil, X } from 'lucide-react';
 
 const LANGS = ['fr', 'en', 'de', 'es', 'it', 'nl', 'pt', 'ar'];
+const FUNCTION_TYPES = [
+  'technical',
+  'commercial',
+  'legal',
+  'operational',
+  'strategic',
+  'reference',
+];
+const AUDIENCE_OPTIONS = ['technical', 'decision-maker', 'user', 'legal'];
+const MATURITY_OPTIONS = ['production', 'beta', 'roadmap', 'archive'];
 
 export interface MetaEdits {
   type: string;
@@ -19,6 +29,9 @@ export interface MetaEdits {
   lang: string;
   tags: string[];
   body: string;
+  function_type?: string | null;
+  audience?: string[];
+  maturity?: string | null;
 }
 
 interface Props {
@@ -55,7 +68,9 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
             </SelectTrigger>
             <SelectContent>
               {types.map((t) => (
-                <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                <SelectItem key={t} value={t} className="text-xs">
+                  {t}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -68,7 +83,9 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
             </SelectTrigger>
             <SelectContent>
               {domains.map((d) => (
-                <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>
+                <SelectItem key={d} value={d} className="text-xs">
+                  {d}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -81,10 +98,71 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
             </SelectTrigger>
             <SelectContent>
               {LANGS.map((l) => (
-                <SelectItem key={l} value={l} className="text-xs">{l}</SelectItem>
+                <SelectItem key={l} value={l} className="text-xs">
+                  {l}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      {/* Function / Maturity */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Function</label>
+          <Select
+            value={edits.function_type ?? undefined}
+            onValueChange={(v) => set({ function_type: v || null })}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {FUNCTION_TYPES.map((f) => (
+                <SelectItem key={f} value={f} className="text-xs">
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground">Maturity</label>
+          <Select value={edits.maturity ?? undefined} onValueChange={(v) => set({ maturity: v || null })}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {MATURITY_OPTIONS.map((m) => (
+                <SelectItem key={m} value={m} className="text-xs">
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Audience */}
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">Audience</label>
+        <div className="flex flex-wrap gap-1">
+          {AUDIENCE_OPTIONS.map((a) => {
+            const active = (edits.audience ?? []).includes(a);
+            return (
+              <button
+                key={a}
+                onClick={() => {
+                  const current = edits.audience ?? [];
+                  set({ audience: active ? current.filter((x) => x !== a) : [...current, a] });
+                }}
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}
+              >
+                {a}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -105,7 +183,10 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput); }
+            if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault();
+              addTag(tagInput);
+            }
           }}
           placeholder="Ajouter un tag (Entrée)"
           className="h-7 text-xs"
@@ -120,9 +201,15 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
             onClick={() => setEditingBody((v) => !v)}
           >
-            {editingBody
-              ? <><Eye className="h-3 w-3" /> Aperçu</>
-              : <><Pencil className="h-3 w-3" /> Éditer</>}
+            {editingBody ? (
+              <>
+                <Eye className="h-3 w-3" /> Aperçu
+              </>
+            ) : (
+              <>
+                <Pencil className="h-3 w-3" /> Éditer
+              </>
+            )}
           </button>
         </div>
         {editingBody ? (

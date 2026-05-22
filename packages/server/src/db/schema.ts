@@ -24,6 +24,9 @@ export const fragments = sqliteTable('fragments', {
   harvest_confidence: real('harvest_confidence'),
   valid_from: text('valid_from'),
   valid_until: text('valid_until'),
+  function_type: text('function_type'),
+  audience: text('audience'),
+  maturity: text('maturity'),
 });
 
 export const auditLog = sqliteTable('audit_log', {
@@ -137,6 +140,12 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   duplicate_score: real('duplicate_score'),
   status: text('status').notNull().default('pending'),
   fragment_id: text('fragment_id'),
+  function_type: text('function_type'),
+  audience: text('audience'),
+  maturity: text('maturity'),
+  entities_json: text('entities_json'),
+  new_proposals: text('new_proposals'),
+  metadata_status: text('metadata_status'),
 });
 
 export const jobs = sqliteTable('jobs', {
@@ -175,6 +184,9 @@ export const fragmentTypes = sqliteTable('fragment_types', {
   label: text('label').notNull(),
   description: text('description'),
   created_at: text('created_at').notNull(),
+  validated: integer('validated').notNull().default(1),
+  usageCount: integer('usage_count').notNull().default(0),
+  proposedBy: text('proposed_by').notNull().default('admin'),
 });
 
 export const fragmentDomains = sqliteTable('fragment_domains', {
@@ -182,6 +194,9 @@ export const fragmentDomains = sqliteTable('fragment_domains', {
   label: text('label').notNull(),
   description: text('description'),
   created_at: text('created_at').notNull(),
+  validated: integer('validated').notNull().default(1),
+  usageCount: integer('usage_count').notNull().default(0),
+  proposedBy: text('proposed_by').notNull().default('admin'),
 });
 
 export const fragmentTags = sqliteTable('fragment_tags', {
@@ -189,4 +204,35 @@ export const fragmentTags = sqliteTable('fragment_tags', {
   label: text('label').notNull(),
   category: text('category'),
   created_at: text('created_at').notNull(),
+  validated: integer('validated').notNull().default(1),
+  usageCount: integer('usage_count').notNull().default(0),
+  proposedBy: text('proposed_by').notNull().default('admin'),
+});
+
+export const fragmentFunctions = sqliteTable('fragment_functions', {
+  slug: text('slug').primaryKey(),
+  label: text('label').notNull(),
+  description: text('description'),
+  validated: integer('validated').notNull().default(1),
+  usageCount: integer('usage_count').notNull().default(0),
+  proposedBy: text('proposed_by').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+});
+
+export const entities = sqliteTable('entities', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  type: text('type').notNull(),
+  name: text('name').notNull(),
+  canonicalName: text('canonical_name').notNull(),
+  normalizedName: text('normalized_name').notNull(),
+  aliases: text('aliases'),
+  validated: integer('validated').notNull().default(0),
+  usageCount: integer('usage_count').notNull().default(0),
+  proposedBy: text('proposed_by').notNull().default('admin'),
+  createdAt: text('created_at').notNull(),
+});
+
+export const fragmentEntities = sqliteTable('fragment_entities', {
+  fragment_id: text('fragment_id').notNull(),
+  entity_id: integer('entity_id').notNull(),
 });

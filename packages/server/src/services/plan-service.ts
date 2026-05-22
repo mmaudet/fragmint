@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans, fragments, planFragmentUsages, fragmentTypes, fragmentDomains } from '../db/schema.js';
+import {
+  plans,
+  fragments,
+  planFragmentUsages,
+  fragmentTypes,
+  fragmentDomains,
+} from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -95,7 +101,10 @@ function rowToRecord(row: typeof plans.$inferSelect): PlanRecord {
 }
 
 export class PlanService {
-  constructor(private db: FragmintDb, private config: PlanServiceConfig) {}
+  constructor(
+    private db: FragmintDb,
+    private config: PlanServiceConfig,
+  ) {}
 
   async create(input: CreatePlanInput): Promise<PlanRecord> {
     const id = `plan_${randomUUID()}`;
@@ -204,9 +213,7 @@ export class PlanService {
       },
       5,
     );
-    return results
-      .filter((r) => r.score >= SECTION_SCORE_THRESHOLD)
-      .map(toCandidate);
+    return results.filter((r) => r.score >= SECTION_SCORE_THRESHOLD).map(toCandidate);
   }
 
   private async inferSectionTypes(
@@ -215,18 +222,15 @@ export class PlanService {
     const knownTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes))
       .map((r) => r.slug)
       .filter((t) => t !== 'unknown' && t !== 'other');
-    const knownDomains = (await this.db.select({ slug: fragmentDomains.slug }).from(fragmentDomains))
-      .map((r) => r.slug);
+    const knownDomains = (
+      await this.db.select({ slug: fragmentDomains.slug }).from(fragmentDomains)
+    ).map((r) => r.slug);
 
     const llm = this.requireLlm();
     const entries = await Promise.all(
       sections.map(async (s) => {
         try {
-          const c = await llm.classify(
-            `${s.title}\n${s.description}`,
-            knownTypes,
-            knownDomains,
-          );
+          const c = await llm.classify(`${s.title}\n${s.description}`, knownTypes, knownDomains);
           const t = knownTypes.includes(c.type) ? c.type : undefined;
           return [s.id, t] as const;
         } catch (err) {
@@ -262,32 +266,34 @@ export class PlanService {
 
     const inferredById = await this.inferSectionTypes(parsed);
 
-    const newSections = await Promise.all(parsed.map(async (ps) => {
-      const previous = oldById.get(ps.id);
-      const filters = previous?.filters_override ?? p.state.filters;
-      const inferred_type = inferredById.get(ps.id) ?? previous?.inferred_type;
-      let candidates: FragmentCandidate[] = [];
-      try {
-        candidates = await this.runSectionSearch(
-          { ...ps, inferred_type },
-          filters,
-          p.collection_slug,
-        );
-      } catch (err) {
-        console.error(`Section "${ps.title}" search failed:`, err);
-        candidates = [];
-      }
-      return {
-        id: ps.id,
-        title: ps.title,
-        description: ps.description,
-        candidates,
-        selected: previous?.selected ?? [],
-        generated_markdown: previous?.generated_markdown,
-        filters_override: previous?.filters_override,
-        inferred_type,
-      };
-    }));
+    const newSections = await Promise.all(
+      parsed.map(async (ps) => {
+        const previous = oldById.get(ps.id);
+        const filters = previous?.filters_override ?? p.state.filters;
+        const inferred_type = inferredById.get(ps.id) ?? previous?.inferred_type;
+        let candidates: FragmentCandidate[] = [];
+        try {
+          candidates = await this.runSectionSearch(
+            { ...ps, inferred_type },
+            filters,
+            p.collection_slug,
+          );
+        } catch (err) {
+          console.error(`Section "${ps.title}" search failed:`, err);
+          candidates = [];
+        }
+        return {
+          id: ps.id,
+          title: ps.title,
+          description: ps.description,
+          candidates,
+          selected: previous?.selected ?? [],
+          generated_markdown: previous?.generated_markdown,
+          filters_override: previous?.filters_override,
+          inferred_type,
+        };
+      }),
+    );
 
     return this.update(id, { sections: newSections, status: 'plan_validated' });
   }
@@ -361,11 +367,13 @@ export class PlanService {
     } else if (args.manual) {
       const fragments = this.requireFragments();
       const inferredType = section.inferred_type;
-      const type = (args.manual.type && FRAGMENT_TYPES.includes(args.manual.type as typeof FRAGMENT_TYPES[number]))
-        ? (args.manual.type as typeof FRAGMENT_TYPES[number])
-        : (inferredType && FRAGMENT_TYPES.includes(inferredType as typeof FRAGMENT_TYPES[number]))
-          ? (inferredType as typeof FRAGMENT_TYPES[number])
-          : 'introduction';
+      const type =
+        args.manual.type &&
+        FRAGMENT_TYPES.includes(args.manual.type as (typeof FRAGMENT_TYPES)[number])
+          ? (args.manual.type as (typeof FRAGMENT_TYPES)[number])
+          : inferredType && FRAGMENT_TYPES.includes(inferredType as (typeof FRAGMENT_TYPES)[number])
+            ? (inferredType as (typeof FRAGMENT_TYPES)[number])
+            : 'introduction';
       const input: CreateFragmentInput = {
         type,
         domain: args.manual.domain,
@@ -377,6 +385,10 @@ export class PlanService {
         generation: 0,
         valid_from: null,
         valid_until: null,
+        function_type: null,
+        audience: [],
+        maturity: null,
+        harvest_confidence: null,
         origin: 'manual',
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
       };
@@ -429,74 +441,83 @@ export class PlanService {
     if (!p) return null;
     const fragments = this.requireFragments();
 
-    const newSections = await Promise.all(p.state.sections.map(async (s) => {
-      const newSelected = await Promise.all(s.selected.map(async (sel) => {
-        if (!sel.propose_to_library || sel.proposed_fragment_id) return sel;
-        const original = await fragments.getById(sel.fragment_id);
+    const newSections = await Promise.all(
+      p.state.sections.map(async (s) => {
+        const newSelected = await Promise.all(
+          s.selected.map(async (sel) => {
+            if (!sel.propose_to_library || sel.proposed_fragment_id) return sel;
+            const original = await fragments.getById(sel.fragment_id);
 
-        const originalType = original?.type;
-        const type = originalType && (FRAGMENT_TYPES as readonly string[]).includes(originalType)
-          ? (originalType as CreateFragmentInput['type'])
-          : 'argument';
+            const originalType = original?.type;
+            const type =
+              originalType && (FRAGMENT_TYPES as readonly string[]).includes(originalType)
+                ? (originalType as CreateFragmentInput['type'])
+                : 'argument';
 
-        const domain: string =
-          original?.domain && original.domain.length > 0 ? original.domain : 'general';
+            const domain: string =
+              original?.domain && original.domain.length > 0 ? original.domain : 'general';
 
-        const candidateLang: string =
-          (original?.lang && original.lang.length > 0 ? original.lang : null) ??
-          p.state.filters.lang ??
-          'fr';
-        const lang: string = /^[a-z]{2}$/.test(candidateLang) ? candidateLang : 'fr';
+            const candidateLang: string =
+              (original?.lang && original.lang.length > 0 ? original.lang : null) ??
+              p.state.filters.lang ??
+              'fr';
+            const lang: string = /^[a-z]{2}$/.test(candidateLang) ? candidateLang : 'fr';
 
-        // Tags may come from the SQLite row (serialized JSON string) or the
-        // parsed frontmatter (already an array). Handle both shapes.
-        let tags: string[] = [];
-        const frontmatterTags = original?.frontmatter?.tags as unknown;
-        const rawTags: unknown = original?.tags ?? frontmatterTags;
-        if (Array.isArray(rawTags)) {
-          tags = rawTags.filter((t): t is string => typeof t === 'string');
-        } else if (typeof rawTags === 'string' && rawTags.length > 0) {
-          try {
-            const parsed = JSON.parse(rawTags);
-            if (Array.isArray(parsed)) {
-              tags = parsed.filter((t): t is string => typeof t === 'string');
+            // Tags may come from the SQLite row (serialized JSON string) or the
+            // parsed frontmatter (already an array). Handle both shapes.
+            let tags: string[] = [];
+            const frontmatterTags = original?.frontmatter?.tags as unknown;
+            const rawTags: unknown = original?.tags ?? frontmatterTags;
+            if (Array.isArray(rawTags)) {
+              tags = rawTags.filter((t): t is string => typeof t === 'string');
+            } else if (typeof rawTags === 'string' && rawTags.length > 0) {
+              try {
+                const parsed = JSON.parse(rawTags);
+                if (Array.isArray(parsed)) {
+                  tags = parsed.filter((t): t is string => typeof t === 'string');
+                }
+              } catch {
+                tags = [];
+              }
             }
-          } catch {
-            tags = [];
-          }
-        }
 
-        const input: CreateFragmentInput = {
-          type,
-          domain,
-          lang,
-          body: sel.body,
-          tags,
-          translation_of: null,
-          parent_id: null,
-          generation: 0,
-          valid_from: null,
-          valid_until: null,
-          origin: 'generated',
-          access: {
-            read: ['*'],
-            write: ['contributor', 'admin'],
-            approve: ['expert', 'admin'],
-          },
-        };
+            const input: CreateFragmentInput = {
+              type,
+              domain,
+              lang,
+              body: sel.body,
+              tags,
+              translation_of: null,
+              parent_id: null,
+              generation: 0,
+              valid_from: null,
+              valid_until: null,
+              function_type: null,
+              audience: [],
+              maturity: null,
+              harvest_confidence: null,
+              origin: 'generated',
+              access: {
+                read: ['*'],
+                write: ['contributor', 'admin'],
+                approve: ['expert', 'admin'],
+              },
+            };
 
-        const created = await fragments.create(
-          input,
-          p.owner,
-          'contributor',
-          undefined,
-          undefined,
-          p.collection_slug ?? 'common',
+            const created = await fragments.create(
+              input,
+              p.owner,
+              'contributor',
+              undefined,
+              undefined,
+              p.collection_slug ?? 'common',
+            );
+            return { ...sel, proposed_fragment_id: created.id };
+          }),
         );
-        return { ...sel, proposed_fragment_id: created.id };
-      }));
-      return { ...s, selected: newSelected };
-    }));
+        return { ...s, selected: newSelected };
+      }),
+    );
 
     return this.update(id, { sections: newSections, status: 'fragments_validated' });
   }

@@ -7,13 +7,30 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, harvestJobs, harvestCandidates, fragmentTypes, fragmentDomains, fragmentTags } from '../db/schema.js';
+import {
+  fragments,
+  harvestJobs,
+  harvestCandidates,
+  fragmentTypes,
+  fragmentDomains,
+  fragmentTags,
+  fragmentFunctions,
+  entities,
+} from '../db/schema.js';
 import type { LlmClient, CombinedBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import type { FragmentService } from './fragment-service.js';
 
 const execFileAsync = promisify(execFile);
 
+function getMetadataStatus(block: CombinedBlock): string {
+  const proposalCount =
+    (block.new_proposals?.tags?.length ?? 0) +
+    Object.values(block.new_proposals?.entities ?? {}).flat().length;
+  if (block.confidence >= 0.85 && proposalCount === 0) return 'auto-validated';
+  if (block.confidence >= 0.6 && proposalCount <= 2) return 'needs-review';
+  return 'requires-review';
+}
 
 export interface HarvestJobWithCandidates {
   id: string;
@@ -39,6 +56,9 @@ export interface HarvestCandidate {
   domain: string;
   lang: string;
   tags: string[];
+  function_type: string | null;
+  audience: string[];
+  maturity: string | null;
   confidence: number;
   origin_source: string;
   origin_page: number | null;
@@ -111,13 +131,33 @@ export class HarvesterService {
     minConfidence: number,
   ): Promise<void> {
     try {
-      const existingTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map((r) => r.slug);
-      const domainRows = await this.db.select({ slug: fragmentDomains.slug, description: fragmentDomains.description }).from(fragmentDomains);
+      const existingTypes = (
+        await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)
+      ).map((r) => r.slug);
+      const domainRows = await this.db
+        .select({ slug: fragmentDomains.slug, description: fragmentDomains.description })
+        .from(fragmentDomains);
       const existingDomains = domainRows.map((r) => r.slug);
       const domainHints: Record<string, string> = Object.fromEntries(
         domainRows.filter((r) => r.description).map((r) => [r.slug, r.description!]),
       );
-      const knownTags = (await this.db.select({ slug: fragmentTags.slug }).from(fragmentTags)).map((r) => r.slug);
+      const knownTagRows = await this.db
+        .select({ slug: fragmentTags.slug })
+        .from(fragmentTags)
+        .where(eq(fragmentTags.validated, 1));
+      const knownTags = knownTagRows.map((r) => r.slug);
+
+      // Load validated referentials for LLM prompt
+      const validFunctionRows = await this.db
+        .select({ slug: fragmentFunctions.slug })
+        .from(fragmentFunctions)
+        .where(eq(fragmentFunctions.validated, 1));
+      const validFunctions = validFunctionRows.map((r) => r.slug);
+
+      const validEntityRows = await this.db
+        .select({ type: entities.type, canonicalName: entities.canonicalName })
+        .from(entities)
+        .where(eq(entities.validated, 1));
 
       let totalCandidates = 0;
       let duplicatesCount = 0;
@@ -160,14 +200,26 @@ export class HarvesterService {
 
         // Parallel LLM calls — one segmentAndClassify per chunk
         const chunks = HarvesterService.chunkMarkdown(markdown);
-        console.log(`[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${chunks.length} chunk(s)`);
+        console.log(
+          `[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${chunks.length} chunk(s)`,
+        );
 
         const t0 = Date.now();
         const chunkResults = await Promise.all(
           chunks.map(async (chunk, ci) => {
             const tc = Date.now();
-            const result = await this.llmClient.segmentAndClassify(chunk, existingTypes, existingDomains, knownTags, domainHints);
-            console.log(`[harvest:${jobId}] chunk ${ci + 1}/${chunks.length}: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`);
+            const result = await this.llmClient.segmentAndClassify(
+              chunk,
+              existingTypes,
+              existingDomains,
+              knownTags,
+              domainHints,
+              validFunctions,
+              validEntityRows,
+            );
+            console.log(
+              `[harvest:${jobId}] chunk ${ci + 1}/${chunks.length}: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`,
+            );
             return result;
           }),
         );
@@ -213,6 +265,12 @@ export class HarvesterService {
               lang: block.lang || lang,
               tags: JSON.stringify(block.tags),
               confidence: block.confidence,
+              function_type: block.function_type ?? null,
+              audience: JSON.stringify(block.audience ?? []),
+              maturity: block.maturity ?? null,
+              entities_json: JSON.stringify(block.entities ?? {}),
+              new_proposals: JSON.stringify(block.new_proposals ?? {}),
+              metadata_status: getMetadataStatus(block),
               origin_source: filename,
               origin_page: null,
               duplicate_of: dupeChecks[j]?.id ?? null,
@@ -220,6 +278,73 @@ export class HarvesterService {
               status: 'pending',
             })),
           );
+
+          // Insert LLM NEW: proposals — tags, domains, and entities all go to admin queue
+          const now2 = new Date().toISOString();
+          for (const block of blocks) {
+            const proposals = block.new_proposals ?? {};
+
+            for (const rawTag of proposals.tags ?? []) {
+              const slug = rawTag.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
+              await this.db
+                .insert(fragmentTags)
+                .values({
+                  slug,
+                  label: slug,
+                  category: 'proposed',
+                  validated: 0,
+                  proposedBy: 'llm-auto',
+                  created_at: now2,
+                })
+                .onConflictDoNothing();
+            }
+
+            for (const rawDomain of proposals.domains ?? []) {
+              const slug = rawDomain.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
+              await this.db
+                .insert(fragmentDomains)
+                .values({
+                  slug,
+                  label: slug,
+                  description: 'LLM-proposed',
+                  validated: 0,
+                  proposedBy: 'llm-auto',
+                  created_at: now2,
+                })
+                .onConflictDoNothing();
+            }
+
+            for (const [entType, entNames] of Object.entries(proposals.entities ?? {})) {
+              for (const rawName of (entNames as string[]) ?? []) {
+                const canonical = rawName.replace(/^NEW:/i, '');
+                const normalized = canonical.toLowerCase().replace(/[\s\-.]+/g, '-');
+                const validEntityType = [
+                  'client',
+                  'product',
+                  'technology',
+                  'partner',
+                  'certification',
+                  'regulation',
+                  'metric',
+                ].includes(entType)
+                  ? entType
+                  : 'product';
+                await this.db
+                  .insert(entities)
+                  .values({
+                    type: validEntityType,
+                    name: canonical,
+                    canonicalName: canonical,
+                    normalizedName: normalized,
+                    aliases: '[]',
+                    validated: 0,
+                    proposedBy: 'llm-auto',
+                    createdAt: now2,
+                  })
+                  .onConflictDoNothing();
+              }
+            }
+          }
         }
 
         totalCandidates += blocks.length;
@@ -289,6 +414,9 @@ export class HarvesterService {
         domain: c.domain,
         lang: c.lang,
         tags: c.tags ? (JSON.parse(c.tags) as string[]) : [],
+        function_type: c.function_type ?? null,
+        audience: c.audience ? (JSON.parse(c.audience) as string[]) : [],
+        maturity: c.maturity ?? null,
         confidence: c.confidence,
         origin_source: c.origin_source,
         origin_page: c.origin_page,
@@ -320,7 +448,7 @@ export class HarvesterService {
       if (rows.length === 0) continue;
       const candidate = rows[0];
 
-      const tags = candidate.tags ? (JSON.parse(candidate.tags) as string[]) : [];
+      const tags = this._tagsFromCandidate(candidate);
 
       const result = await this.fragmentService.create(
         {
@@ -336,13 +464,20 @@ export class HarvesterService {
           valid_from: null,
           valid_until: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        },
+          function_type: candidate.function_type ?? null,
+          audience: candidate.audience ? JSON.parse(candidate.audience) : [],
+          maturity: candidate.maturity ?? null,
+          harvest_confidence: candidate.confidence,
+        } as any,
         userId,
         'expert',
       );
 
       await Promise.all([
-        this.db.update(harvestCandidates).set({ status: 'accepted', fragment_id: result.id }).where(eq(harvestCandidates.id, candidateId)),
+        this.db
+          .update(harvestCandidates)
+          .set({ status: 'accepted', fragment_id: result.id })
+          .where(eq(harvestCandidates.id, candidateId)),
         this._upsertTags(tags),
       ]);
 
@@ -360,7 +495,7 @@ export class HarvesterService {
       if (rows.length === 0) continue;
       const candidate = rows[0];
 
-      const tags = mod.tags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
+      const tags = this._tagsFromCandidate(candidate, mod.tags);
 
       const result = await this.fragmentService.create(
         {
@@ -376,13 +511,20 @@ export class HarvesterService {
           valid_from: null,
           valid_until: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        },
+          function_type: candidate.function_type ?? null,
+          audience: candidate.audience ? JSON.parse(candidate.audience) : [],
+          maturity: candidate.maturity ?? null,
+          harvest_confidence: candidate.confidence,
+        } as any,
         userId,
         'expert',
       );
 
       await Promise.all([
-        this.db.update(harvestCandidates).set({ status: 'accepted', fragment_id: result.id }).where(eq(harvestCandidates.id, mod.id)),
+        this.db
+          .update(harvestCandidates)
+          .set({ status: 'accepted', fragment_id: result.id })
+          .where(eq(harvestCandidates.id, mod.id)),
         this._upsertTags(tags),
       ]);
 
@@ -410,6 +552,19 @@ export class HarvesterService {
     }
 
     return { committed, merged, rejected };
+  }
+
+  private _tagsFromCandidate(
+    candidate: { tags: string | null; new_proposals: string | null },
+    overrideTags?: string[],
+  ): string[] {
+    const known: string[] = overrideTags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
+    const proposals = candidate.new_proposals ? (JSON.parse(candidate.new_proposals) as Record<string, unknown>) : {};
+    const proposed: string[] = ((proposals.tags as string[] | undefined) ?? []).map((t) =>
+      t.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-'),
+    );
+    const merged = [...new Set([...known, ...proposed])].filter(Boolean);
+    return merged;
   }
 
   private async _upsertTags(tags: string[]): Promise<void> {

@@ -27,5 +27,9 @@
       "msw",
       "protobufjs"
     ]
+  },
+  "dependencies": {
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-tabs": "^1.1.13"
   }
 }

@@ -36,7 +36,11 @@ interface FragmentDetailProps {
 function parseTags(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw as string[];
   if (typeof raw === 'string' && raw.length > 0) {
-    try { return JSON.parse(raw) as string[]; } catch { return []; }
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }
@@ -61,6 +65,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const [editLang, setEditLang] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editBody, setEditBody] = useState('');
+  const [editFunctionType, setEditFunctionType] = useState<string | null>(null);
+  const [editAudience, setEditAudience] = useState<string[]>([]);
+  const [editMaturity, setEditMaturity] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [initializedFor, setInitializedFor] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -71,6 +78,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
     setEditLang(f.lang ?? '');
     setEditTags(parseTags(f.tags));
     setEditBody(f.body ?? f.body_excerpt ?? '');
+    setEditFunctionType((f as any).function_type ?? null);
+    setEditAudience((f as any).audience ? JSON.parse((f as any).audience) : []);
+    setEditMaturity((f as any).maturity ?? null);
     setDirty(false);
   };
 
@@ -83,57 +93,117 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const handleSave = () => {
     if (!fragmentId) return;
     updateMutation.mutate(
-      { id: fragmentId, input: { body: editBody, domain: editDomain, type: editType, lang: editLang, tags: editTags } },
       {
-        onSuccess: () => { toast.success(t('fragments', 'updateSuccess')); close(); },
-        onError: (err) => toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
+        id: fragmentId,
+        input: {
+          body: editBody,
+          domain: editDomain,
+          type: editType,
+          lang: editLang,
+          tags: editTags,
+          function_type: editFunctionType,
+          audience: editAudience,
+          maturity: editMaturity,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          toast.success(t('fragments', 'updateSuccess'));
+          close();
+        },
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
       },
     );
   };
 
   const saveIfDirty = (then: () => void) => {
     if (!fragmentId) return;
-    if (!dirty) { then(); return; }
+    if (!dirty) {
+      then();
+      return;
+    }
     updateMutation.mutate(
-      { id: fragmentId, input: { body: editBody, domain: editDomain, type: editType, lang: editLang, tags: editTags } },
       {
-        onSuccess: () => { setDirty(false); then(); },
-        onError: (err) => toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
+        id: fragmentId,
+        input: {
+          body: editBody,
+          domain: editDomain,
+          type: editType,
+          lang: editLang,
+          tags: editTags,
+          function_type: editFunctionType,
+          audience: editAudience,
+          maturity: editMaturity,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          setDirty(false);
+          then();
+        },
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
       },
     );
   };
 
-  const close = () => { setDirty(false); setInitializedFor(null); setConfirmingDelete(false); onClose(); };
+  const close = () => {
+    setDirty(false);
+    setInitializedFor(null);
+    setConfirmingDelete(false);
+    onClose();
+  };
 
   const handleDelete = () => {
     if (!fragmentId) return;
     deleteMutation.mutate(fragmentId, {
-      onSuccess: () => { toast.success(t('fragments', 'deleteSuccess')); close(); },
+      onSuccess: () => {
+        toast.success(t('fragments', 'deleteSuccess'));
+        close();
+      },
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Erreur'),
     });
   };
 
-  const handleReview = () => saveIfDirty(() => {
-    if (!fragmentId) return;
-    reviewMutation.mutate(fragmentId, {
-      onSuccess: () => { toast.success(t('fragments', 'reviewSuccess')); close(); },
-      onError: () => toast.error(t('fragments', 'reviewError')),
+  const handleReview = () =>
+    saveIfDirty(() => {
+      if (!fragmentId) return;
+      reviewMutation.mutate(fragmentId, {
+        onSuccess: () => {
+          toast.success(t('fragments', 'reviewSuccess'));
+          close();
+        },
+        onError: () => toast.error(t('fragments', 'reviewError')),
+      });
     });
-  });
 
-  const handleApprove = () => saveIfDirty(() => {
-    if (!fragmentId) return;
-    approveMutation.mutate(fragmentId, {
-      onSuccess: () => { toast.success(t('fragments', 'approveSuccess')); close(); },
-      onError: () => toast.error(t('fragments', 'approveError')),
+  const handleApprove = () =>
+    saveIfDirty(() => {
+      if (!fragmentId) return;
+      approveMutation.mutate(fragmentId, {
+        onSuccess: () => {
+          toast.success(t('fragments', 'approveSuccess'));
+          close();
+        },
+        onError: () => toast.error(t('fragments', 'approveError')),
+      });
     });
-  });
 
   const hasAction = fragment && (fragment.quality === 'draft' || fragment.quality === 'reviewed');
   const showFooter = dirty || !!hasAction || (!!fragment && canDelete(currentUser));
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) { setDirty(false); setInitializedFor(null); onClose(); } }}>
+    <Sheet
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setDirty(false);
+          setInitializedFor(null);
+          onClose();
+        }
+      }}
+    >
       <SheetContent side="right" className="w-[500px] sm:max-w-lg flex flex-col p-0">
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
           {isLoading ? (
@@ -146,20 +216,43 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
             <>
               <SheetHeader>
                 <div className="flex items-center justify-between pr-8 gap-2">
-                  <SheetTitle className="text-base truncate">{fragment.title || t('common', 'noTitle')}</SheetTitle>
+                  <SheetTitle className="text-base truncate">
+                    {fragment.title || t('common', 'noTitle')}
+                  </SheetTitle>
                   <QualityBadge quality={fragment.quality} />
                 </div>
                 <SheetDescription asChild>
                   <div className="flex items-center gap-1 flex-wrap mt-1">
-                    <Badge variant="outline" className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">{fragment.type}</Badge>
-                    <Badge variant="outline" className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">{fragment.domain}</Badge>
-                    <Badge variant="outline" className="text-xs">{fragment.lang}</Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                    >
+                      {fragment.type}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+                    >
+                      {fragment.domain}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {fragment.lang}
+                    </Badge>
                   </div>
                 </SheetDescription>
               </SheetHeader>
 
               <FragmentMetaEditor
-                edits={{ type: editType, domain: editDomain, lang: editLang, tags: editTags, body: editBody }}
+                edits={{
+                  type: editType,
+                  domain: editDomain,
+                  lang: editLang,
+                  tags: editTags,
+                  body: editBody,
+                  function_type: editFunctionType,
+                  audience: editAudience,
+                  maturity: editMaturity,
+                }}
                 types={types}
                 domains={domains}
                 onChange={(m: MetaEdits) => {
@@ -168,6 +261,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   setEditLang(m.lang);
                   setEditTags(m.tags);
                   setEditBody(m.body);
+                  setEditFunctionType(m.function_type ?? null);
+                  setEditAudience(m.audience ?? []);
+                  setEditMaturity(m.maturity ?? null);
                   setDirty(true);
                 }}
               />
@@ -178,15 +274,25 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                 <table className="text-sm w-full">
                   <tbody>
-                    {([
-                      [t('common', 'author'), fragment.author],
-                      [t('common', 'createdAt'), new Date(fragment.created_at).toLocaleDateString('fr-FR')],
-                      [t('common', 'updatedAt'), new Date(fragment.updated_at).toLocaleDateString('fr-FR')],
-                      [t('common', 'uses'), String(fragment.uses)],
-                      [t('common', 'file'), fragment.file_path],
-                    ] as const).map(([label, value]) => (
+                    {(
+                      [
+                        [t('common', 'author'), fragment.author],
+                        [
+                          t('common', 'createdAt'),
+                          new Date(fragment.created_at).toLocaleDateString('fr-FR'),
+                        ],
+                        [
+                          t('common', 'updatedAt'),
+                          new Date(fragment.updated_at).toLocaleDateString('fr-FR'),
+                        ],
+                        [t('common', 'uses'), String(fragment.uses)],
+                        [t('common', 'file'), fragment.file_path],
+                      ] as const
+                    ).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
-                        <td className="py-1.5 pr-4 text-muted-foreground font-medium whitespace-nowrap">{label}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground font-medium whitespace-nowrap">
+                          {label}
+                        </td>
                         <td className="py-1.5 break-all">{value}</td>
                       </tr>
                     ))}
@@ -202,7 +308,9 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     <ul className="space-y-2">
                       {history.map((entry) => (
                         <li key={entry.commit} className="text-sm">
-                          <span className="text-muted-foreground">{new Date(entry.date).toLocaleDateString('fr-FR')}</span>
+                          <span className="text-muted-foreground">
+                            {new Date(entry.date).toLocaleDateString('fr-FR')}
+                          </span>
                           <span className="mx-1.5">&mdash;</span>
                           <span>{entry.message}</span>
                         </li>
@@ -220,18 +328,30 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
         {showFooter && (
           <div className="border-t p-4 flex flex-col gap-2">
             {dirty && (
-              <Button size="sm" variant="outline" className="w-full" onClick={handleSave} disabled={updateMutation.isPending}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
                 <Save className="h-3.5 w-3.5 mr-1" />
                 {updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
               </Button>
             )}
             {fragment?.quality === 'draft' && (
               <Button className="w-full" onClick={handleReview} disabled={reviewMutation.isPending}>
-                {reviewMutation.isPending ? t('common', 'inProgress') : t('fragments', 'markReviewed')}
+                {reviewMutation.isPending
+                  ? t('common', 'inProgress')
+                  : t('fragments', 'markReviewed')}
               </Button>
             )}
             {fragment?.quality === 'reviewed' && (
-              <Button className="w-full" onClick={handleApprove} disabled={approveMutation.isPending}>
+              <Button
+                className="w-full"
+                onClick={handleApprove}
+                disabled={approveMutation.isPending}
+              >
                 {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
               </Button>
             )}
@@ -239,15 +359,31 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
               <div className="flex gap-2 pt-1 border-t mt-1">
                 {confirmingDelete ? (
                   <>
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmingDelete(false)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setConfirmingDelete(false)}
+                    >
                       {t('common', 'cancel')}
                     </Button>
-                    <Button variant="destructive" size="sm" className="flex-1" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleDelete}
+                      disabled={deleteMutation.isPending}
+                    >
                       {t('fragments', 'confirmDelete')}
                     </Button>
                   </>
                 ) : (
-                  <Button variant="outline" size="sm" className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setConfirmingDelete(true)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmingDelete(true)}
+                  >
                     <Trash2 className="h-3.5 w-3.5 mr-1" />
                     {t('fragments', 'delete')}
                   </Button>
