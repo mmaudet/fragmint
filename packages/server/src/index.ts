@@ -55,6 +55,9 @@ import { collectionRoutes } from './routes/collection-routes.js';
 import { jobRoutes } from './routes/job-routes.js';
 import { taxonomyRoutes } from './routes/taxonomy-routes.js';
 import { adminMetadataRoutes } from './routes/admin-metadata-routes.js';
+import { adminMetadataMutationRoutes } from './routes/admin-metadata-mutation-routes.js';
+import { adminMetadataLookupRoutes } from './routes/admin-metadata-lookup-routes.js';
+import { adminSupersedureRoutes } from './routes/admin-supersedure-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -295,6 +298,8 @@ export async function createServer(options?: {
     timeout: config.llm_timeout,
     apiKey: config.llm_api_key,
   });
+  fragmentService.llmClient = llmClient;
+
   const harvesterService = new HarvesterService(
     db,
     llmClient,
@@ -335,6 +340,9 @@ export async function createServer(options?: {
 
   taxonomyRoutes(app, db, authenticate);
   adminMetadataRoutes(app, db, authenticate);
+  adminMetadataMutationRoutes(app, db, authenticate);
+  adminMetadataLookupRoutes(app, db, authenticate);
+  adminSupersedureRoutes(app, db, authenticate);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);

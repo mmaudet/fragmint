@@ -14,10 +14,17 @@ import InventoryPage from '@/pages/inventory';
 import ComposePage from '@/pages/compose';
 import ValidationPage from '@/pages/validation';
 import HarvestPage from '@/pages/harvest';
+import HarvestDebriefPage from '@/pages/harvest-debrief';
 import PlanGenerationPage from '@/pages/plan-generation';
 import HomePage from '@/pages/home';
+import AdminHarvestPage from '@/pages/admin/harvest';
+import AdminHarvestJobPage from '@/pages/admin/harvest-job';
 import AdminMetadataPage from '@/pages/admin/metadata';
+import AdminSupersedurePage from '@/pages/admin/supersedure';
+import AdminCollectionsPage from '@/pages/admin/collections';
+import AdminUsersPage from '@/pages/admin/users';
 import { AdminPlaceholderPage } from '@/pages/admin/placeholder';
+import { AdminHomePage } from '@/pages/admin/home';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +56,7 @@ export default function App() {
                     <Route path="/compose" element={<ComposePage />} />
                     <Route path="/validation" element={<ValidationPage />} />
                     <Route path="/harvest" element={<HarvestPage />} />
+                    <Route path="/harvest/:jobId/debrief" element={<HarvestDebriefPage />} />
                     <Route path="/plan-generation" element={<PlanGenerationPage />} />
                   </Route>
                   <Route
@@ -59,13 +67,15 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   >
-                    <Route index element={<Navigate to="/admin/metadata" replace />} />
+                    <Route index element={<AdminHomePage />} />
+                    <Route path="harvest" element={<AdminHarvestPage />} />
+                    <Route path="harvest/jobs/:jobId" element={<AdminHarvestJobPage />} />
                     <Route path="metadata" element={<AdminMetadataPage />} />
                     <Route path="relations" element={<AdminPlaceholderPage title="Relations" description="Fragment relationship graph — coming soon" />} />
-                    <Route path="supersedure" element={<AdminPlaceholderPage title="Supersedure" description="Manage fragment supersedure chains — coming soon" />} />
+                    <Route path="supersedure" element={<AdminSupersedurePage />} />
                     <Route path="contradictions" element={<AdminPlaceholderPage title="Contradictions" description="Detected contradictions between fragments — coming soon" />} />
-                    <Route path="users" element={<AdminPlaceholderPage title="Users" description="User and token management — coming soon" />} />
-                    <Route path="collections" element={<AdminPlaceholderPage title="Collections" description="Collection management — coming soon" />} />
+                    <Route path="users" element={<AdminUsersPage />} />
+                    <Route path="collections" element={<AdminCollectionsPage />} />
                   </Route>
                 </Routes>
               </BrowserRouter>

@@ -15,9 +15,12 @@ import {
 import { AuditService } from './audit-service.js';
 import { hasRole } from '../auth/index.js';
 import { SearchService, type SearchFilters } from '../search/index.js';
+import type { LlmClient } from './llm-client.js';
+import { detectAndPropose } from './supersedure-detector.js';
 
 export class FragmentService {
   private git: GitRepository;
+  llmClient?: LlmClient;
 
   constructor(
     private db: FragmintDb,
@@ -395,6 +398,10 @@ export class FragmentService {
       audience: updatedFrontmatter.audience ?? [],
       maturity: updatedFrontmatter.maturity ?? null,
     });
+
+    if (input.quality === 'reviewed' && this.llmClient) {
+      detectAndPropose(id, this.db, this.llmClient).catch(() => {});
+    }
 
     return { id, commit_hash: commitHash };
   }
