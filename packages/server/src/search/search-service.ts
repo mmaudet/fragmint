@@ -15,6 +15,9 @@ export interface FragmentMetadata {
   access_read: string[];
   created_at: string;
   updated_at: string;
+  function_type?: string | null;
+  audience?: string[];
+  maturity?: string | null;
 }
 
 export interface SearchFilters {
@@ -142,6 +145,9 @@ export class SearchService {
             tags: metadata.tags,
             access_read: metadata.access_read,
             community_id: 0,
+            function_type: metadata.function_type ?? '',
+            audience: metadata.audience ?? [],
+            maturity: metadata.maturity ?? '',
           },
         ],
         partitionName,
@@ -179,6 +185,9 @@ export class SearchService {
         tags: item.metadata.tags,
         access_read: item.metadata.access_read,
         community_id: 0,
+        function_type: item.metadata.function_type ?? '',
+        audience: item.metadata.audience ?? [],
+        maturity: item.metadata.maturity ?? '',
       }));
 
       // Batch upsert in chunks of 100

@@ -161,6 +161,9 @@ export class FragmentService {
       access_read: input.access.read,
       created_at: now,
       updated_at: now,
+      function_type: (input as any).function_type ?? null,
+      audience: (input as any).audience ?? [],
+      maturity: (input as any).maturity ?? null,
     });
 
     return { id, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
@@ -374,6 +377,9 @@ export class FragmentService {
       access_read: updatedFrontmatter.access.read,
       created_at: updatedFrontmatter.created_at,
       updated_at: updatedFrontmatter.updated_at,
+      function_type: (updatedFrontmatter as any).function_type ?? null,
+      audience: (updatedFrontmatter as any).audience ?? [],
+      maturity: (updatedFrontmatter as any).maturity ?? null,
     });
 
     return { id, commit_hash: commitHash };
