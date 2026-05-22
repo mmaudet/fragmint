@@ -34,9 +34,6 @@ export default function FragmentsPage() {
   const [domain, setDomain] = useState('');
   const [lang, setLang] = useState('');
   const [quality, setQuality] = useState('');
-  const [functionType, setFunctionType] = useState('');
-  const [audience, setAudience] = useState('');
-  const [maturity, setMaturity] = useState('');
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(24);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,9 +51,6 @@ export default function FragmentsPage() {
     ...(domain && { domain }),
     ...(lang && { lang }),
     ...(quality && { quality }),
-    ...(functionType && { function_type: functionType }),
-    ...(audience && { audience }),
-    ...(maturity && { maturity }),
     limit: pageSize,
     offset,
   };
@@ -90,9 +84,6 @@ export default function FragmentsPage() {
       if (domain) params.set('domain', domain);
       if (lang) params.set('lang', lang);
       if (quality) params.set('quality', quality);
-      if (functionType) params.set('function_type', functionType);
-      if (audience) params.set('audience', audience);
-      if (maturity) params.set('maturity', maturity);
       params.set('limit', '99999');
       const { data: all } = await apiRequestFull<Fragment[]>('GET', collectionApiUrl(activeCollection, `/fragments?${params}`));
       setSelectedIds(new Set(all.map((f) => f.id)));
@@ -156,29 +147,6 @@ export default function FragmentsPage() {
             items: fragmentTypes.map((ft) => ({ value: ft.slug, label: ft.label })) },
           { value: domain, set: setDomain, allLabel: t('fragments', 'allDomains'), width: 'w-48',
             items: domainsData.map((d) => ({ value: d.slug, label: d.label ?? d.slug })) },
-          { value: functionType, set: setFunctionType, allLabel: t('fragments', 'allFunctions'), width: 'w-44',
-            items: [
-              { value: 'technical', label: t('fragments', 'functionTechnical') },
-              { value: 'commercial', label: t('fragments', 'functionCommercial') },
-              { value: 'legal', label: t('fragments', 'functionLegal') },
-              { value: 'operational', label: t('fragments', 'functionOperational') },
-              { value: 'strategic', label: t('fragments', 'functionStrategic') },
-              { value: 'reference', label: t('fragments', 'functionReference') },
-            ] },
-          { value: audience, set: setAudience, allLabel: t('fragments', 'allAudiences'), width: 'w-40',
-            items: [
-              { value: 'technical', label: t('fragments', 'audienceTechnical') },
-              { value: 'decision-maker', label: t('fragments', 'audienceDecisionMaker') },
-              { value: 'user', label: t('fragments', 'audienceUser') },
-              { value: 'legal', label: t('fragments', 'audienceLegal') },
-            ] },
-          { value: maturity, set: setMaturity, allLabel: t('fragments', 'allMaturities'), width: 'w-40',
-            items: [
-              { value: 'production', label: t('fragments', 'maturityProduction') },
-              { value: 'beta', label: t('fragments', 'maturityBeta') },
-              { value: 'roadmap', label: t('fragments', 'maturityRoadmap') },
-              { value: 'archive', label: t('fragments', 'maturityArchive') },
-            ] },
           { value: lang, set: setLang, allLabel: t('fragments', 'allLanguages'), width: 'w-36',
             items: LANG_VALUES.map((v) => ({ value: v, label: t('fragments', v === 'fr' ? 'langFr' : 'langEn') })) },
           { value: quality, set: setQuality, allLabel: t('fragments', 'allQualities'), width: 'w-40',

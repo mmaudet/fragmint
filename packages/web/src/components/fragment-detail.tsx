@@ -65,9 +65,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const [editLang, setEditLang] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editBody, setEditBody] = useState('');
-  const [editFunctionType, setEditFunctionType] = useState<string | null>(null);
-  const [editAudience, setEditAudience] = useState<string[]>([]);
-  const [editMaturity, setEditMaturity] = useState<string | null>(null);
+
   const [dirty, setDirty] = useState(false);
   const [initializedFor, setInitializedFor] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -78,9 +76,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
     setEditLang(f.lang ?? '');
     setEditTags(parseTags(f.tags));
     setEditBody(f.body ?? f.body_excerpt ?? '');
-    setEditFunctionType((f as any).function_type ?? null);
-    setEditAudience((f as any).audience ? JSON.parse((f as any).audience) : []);
-    setEditMaturity((f as any).maturity ?? null);
+
     setDirty(false);
   };
 
@@ -101,10 +97,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
           type: editType,
           lang: editLang,
           tags: editTags,
-          function_type: editFunctionType,
-          audience: editAudience,
-          maturity: editMaturity,
-        } as any,
+        },
       },
       {
         onSuccess: () => {
@@ -132,10 +125,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
           type: editType,
           lang: editLang,
           tags: editTags,
-          function_type: editFunctionType,
-          audience: editAudience,
-          maturity: editMaturity,
-        } as any,
+        },
       },
       {
         onSuccess: () => {
@@ -249,9 +239,6 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   lang: editLang,
                   tags: editTags,
                   body: editBody,
-                  function_type: editFunctionType,
-                  audience: editAudience,
-                  maturity: editMaturity,
                 }}
                 types={types}
                 domains={domains}
@@ -261,9 +248,6 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   setEditLang(m.lang);
                   setEditTags(m.tags);
                   setEditBody(m.body);
-                  setEditFunctionType(m.function_type ?? null);
-                  setEditAudience(m.audience ?? []);
-                  setEditMaturity(m.maturity ?? null);
                   setDirty(true);
                 }}
               />

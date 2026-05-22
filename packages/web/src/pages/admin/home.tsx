@@ -122,27 +122,6 @@ const METADATA_GLOSSARY = [
     example: 'argument → "Open source réel, sans dual licensing"',
   },
   {
-    field: 'Fonction',
-    code: 'function_type',
-    question: 'Quelle est la fonction de ce fragment dans le document ?',
-    values: 'technical · commercial · legal · operational · strategic · reference',
-    example: 'technical → architecture, protocoles, intégrations · legal → clauses, conformité, certifications · strategic → vision, positionnement',
-  },
-  {
-    field: 'Audience',
-    code: 'audience',
-    question: 'Qui lit cette section du document ?',
-    values: 'technical · decision-maker · user · legal (multi-valeur : 1 à 3)',
-    example: 'decision-maker → résumé exécutif, ROI, vision stratégique',
-  },
-  {
-    field: 'Phase produit',
-    code: 'maturity',
-    question: 'Ce contenu est-il fiable et engageable dans un document officiel ?',
-    values: 'production (vendable, supporté) · beta (utilisable sans engagement fort) · roadmap (annoncé, pas encore livré) · archive (ne plus proposer)',
-    example: 'roadmap → "Twake AI disponible Q3 2026"',
-  },
-  {
     field: 'Tags',
     code: 'tags',
     question: 'Quels concepts transverses ce fragment illustre-t-il ?',

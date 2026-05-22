@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useI18n } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,16 +12,6 @@ import {
 import { Eye, Pencil, X } from 'lucide-react';
 
 const LANGS = ['fr', 'en', 'de', 'es', 'it', 'nl', 'pt', 'ar'];
-const FUNCTION_TYPES = [
-  'technical',
-  'commercial',
-  'legal',
-  'operational',
-  'strategic',
-  'reference',
-];
-const AUDIENCE_OPTIONS = ['technical', 'decision-maker', 'user', 'legal'];
-const MATURITY_OPTIONS = ['production', 'beta', 'roadmap', 'archive'];
 
 export interface MetaEdits {
   type: string;
@@ -30,9 +19,6 @@ export interface MetaEdits {
   lang: string;
   tags: string[];
   body: string;
-  function_type?: string | null;
-  audience?: string[];
-  maturity?: string | null;
 }
 
 interface Props {
@@ -43,7 +29,6 @@ interface Props {
 }
 
 export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
-  const { t } = useI18n();
   const [tagInput, setTagInput] = useState('');
   const [editingBody, setEditingBody] = useState(false);
 
@@ -106,65 +91,6 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
-
-      {/* Function / Maturity */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Function</label>
-          <Select
-            value={edits.function_type ?? undefined}
-            onValueChange={(v) => set({ function_type: v || null })}
-          >
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              {FUNCTION_TYPES.map((f) => (
-                <SelectItem key={f} value={f} className="text-xs">
-                  {f}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">{t('fragments', 'maturityLabel')}</label>
-          <Select value={edits.maturity ?? undefined} onValueChange={(v) => set({ maturity: v || null })}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              {MATURITY_OPTIONS.map((m) => (
-                <SelectItem key={m} value={m} className="text-xs">
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Audience */}
-      <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Audience</label>
-        <div className="flex flex-wrap gap-1">
-          {AUDIENCE_OPTIONS.map((a) => {
-            const active = (edits.audience ?? []).includes(a);
-            return (
-              <button
-                key={a}
-                onClick={() => {
-                  const current = edits.audience ?? [];
-                  set({ audience: active ? current.filter((x) => x !== a) : [...current, a] });
-                }}
-                className={`text-xs px-2 py-0.5 rounded border transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}
-              >
-                {a}
-              </button>
-            );
-          })}
         </div>
       </div>
 
