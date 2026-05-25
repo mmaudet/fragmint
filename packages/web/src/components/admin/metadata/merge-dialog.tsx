@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '@/lib/i18n';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ export function MergeDialog({ proposal, open, onOpenChange }: Props) {
   const { data: validated } = useValidatedReferenceValues(proposal.kind, proposal.entity_type);
   const merge = useMergeProposal();
   const setAlias = useSetAsAlias();
+  const { t } = useI18n();
 
   const isAliasMode =
     proposal.kind === 'entity' && proposal.flags.some((f) => f.label.startsWith('Canonical:'));
@@ -61,7 +63,7 @@ export function MergeDialog({ proposal, open, onOpenChange }: Props) {
         </DialogHeader>
         <div className="space-y-4 py-4">
           <Input
-            placeholder="Search validated values..."
+            placeholder={t('admin', 'mergeSearchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

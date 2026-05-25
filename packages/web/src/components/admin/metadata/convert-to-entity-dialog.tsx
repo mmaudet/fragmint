@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useConvertToEntity } from '@/api/hooks/use-metadata-proposals';
+import { useI18n } from '@/lib/i18n';
 import type { MetadataProposal, EntityType } from '@/types/admin-metadata';
 
 const ENTITY_TYPES: EntityType[] = [
@@ -40,45 +41,46 @@ export function ConvertToEntityDialog({ proposal, open, onOpenChange }: Props) {
   const [canonicalName, setCanonicalName] = useState(proposal.name);
   const [aliases, setAliases] = useState('');
   const convert = useConvertToEntity();
+  const { t } = useI18n();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Convert tag to entity</DialogTitle>
+          <DialogTitle>{t('admin', 'convertDialogTitle')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div>
-            <Label>Entity type</Label>
+            <Label>{t('admin', 'convertDialogEntityType')}</Label>
             <Select value={entityType} onValueChange={(v) => setEntityType(v as EntityType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ENTITY_TYPES.map((t) => (
-                  <SelectItem key={t} value={t} className="capitalize">
-                    {t}
+                {ENTITY_TYPES.map((type) => (
+                  <SelectItem key={type} value={type} className="capitalize">
+                    {type}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Canonical name</Label>
+            <Label>{t('admin', 'convertDialogCanonical')}</Label>
             <Input value={canonicalName} onChange={(e) => setCanonicalName(e.target.value)} />
           </div>
           <div>
-            <Label>Aliases (comma-separated)</Label>
+            <Label>{t('admin', 'convertDialogAliases')}</Label>
             <Input
               value={aliases}
               onChange={(e) => setAliases(e.target.value)}
-              placeholder="e.g. James, Apache James"
+              placeholder={t('admin', 'convertDialogAliasesPlaceholder')}
             />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common', 'cancel')}
           </Button>
           <Button
             onClick={() =>
@@ -97,7 +99,7 @@ export function ConvertToEntityDialog({ proposal, open, onOpenChange }: Props) {
             }
             disabled={convert.isPending}
           >
-            Convert & Validate
+            {t('admin', 'convertDialogSubmit')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -10,6 +10,7 @@ import type { TrustSource } from '@/types/trust-source';
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['admin', 'metadata'] });
+  qc.invalidateQueries({ queryKey: ['referential'] });
   qc.invalidateQueries({ queryKey: ['fragments'] });
 }
 
@@ -21,6 +22,7 @@ export function useMetadataProposals(
     limit?: number;
     offset?: number;
     trust_source?: TrustSource;
+    sort?: 'date' | 'usage' | 'name';
   } = {},
 ) {
   const qs = new URLSearchParams(
@@ -113,6 +115,15 @@ export function useReclassifyEntityType() {
     mutationFn: (p: { id: number; new_type: EntityType }) =>
       apiRequest('POST', `/v1/admin/metadata/proposals/${p.id}/reclassify-entity-type`, p),
     onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useMetadataPendingCount() {
+  return useQuery<{ tags: number; entities: number; domains: number; total: number }>({
+    queryKey: ['admin', 'metadata', 'pending-count'],
+    queryFn: () => apiRequest('GET', '/v1/admin/metadata/pending-count'),
+    staleTime: 1000 * 60,
+    refetchInterval: 1000 * 60 * 5,
   });
 }
 

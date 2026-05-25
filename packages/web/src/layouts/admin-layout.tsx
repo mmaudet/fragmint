@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useSupersedureStats } from '@/api/hooks/use-supersedure-proposals';
+import { useMetadataPendingCount } from '@/api/hooks/use-metadata-proposals';
 
 const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
 
@@ -43,6 +44,7 @@ export default function AdminLayout() {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useI18n();
   const { data: supersedureStats } = useSupersedureStats();
+  const { data: metadataPending } = useMetadataPendingCount();
   if ((ROLE_LEVEL[user?.role ?? 'reader'] ?? 0) < ROLE_LEVEL['admin']) {
     return <Navigate to="/home" replace />;
   }
@@ -80,6 +82,13 @@ export default function AdminLayout() {
                 supersedureStats.pending > 0 && (
                   <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
                     {supersedureStats.pending}
+                  </span>
+                )}
+              {to === '/admin/metadata' &&
+                metadataPending &&
+                metadataPending.total > 0 && (
+                  <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                    {metadataPending.total}
                   </span>
                 )}
             </NavLink>

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useRenameProposal } from '@/api/hooks/use-metadata-proposals';
+import { useI18n } from '@/lib/i18n';
 import type { MetadataProposal } from '@/types/admin-metadata';
 
 interface Props {
@@ -21,31 +22,32 @@ interface Props {
 export function RenameDialog({ proposal, open, onOpenChange }: Props) {
   const [newName, setNewName] = useState(proposal.name);
   const rename = useRenameProposal();
+  const { t } = useI18n();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rename {proposal.kind}</DialogTitle>
+          <DialogTitle>{t('admin', 'renameDialogTitle')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div>
-            <Label>Current name</Label>
+            <Label>{t('admin', 'renameDialogCurrentLabel')}</Label>
             <Input value={proposal.name} disabled />
           </div>
           <div>
-            <Label>New name</Label>
+            <Label>{t('admin', 'renameDialogNewLabel')}</Label>
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="kebab-case-name"
             />
-            <p className="text-xs text-muted-foreground mt-1">Use kebab-case.</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('admin', 'renameDialogHint')}</p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common', 'cancel')}
           </Button>
           <Button
             onClick={() =>
@@ -56,7 +58,7 @@ export function RenameDialog({ proposal, open, onOpenChange }: Props) {
             }
             disabled={rename.isPending || newName === proposal.name}
           >
-            Save & Approve
+            {t('admin', 'renameDialogSave')}
           </Button>
         </DialogFooter>
       </DialogContent>

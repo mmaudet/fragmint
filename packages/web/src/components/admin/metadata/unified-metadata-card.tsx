@@ -1,0 +1,208 @@
+import { useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
+import { Check, X, Edit, Combine, ArrowRight, AlertTriangle, Info, Archive, RotateCcw } from 'lucide-react';
+import { useApproveProposal, useRejectProposal } from '@/api/hooks/use-metadata-proposals';
+import { useI18n } from '@/lib/i18n';
+import { apiRequest } from '@/api/client';
+import { RenameDialog } from './rename-dialog';
+import { MergeDialog } from './merge-dialog';
+import { ConvertToEntityDialog } from './convert-to-entity-dialog';
+import { ReferentialItemSheet, type SheetInitialItem } from '@/components/admin/referential-item-sheet';
+import type { UnifiedMetadataItem, ProposalKind } from '@/types/admin-metadata';
+import type { TrustSource } from '@/types/trust-source';
+
+interface Props {
+  item: UnifiedMetadataItem;
+  kind: ProposalKind;
+  selected?: boolean;
+  onToggle?: () => void;
+  onRefresh: () => void;
+}
+
+const TRUST_CLASSES: Record<TrustSource, string> = {
+  'human-direct': 'bg-green-100 text-green-800',
+  'llm-confirmed': 'bg-blue-100 text-blue-800',
+  'llm-deviation': 'bg-amber-100 text-amber-800',
+  'llm-inferred': 'bg-sky-100 text-sky-800',
+};
+
+const TRUST_LABEL_KEYS: Record<TrustSource, 'trustHuman' | 'trustLlmConfirmed' | 'trustLlmInferred' | 'trustLlmDeviation'> = {
+  'human-direct': 'trustHuman',
+  'llm-confirmed': 'trustLlmConfirmed',
+  'llm-inferred': 'trustLlmInferred',
+  'llm-deviation': 'trustLlmDeviation',
+};
+
+const TRUST_TOOLTIP_KEYS: Record<TrustSource, 'trustTooltipHuman' | 'trustTooltipConfirmed' | 'trustTooltipInferred' | 'trustTooltipDeviation'> = {
+  'human-direct': 'trustTooltipHuman',
+  'llm-confirmed': 'trustTooltipConfirmed',
+  'llm-inferred': 'trustTooltipInferred',
+  'llm-deviation': 'trustTooltipDeviation',
+};
+
+const ROLE_KEYS: Record<string, 'roleAdmin' | 'roleContributor' | 'roleExpert' | 'roleReader' | 'roleManager'> = {
+  admin: 'roleAdmin',
+  contributor: 'roleContributor',
+  expert: 'roleExpert',
+  reader: 'roleReader',
+  manager: 'roleManager',
+};
+
+const FLAG_LABEL_KEYS: Record<string, 'flagLowUsage' | 'flagPossiblyEntity'> = {
+  'Low usage': 'flagLowUsage',
+  'Possibly entity': 'flagPossiblyEntity',
+};
+
+export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh }: Props) {
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const approve = useApproveProposal();
+  const reject = useRejectProposal();
+  const { t } = useI18n();
+
+  const isPending = item.status === 'pending';
+  const isHidden = item.status === 'archived' || item.status === 'rejected';
+
+  const handleRestore = async () => {
+    await apiRequest('POST', `/v1/admin/referential/${kind}/${item.id}/restore`);
+    onRefresh();
+  };
+  const handleArchive = async () => {
+    await apiRequest('POST', `/v1/admin/referential/${kind}/${item.id}/archive`);
+    onRefresh();
+  };
+
+  const proposalForDialogs = {
+    id: item.id,
+    kind,
+    name: item.label,
+    label: item.label,
+    entity_type: item.category as any,
+    usage_count: item.usageCount,
+    validated: !isPending,
+    proposed_by: item.proposedBy ?? '',
+    created_at: item.createdAt ?? '',
+    flags: item.flags,
+    trust_source: item.trustSource as TrustSource,
+  };
+
+  return (
+    <Card className={`p-4 cursor-pointer hover:bg-accent/30 transition-colors ${isHidden ? 'opacity-60' : ''}`} onClick={() => setSheetOpen(true)}>
+      <div className="flex gap-3">
+        {isPending && onToggle !== undefined && (
+          <div className="mt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onToggle}
+              className="h-5 w-5 border-2 border-muted-foreground data-[state=checked]:border-primary"
+            />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{item.label}</code>
+            {item.usageCount > 0 && (
+              <Badge variant="secondary">
+                {item.category && <span className="mr-1">{item.category} ·</span>}
+                {item.usageCount} {item.usageCount === 1 ? 'fragment' : 'fragments'}
+              </Badge>
+            )}
+            {item.trustSource && (
+              <Tooltip>
+                <span className={`text-xs px-2 py-0.5 rounded cursor-help ${TRUST_CLASSES[item.trustSource as TrustSource] ?? 'bg-muted text-muted-foreground'}`}>
+                  {TRUST_LABEL_KEYS[item.trustSource as TrustSource] ? t('admin', TRUST_LABEL_KEYS[item.trustSource as TrustSource]) : item.trustSource}
+                </span>
+                {TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource] && (
+                  <TooltipContent side="top" className="max-w-xs">
+                    {t('admin', TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource])}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
+            {item.flags.map((flag, i) => (
+              <Badge key={i} variant={flag.type === 'warning' ? 'destructive' : 'info'} className="text-xs">
+                {flag.type === 'warning' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <Info className="h-3 w-3 mr-1" />}
+                {FLAG_LABEL_KEYS[flag.label] ? t('admin', FLAG_LABEL_KEYS[flag.label]) : flag.label}
+              </Badge>
+            ))}
+            {item.status === 'archived' && (
+              <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">{t('admin', 'statusArchived')}</Badge>
+            )}
+            {item.status === 'rejected' && (
+              <Badge variant="destructive" className="text-xs">{t('admin', 'statusRejected')}</Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            {item.proposedBy === 'llm-auto'
+              ? t('admin', 'llmAutoLabel')
+              : (item.proposedByDisplay ?? item.proposedBy)}
+            {item.proposedByRole && ` (${t('admin', ROLE_KEYS[item.proposedByRole] ?? 'roleReader')})`}
+            {item.createdAt && ` · ${new Date(item.createdAt).toLocaleDateString()}`}
+          </p>
+          {isPending && item.preview && (
+            <p className="text-xs text-muted-foreground mb-1 line-clamp-2">
+              <span className="font-medium not-italic">{t('admin', 'previewExampleLabel')}</span>{' '}
+              <span className="italic">«&nbsp;{item.preview}&nbsp;»</span>
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-2 flex-wrap mt-3 ml-0" onClick={(e) => e.stopPropagation()}>
+        {isPending && (
+          <>
+            <Button size="sm" onClick={() => approve.mutate({ id: item.id, kind }, { onSuccess: onRefresh })} disabled={approve.isPending}>
+              <Check className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'approve')}
+            </Button>
+            {item.flags.some((f) => f.label === 'Possibly entity') && kind === 'tag' && (
+              <Button size="sm" variant="outline" onClick={() => setConvertOpen(true)}>
+                <ArrowRight className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'convertToEntity')}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
+              <Edit className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'rename')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
+              <Combine className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'merge')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => reject.mutate({ id: item.id, kind }, { onSuccess: onRefresh })} disabled={reject.isPending} className="text-destructive hover:text-destructive">
+              <X className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'reject')}
+            </Button>
+          </>
+        )}
+        {item.status === 'active' && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
+              <Edit className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'rename')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleArchive} className="text-amber-700 hover:text-amber-700">
+              <Archive className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'archiveItem')}
+            </Button>
+          </>
+        )}
+        {isHidden && (
+          <Button size="sm" variant="outline" onClick={handleRestore} className="text-green-700 hover:text-green-700">
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'restoreItem')}
+          </Button>
+        )}
+      </div>
+
+      {renameOpen && <RenameDialog proposal={proposalForDialogs as any} open onOpenChange={setRenameOpen} />}
+      {mergeOpen && <MergeDialog proposal={proposalForDialogs as any} open onOpenChange={setMergeOpen} />}
+      {convertOpen && <ConvertToEntityDialog proposal={proposalForDialogs as any} open onOpenChange={setConvertOpen} />}
+      <ReferentialItemSheet
+        type={kind}
+        id={item.id}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        initialItem={item as SheetInitialItem}
+      />
+    </Card>
+  );
+}

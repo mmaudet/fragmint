@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Check, X, Loader2 } from 'lucide-react';
+import { Check, X, Loader2 } from 'lucide-react';
 import { useMetadataProposals, useBulkAction } from '@/api/hooks/use-metadata-proposals';
+import { useI18n } from '@/lib/i18n';
 import { ProposalsList } from './proposals-list';
 import type { ProposalKind } from '@/types/admin-metadata';
 
 export function AdminMetadataTab() {
   const [activeKind, setActiveKind] = useState<ProposalKind>('tag');
-  const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [availableIds, setAvailableIds] = useState<Array<string | number>>([]);
+  const { t } = useI18n();
 
   const { data } = useMetadataProposals({ limit: 0 });
   const counts = data?.counts ?? { tags: 0, entities: 0, domains: 0, entities_by_type: {} as any };
@@ -30,72 +30,85 @@ export function AdminMetadataTab() {
     setSelectedIds(next);
   };
 
-  return (
-    <Tabs
-      value={activeKind}
-      onValueChange={(v: string) => {
-        setActiveKind(v as ProposalKind);
-        setSelectedIds(new Set());
-      }}
-    >
-      <TabsList>
-        <TabsTrigger value="tag">
-          Tags <span className="ml-1.5 text-xs opacity-70">({counts.tags})</span>
-        </TabsTrigger>
-        <TabsTrigger value="entity">
-          Entities <span className="ml-1.5 text-xs opacity-70">({counts.entities})</span>
-        </TabsTrigger>
-        <TabsTrigger value="domain">
-          Domains <span className="ml-1.5 text-xs opacity-70">({counts.domains})</span>
-        </TabsTrigger>
-      </TabsList>
+  const isAllSelected = availableIds.length > 0 && availableIds.every((id) => selectedIds.has(id));
 
-      <div className="flex gap-2 items-center mt-4 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search proposals..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+  const kinds: Array<{ key: ProposalKind; label: string; count: number }> = [
+    { key: 'tag', label: t('admin', 'kindTags'), count: counts.tags },
+    { key: 'entity', label: t('admin', 'kindEntities'), count: counts.entities },
+    { key: 'domain', label: t('admin', 'kindDomains'), count: counts.domains },
+  ];
+
+  return (
+    <div>
+      <div className="flex gap-1 border-b mb-4">
+        {kinds.map(({ key, label, count }) => (
+          <button
+            key={key}
+            onClick={() => { setActiveKind(key); setSelectedIds(new Set()); }}
+            className={`px-4 py-2 text-sm border-b-2 transition-colors ${
+              activeKind === key
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label} <span className="ml-1 opacity-70">({count})</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex justify-end mb-2">
         <Button
           variant="outline"
           size="sm"
-          disabled={selectedIds.size === 0 || bulkAction.isPending}
-          onClick={() => handleBulk('approve')}
+          disabled={availableIds.length === 0}
+          onClick={() =>
+            isAllSelected
+              ? setSelectedIds(new Set())
+              : setSelectedIds(new Set(availableIds))
+          }
         >
-          {bulkAction.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Check className="h-4 w-4 mr-2" />
-          )}
-          Bulk approve ({selectedIds.size})
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={selectedIds.size === 0 || bulkAction.isPending}
-          onClick={() => handleBulk('reject')}
-          className="text-destructive hover:text-destructive"
-        >
-          <X className="h-4 w-4 mr-2" />
-          Bulk reject ({selectedIds.size})
+          {isAllSelected ? t('admin', 'deselectAll') : t('admin', 'selectAll')}
         </Button>
       </div>
 
-      {(['tag', 'entity', 'domain'] as ProposalKind[]).map((k) => (
-        <TabsContent key={k} value={k}>
-          <ProposalsList
-            kind={k}
-            search={search}
-            selectedIds={selectedIds}
-            onToggle={toggleSelection}
-            countsByType={k === 'entity' ? counts.entities_by_type : undefined}
-          />
-        </TabsContent>
-      ))}
-    </Tabs>
+      {selectedIds.size > 0 && (
+        <div className="flex gap-2 items-center mb-3 px-3 py-2 bg-muted rounded-md">
+          <span className="text-sm text-muted-foreground flex-1">
+            {selectedIds.size} {t('admin', 'selectedCount')}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkAction.isPending}
+            onClick={() => handleBulk('approve')}
+          >
+            {bulkAction.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4 mr-1.5" />
+            )}
+            {t('admin', 'bulkApprove')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkAction.isPending}
+            onClick={() => handleBulk('reject')}
+            className="text-destructive hover:text-destructive"
+          >
+            <X className="h-4 w-4 mr-1.5" />
+            {t('admin', 'bulkReject')}
+          </Button>
+        </div>
+      )}
+
+      <ProposalsList
+        kind={activeKind}
+        selectedIds={selectedIds}
+        onToggle={toggleSelection}
+        onAvailableIds={setAvailableIds}
+        countsByType={activeKind === 'entity' ? counts.entities_by_type : undefined}
+      />
+    </div>
   );
 }

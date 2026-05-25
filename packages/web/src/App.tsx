@@ -26,6 +26,8 @@ import AdminCollectionsPage from '@/pages/admin/collections';
 import AdminUsersPage from '@/pages/admin/users';
 import { AdminPlaceholderPage } from '@/pages/admin/placeholder';
 import { AdminHomePage } from '@/pages/admin/home';
+import { ReferentialItemDetailPage } from '@/pages/admin/referential-item-detail';
+import { ActiveJobsProvider } from '@/contexts/active-jobs-context';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -66,6 +68,7 @@ export default function App() {
       <AuthProvider>
         <I18nProvider>
           <TooltipProvider>
+            <ActiveJobsProvider>
             <CollectionProvider>
               <BrowserRouter basename="/ui">
                 <ErrorBoundary>
@@ -105,12 +108,14 @@ export default function App() {
                     <Route path="contradictions" element={<AdminPlaceholderPage title="Contradictions" description="Detected contradictions between fragments — coming soon" />} />
                     <Route path="users" element={<AdminUsersPage />} />
                     <Route path="collections" element={<AdminCollectionsPage />} />
+                    <Route path="referential/:type/:id" element={<ReferentialItemDetailPage />} />
                   </Route>
                 </Routes>
               </ErrorBoundary>
               </BrowserRouter>
               <Toaster />
             </CollectionProvider>
+            </ActiveJobsProvider>
           </TooltipProvider>
         </I18nProvider>
       </AuthProvider>
