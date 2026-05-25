@@ -3,7 +3,7 @@ import { eq, and, or, desc, like, isNull, lte, gte, count, inArray, ne } from 'd
 import { join, relative } from 'node:path';
 import { readdirSync, unlinkSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, collections } from '../db/schema.js';
+import { fragments, collections, fragmentDomains, fragmentTags } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
 import { buildCommitMessage } from '../git/commit-message.js';
@@ -137,6 +137,7 @@ export class FragmentService {
       origin: input.origin,
       parent_id: input.parent_id ?? null,
       translation_of: input.translation_of ?? null,
+      tags: input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null,
       valid_from: input.valid_from ?? null,
       valid_until: input.valid_until ?? null,
       function_type: input.function_type ?? null,
@@ -374,6 +375,23 @@ export class FragmentService {
         maturity: updatedFrontmatter.maturity ?? null,
       })
       .where(eq(fragments.id, id));
+
+    // Propagate human-direct trust to referential for any manually edited fields
+    const now = new Date().toISOString();
+    if (input.domain) {
+      await this.db
+        .insert(fragmentDomains)
+        .values({ slug: input.domain, label: input.domain, created_at: now, validated: 1, proposedBy: userId, trustSource: 'human-direct' })
+        .onConflictDoUpdate({ target: fragmentDomains.slug, set: { trustSource: 'human-direct', validated: 1 } });
+    }
+    if (input.tags && input.tags.length > 0) {
+      for (const tag of input.tags) {
+        await this.db
+          .insert(fragmentTags)
+          .values({ slug: tag, label: tag, created_at: now, validated: 1, proposedBy: userId, trustSource: 'human-direct' })
+          .onConflictDoUpdate({ target: fragmentTags.slug, set: { trustSource: 'human-direct', validated: 1 } });
+      }
+    }
 
     await this.audit.log({
       user_id: userId,
@@ -753,6 +771,126 @@ export class FragmentService {
       }
     }
     return { done, errors };
+  }
+
+  async bulkCreateDraftFragments(
+    items: Array<{
+      type: string;
+      domain: string;
+      lang: string;
+      body: string;
+      tags: string[];
+      origin: 'manual' | 'harvested' | 'generated';
+      function_type: string | null;
+      audience: string[];
+      maturity: string | null;
+      harvest_confidence?: number;
+      collectionSlug?: string;
+    }>,
+    author: string,
+  ): Promise<Array<{ idx: number; id: string; file_path: string; commit_hash: string }>> {
+    const now = new Date().toISOString();
+    const { mkdirSync } = await import('node:fs');
+    type Group = {
+      git: GitRepository;
+      storePath: string;
+      items: Array<{ idx: number; id: string; relPath: string; item: (typeof items)[number] }>;
+    };
+    const groups = new Map<string, Group>();
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      try {
+        const storePath = await this.resolveStorePath(item.collectionSlug ?? null);
+        const id = generateId();
+        const fragmentsDir = join(storePath, 'fragments', item.domain);
+        mkdirSync(fragmentsDir, { recursive: true });
+
+        const frontmatter = {
+          id,
+          type: item.type,
+          domain: item.domain,
+          tags: item.tags,
+          lang: item.lang,
+          translation_of: null,
+          quality: 'draft' as const,
+          author,
+          reviewed_by: null,
+          approved_by: null,
+          created_at: now,
+          updated_at: now,
+          valid_from: null,
+          valid_until: null,
+          parent_id: null,
+          generation: 0,
+          uses: 0,
+          last_used: null,
+          access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
+          origin: item.origin,
+          function_type: item.function_type,
+          audience: item.audience,
+          maturity: item.maturity,
+        };
+
+        const absPath = writeFragment(fragmentsDir, frontmatter, item.body);
+        const relPath = relative(storePath, absPath);
+
+        if (!groups.has(storePath)) {
+          groups.set(storePath, { git: this.resolveGit(storePath), storePath, items: [] });
+        }
+        groups.get(storePath)!.items.push({ idx, id, relPath, item });
+      } catch (e) {
+        console.error(`[bulkCreate] item ${idx} failed to prepare:`, e);
+      }
+    }
+
+    const results: Array<{ idx: number; id: string; file_path: string; commit_hash: string }> = [];
+
+    for (const [, { git, storePath: _sp, items: groupItems }] of groups) {
+      try {
+        const filePaths = groupItems.map((i) => i.relPath);
+        const commitHash = await git.commitFiles(
+          filePaths,
+          `chore: bulk accept ${groupItems.length} harvested fragments by ${author}`,
+        );
+
+        await this.db.insert(fragments).values(
+          groupItems.map(({ id, relPath, item }) => ({
+            id,
+            type: item.type,
+            domain: item.domain,
+            lang: item.lang,
+            quality: 'draft' as const,
+            author,
+            title: deriveTitle(item.body),
+            body_excerpt: item.body.slice(0, 200),
+            created_at: now,
+            updated_at: now,
+            file_path: relPath,
+            git_hash: commitHash,
+            collection_slug: item.collectionSlug ?? 'common',
+            origin: item.origin,
+            parent_id: null,
+            translation_of: null,
+            tags: item.tags.length > 0 ? JSON.stringify(item.tags) : null,
+            valid_from: null,
+            valid_until: null,
+            function_type: item.function_type,
+            audience: item.audience ? JSON.stringify(item.audience) : null,
+            maturity: item.maturity,
+            harvest_confidence: item.harvest_confidence ?? null,
+          })),
+        );
+
+        for (const { idx, id, relPath } of groupItems) {
+          results.push({ idx, id, file_path: relPath, commit_hash: commitHash });
+        }
+      } catch (e) {
+        console.error(`[bulkCreate] commit/insert failed:`, e);
+      }
+    }
+
+    return results;
   }
 
   async filterOwnedIds(ids: string[], authorLogin: string): Promise<string[]> {

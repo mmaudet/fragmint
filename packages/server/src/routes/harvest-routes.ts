@@ -8,6 +8,16 @@ import type { FragmintDb } from '../db/connection.js';
 import { harvestCandidates, harvestJobs, fragmentDomains, fragmentTags } from '../db/schema.js';
 import { type UploadHints, UploadHintsSchema } from '../schema/trust-source.js';
 
+function worstTrust(trustSourcesJson: string | null | undefined): string {
+  const vals = Object.values(
+    trustSourcesJson ? (JSON.parse(trustSourcesJson) as Record<string, string>) : {},
+  );
+  if (vals.includes('llm-deviation')) return 'llm-deviation';
+  if (vals.includes('llm-inferred')) return 'llm-inferred';
+  if (vals.includes('llm-confirmed')) return 'llm-confirmed';
+  return 'human-direct';
+}
+
 export function harvestRoutes(
   app: FastifyInstance,
   harvesterService: HarvesterService,
@@ -230,15 +240,7 @@ export function harvestRoutes(
         const byTrustSource = { 'human-direct': 0, 'llm-confirmed': 0, 'llm-deviation': 0, 'llm-inferred': 0 };
 
         for (const row of candidateRows) {
-          const sources = row.trust_sources_json
-            ? (JSON.parse(row.trust_sources_json) as Record<string, string>)
-            : {};
-          const vals = Object.values(sources);
-          let worst = 'human-direct';
-          if (vals.includes('llm-deviation')) worst = 'llm-deviation';
-          else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
-          else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
-
+          const worst = worstTrust(row.trust_sources_json);
           byTrustSource[worst as keyof typeof byTrustSource]++;
           if (worst === 'human-direct' || worst === 'llm-confirmed') byTrust.high++;
           else if (worst === 'llm-deviation') byTrust.mixed++;
@@ -275,7 +277,7 @@ export function harvestRoutes(
       `${prefix}/admin/harvest/candidates`,
       { preHandler: adminHandlers },
       async (request) => {
-        const { job_id, trust_level, limit = 50, offset = 0 } = (request.query ?? {}) as {
+        const { job_id, trust_level, limit = 500, offset = 0 } = (request.query ?? {}) as {
           job_id?: string;
           trust_level?: 'high' | 'mixed' | 'low';
           limit?: number;
@@ -295,13 +297,7 @@ export function harvestRoutes(
 
         const filtered = trust_level
           ? rows.filter((c) => {
-              const vals = Object.values(
-                c.trust_sources_json ? (JSON.parse(c.trust_sources_json) as Record<string, string>) : {},
-              );
-              let worst = 'human-direct';
-              if (vals.includes('llm-deviation')) worst = 'llm-deviation';
-              else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
-              else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
+              const worst = worstTrust(c.trust_sources_json);
               if (trust_level === 'high') return worst === 'human-direct' || worst === 'llm-confirmed';
               if (trust_level === 'mixed') return worst === 'llm-deviation';
               return worst === 'llm-inferred';
@@ -328,28 +324,46 @@ export function harvestRoutes(
         const candidates = await db
           .select()
           .from(harvestCandidates)
-          .where(inArray(harvestCandidates.id, candidate_ids));
-
-        for (const c of candidates) {
-          const vals = Object.values(
-            c.trust_sources_json ? (JSON.parse(c.trust_sources_json) as Record<string, string>) : {},
-          );
-          let worst = 'human-direct';
-          if (vals.includes('llm-deviation')) worst = 'llm-deviation';
-          else if (vals.includes('llm-inferred')) worst = 'llm-inferred';
-          else if (vals.includes('llm-confirmed')) worst = 'llm-confirmed';
-          const isHigh = worst === 'human-direct' || worst === 'llm-confirmed';
-          if (!isHigh) {
-            return reply.status(400).send({
-              data: null,
-              meta: null,
-              error: `Candidate ${c.id} is not trust-high, refusing bulk accept`,
-            });
-          }
-        }
+          .where(and(inArray(harvestCandidates.id, candidate_ids), eq(harvestCandidates.status, 'pending')));
 
         const accepted = await harvesterService.bulkAccept(candidates, request.user.login);
         return reply.send({ data: { accepted }, meta: null, error: null });
+      },
+    );
+
+    // POST /v1/admin/harvest/candidates/bulk-reject
+    app.post(
+      `${prefix}/admin/harvest/candidates/bulk-reject`,
+      { preHandler: adminHandlers },
+      async (request, reply) => {
+        const parsed = z
+          .object({ candidate_ids: z.array(z.string()).min(1) })
+          .safeParse(request.body);
+        if (!parsed.success) {
+          return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+        }
+        const { candidate_ids } = parsed.data;
+        const result = await db
+          .update(harvestCandidates)
+          .set({ status: 'rejected' })
+          .where(and(inArray(harvestCandidates.id, candidate_ids), eq(harvestCandidates.status, 'pending')));
+        return reply.send({ data: { rejected: result.changes ?? candidate_ids.length }, meta: null, error: null });
+      },
+    );
+
+    // POST /v1/admin/harvest/candidates/reject-all — reject ALL pending, optionally scoped to a job
+    app.post(
+      `${prefix}/admin/harvest/candidates/reject-all`,
+      { preHandler: adminHandlers },
+      async (request, reply) => {
+        const { job_id } = (request.body ?? {}) as { job_id?: string };
+        const conditions = [eq(harvestCandidates.status, 'pending')];
+        if (job_id) conditions.push(eq(harvestCandidates.job_id, job_id));
+        const result = await db
+          .update(harvestCandidates)
+          .set({ status: 'rejected' })
+          .where(and(...conditions));
+        return reply.send({ data: { rejected: result.changes ?? 0 }, meta: null, error: null });
       },
     );
   }
