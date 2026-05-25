@@ -263,7 +263,6 @@ export function fragmentRoutes(
     handler: async (request, reply) => {
       const params = request.params as Record<string, string>;
       const id = params.id;
-      console.log(`[DELETE fragment] id=${id} params=${JSON.stringify(params)}`);
       const result = await fragmentService.delete(id, request.user.login, request.ip);
       return reply.send({ data: result, meta: null, error: null });
     },
