@@ -1,9 +1,10 @@
 // packages/server/src/services/harvester-validation.ts
 // Validation and bulk-accept logic for the harvester — extracted from harvester-service.ts
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   harvestCandidates,
+  harvestJobs,
   fragmentTags,
   entities,
   fragmentEntities,
@@ -21,6 +22,13 @@ export async function validate(
   let committed = 0;
   let merged = 0;
   let rejected = 0;
+
+  const jobRows = await db
+    .select({ collection_slug: harvestJobs.collection_slug })
+    .from(harvestJobs)
+    .where(eq(harvestJobs.id, jobId))
+    .limit(1);
+  const collectionSlug = jobRows[0]?.collection_slug ?? undefined;
 
   // Accepted candidates — create fragments
   for (const candidateId of validation.accepted) {
@@ -56,6 +64,9 @@ export async function validate(
       } as any,
       userId,
       'expert',
+      undefined,
+      undefined,
+      collectionSlug,
     );
 
     await Promise.all([
@@ -104,6 +115,9 @@ export async function validate(
       } as any,
       userId,
       'expert',
+      undefined,
+      undefined,
+      collectionSlug,
     );
 
     await Promise.all([
@@ -147,42 +161,44 @@ export async function bulkAccept(
   candidates: (typeof harvestCandidates.$inferSelect)[],
   userId: string,
 ): Promise<number> {
-  let count = 0;
-  for (const candidate of candidates) {
-    const tags = tagsFromCandidate(candidate);
-    const result = await fragmentService.create(
-      {
-        type: candidate.type as any,
-        domain: candidate.domain,
-        tags,
-        lang: candidate.lang,
-        body: candidate.body,
-        translation_of: null,
-        parent_id: null,
-        generation: 0,
-        origin: 'harvested',
-        valid_from: null,
-        valid_until: null,
-        access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        function_type: candidate.function_type ?? null,
-        audience: candidate.audience ? JSON.parse(candidate.audience) : [],
-        maturity: candidate.maturity ?? null,
-        harvest_confidence: candidate.confidence,
-      } as any,
-      userId,
-      'expert',
-    );
-    await Promise.all([
-      db
-        .update(harvestCandidates)
-        .set({ status: 'accepted', fragment_id: result.id })
-        .where(eq(harvestCandidates.id, candidate.id)),
-      upsertTags(db, tags),
-      linkFragmentEntities(db, result.id, candidate.entities_json),
-    ]);
-    count++;
+  const jobIds = [...new Set(candidates.map((c) => c.job_id))];
+  const jobRows = await db
+    .select({ id: harvestJobs.id, collection_slug: harvestJobs.collection_slug })
+    .from(harvestJobs)
+    .where(jobIds.length === 1 ? eq(harvestJobs.id, jobIds[0]!) : inArray(harvestJobs.id, jobIds));
+  const jobCollectionMap = new Map(jobRows.map((j) => [j.id, j.collection_slug ?? undefined]));
+
+  const items = candidates.map((candidate) => ({
+    type: candidate.type,
+    domain: candidate.domain,
+    lang: candidate.lang,
+    body: candidate.body,
+    tags: tagsFromCandidate(candidate),
+    origin: 'harvested' as const,
+    function_type: candidate.function_type ?? null,
+    audience: candidate.audience ? (JSON.parse(candidate.audience) as string[]) : [],
+    maturity: candidate.maturity ?? null,
+    harvest_confidence: candidate.confidence,
+    collectionSlug: jobCollectionMap.get(candidate.job_id),
+  }));
+
+  // Single batch: one git commit per collection vault instead of N commits
+  const created = await fragmentService.bulkCreateDraftFragments(items, userId);
+
+  // Update candidates and link entities
+  const allTags = [...new Set(items.flatMap((i) => i.tags))];
+  await upsertTags(db, allTags);
+
+  for (const { idx, id } of created) {
+    const candidate = candidates[idx];
+    await db
+      .update(harvestCandidates)
+      .set({ status: 'accepted', fragment_id: id })
+      .where(eq(harvestCandidates.id, candidate.id));
+    await linkFragmentEntities(db, id, candidate.entities_json);
   }
-  return count;
+
+  return created.length;
 }
 
 export function tagsFromCandidate(
@@ -232,6 +248,18 @@ export async function upsertTags(db: FragmintDb, tags: string[]): Promise<void> 
   const now = new Date().toISOString();
   await db
     .insert(fragmentTags)
-    .values(tags.map((slug) => ({ slug, label: slug, created_at: now })))
-    .onConflictDoNothing();
+    .values(tags.map((slug) => ({
+      slug,
+      label: slug,
+      usageCount: 1,
+      validated: 0,
+      status: 'pending' as const,
+      proposedBy: 'llm-auto',
+      trustSource: 'llm-inferred',
+      created_at: now,
+    })))
+    .onConflictDoUpdate({
+      target: fragmentTags.slug,
+      set: { usageCount: sql`usage_count + 1` },
+    });
 }

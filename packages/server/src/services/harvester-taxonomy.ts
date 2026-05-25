@@ -19,11 +19,6 @@ export const HARVESTER_DOMAINS: DomainDef[] = [
       'LinCloud / LinShare cloud suite. Use only when the text explicitly discusses LinCloud hosting or the LinShare suite.',
   },
   {
-    slug: 'linshare',
-    description:
-      'LinShare file sharing (standalone). Use only when the text is specifically about LinShare.',
-  },
-  {
     slug: 'linagora',
     description:
       'Linagora company — ONLY for content explicitly about Linagora itself: company presentation, methodology, values, history. NOT for generic SLA, technical specs, or client requirements.',
@@ -199,18 +194,3 @@ export const INITIAL_TAGS = [
   { slug: 'european-initiative', label: 'European Initiative', category: 'concept' },
 ];
 
-// Must stay in sync with FRAGMENT_TYPES in packages/server/src/schema/fragment.ts
-export const HARVESTER_TYPES = [
-  'introduction', // general presentation, context
-  'argument', // sales argument, benefit, key point
-  'pricing', // pricing, rate card, economic model
-  'clause', // contractual clause, condition, commitment
-  'faq', // frequently asked question and answer
-  'conclusion', // summary, call to action, next steps
-  'bio', // person or team presentation
-  'testimonial', // client testimonial, quote, feedback
-  'methodology', // process, step, project phase
-  'engagement', // commitment, SLA, guarantee
-  'use-case', // use case, concrete example, scenario
-  'other', // uncategorized content that fits no other type
-];

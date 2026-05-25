@@ -86,6 +86,7 @@ export async function runPipeline(
 
     let totalCandidates = 0;
     let duplicatesCount = 0;
+    let lowConfidenceCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const buffer = files[i];
@@ -170,8 +171,9 @@ export async function runPipeline(
       console.log(`[harvest:${jobId}] dupe detection: ${((Date.now() - t1) / 1000).toFixed(1)}s`);
 
       // Count stats
-      blocks.forEach((_b, j) => {
+      blocks.forEach((b, j) => {
         if (dupeChecks[j]) duplicatesCount++;
+        else if (b.confidence < 0.7) lowConfidenceCount++;
       });
 
       // Compute quality signals for all blocks
@@ -183,7 +185,8 @@ export async function runPipeline(
         );
       });
 
-      // Run LLM-as-judge on ambiguous fragments (warnings but not exact duplicates)
+      // Run LLM-as-judge on all non-duplicate fragments — provides quality verdict + metadata suggestions
+      const judgeTaxonomy = { domains: existingDomains, types: existingTypes, tags: knownTags };
       const judgeResults: (JudgeResult | null)[] = await Promise.all(
         blocks.map(async (block, j) => {
           const signals = qualitySignalsPerBlock[j];
@@ -196,7 +199,7 @@ export async function runPipeline(
             type: block.type,
             audience: block.audience,
             entities: (block.entities ?? {}) as Record<string, string[]>,
-          }, signals);
+          }, signals, judgeTaxonomy);
         }),
       );
 
@@ -335,7 +338,8 @@ export async function runPipeline(
     const stats = {
       total: totalCandidates,
       duplicates: duplicatesCount,
-      valid: totalCandidates - duplicatesCount,
+      low_confidence: lowConfidenceCount,
+      valid: totalCandidates - duplicatesCount - lowConfidenceCount,
     };
 
     await db
