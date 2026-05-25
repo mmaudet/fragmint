@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
-import type { PlanService } from '../services/plan-service.js';
+import type { PlanAssembler } from '../services/plan-assembler.js';
 import type { TemplateService } from '../services/template-service.js';
 import {
   CreatePlanSchema,
@@ -14,7 +14,7 @@ import { join } from 'node:path';
 
 export function planRoutes(
   app: FastifyInstance,
-  planService: PlanService,
+  planService: PlanAssembler,
   templateService: TemplateService,
   storePath: string,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,

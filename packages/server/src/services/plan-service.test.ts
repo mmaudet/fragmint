@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createDb } from '../db/connection.js';
-import { PlanService } from './plan-service.js';
+import { PlanAssembler } from './plan-assembler.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 
 function makeService() {
   const db = createDb(':memory:');
-  return new PlanService(db, {
+  return new PlanAssembler(db, {
     fragmentMaxChars: 4000,
     docxReferencePath: undefined,
   });
@@ -104,7 +104,7 @@ function makeServiceFull(opts: {
   fragments?: FragmentService;
 } = {}) {
   const db = createDb(':memory:');
-  return new PlanService(db, {
+  return new PlanAssembler(db, {
     fragmentMaxChars: 4000,
     docxReferencePath: undefined,
     llm: opts.llm,
