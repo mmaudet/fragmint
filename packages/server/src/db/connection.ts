@@ -166,6 +166,13 @@ export function createDb(path: string | ':memory:') {
     // Column already exists — ignore
   }
 
+  // Add collection_slug to harvest_jobs if not already present
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN collection_slug TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
   // Add valid_from / valid_until to fragments if not already present
   try {
     sqlite.exec('ALTER TABLE fragments ADD COLUMN valid_from TEXT');
@@ -317,6 +324,40 @@ export function createDb(path: string | ':memory:') {
   try {
     sqlite.exec('ALTER TABLE fragments ADD COLUMN supersedes TEXT');
   } catch (_) {}
+
+  // Migration 013 — statut cycle de vie sur les tables référentiels
+  // ALTER TABLE only runs once (fails silently if column exists)
+  // No backfill UPDATE — new items get DEFAULT 'active'; status is set explicitly on approve/reject actions
+  try { sqlite.exec("ALTER TABLE fragment_domains ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
+  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_domains_status ON fragment_domains(status)'); } catch (_) {}
+
+  try { sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
+  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_tags_status ON fragment_tags(status)'); } catch (_) {}
+
+  try { sqlite.exec("ALTER TABLE fragment_types ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
+  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_types_status ON fragment_types(status)'); } catch (_) {}
+
+  try { sqlite.exec("ALTER TABLE fragment_functions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
+  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_functions_status ON fragment_functions(status)'); } catch (_) {}
+
+  try { sqlite.exec("ALTER TABLE entities ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
+  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)'); } catch (_) {}
+
+  // Migration 014 — table historique des renommages
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS referential_renames (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      old_value TEXT NOT NULL,
+      new_value TEXT NOT NULL,
+      affected_fragments INTEGER NOT NULL DEFAULT 0,
+      renamed_by TEXT NOT NULL,
+      renamed_at TEXT NOT NULL,
+      recalculation_job_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_renames_table_old ON referential_renames(table_name, old_value);
+    CREATE INDEX IF NOT EXISTS idx_renames_renamed_at ON referential_renames(renamed_at);
+  `);
 
   // Supersedure proposals table
   sqlite.exec(`
