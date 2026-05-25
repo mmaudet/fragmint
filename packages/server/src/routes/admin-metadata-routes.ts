@@ -1,14 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq, and, like } from 'drizzle-orm';
+import { eq, and, like, inArray, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentTags,
   fragmentDomains,
   fragmentFunctions,
+  fragmentTypes,
   entities,
   fragmentEntities,
   fragments,
+  users,
 } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
 import {
@@ -35,6 +37,7 @@ export function adminMetadataRoutes(
         entity_type,
         search,
         trust_source,
+        sort = 'date',
         limit = 50,
         offset = 0,
       } = (request.query ?? {}) as {
@@ -42,6 +45,7 @@ export function adminMetadataRoutes(
         entity_type?: string;
         search?: string;
         trust_source?: string;
+        sort?: string;
         limit?: number;
         offset?: number;
       };
@@ -146,8 +150,31 @@ export function adminMetadataRoutes(
         }
       }
 
+      if (sort === 'usage') {
+        proposals.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0));
+      } else if (sort === 'name') {
+        proposals.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+      } else {
+        proposals.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+      }
+
+      const proposerNames = [...new Set(proposals.map((p) => p.proposed_by).filter((n) => n && n !== 'llm-auto'))];
+      let roleMap: Record<string, string> = {};
+      let displayMap: Record<string, string> = {};
+      if (proposerNames.length > 0) {
+        const userRows = await db.select({ login: users.login, role: users.role, display_name: users.display_name })
+          .from(users).where(inArray(users.login, proposerNames));
+        roleMap = Object.fromEntries(userRows.map((r) => [r.login, r.role]));
+        displayMap = Object.fromEntries(userRows.map((r) => [r.login, r.display_name ?? r.login]));
+      }
+      const proposalsWithRole = proposals.map((p) => ({
+        ...p,
+        proposed_by_role: p.proposed_by ? (roleMap[p.proposed_by] ?? null) : null,
+        proposed_by_display: p.proposed_by ? (displayMap[p.proposed_by] ?? p.proposed_by) : null,
+      }));
+
       const counts = await computeCounts(db);
-      return { data: { proposals, total: proposals.length, counts }, meta: null, error: null };
+      return { data: { proposals: proposalsWithRole, total: proposalsWithRole.length, counts }, meta: null, error: null };
     },
   );
 
@@ -163,13 +190,13 @@ export function adminMetadataRoutes(
       if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
       const { kind } = parsed.data;
       if (kind === 'tag')
-        await db.update(fragmentTags).set({ validated: 1 }).where(eq(fragmentTags.slug, id));
+        await db.update(fragmentTags).set({ validated: 1, status: 'active' }).where(eq(fragmentTags.slug, id));
       else if (kind === 'domain')
-        await db.update(fragmentDomains).set({ validated: 1 }).where(eq(fragmentDomains.slug, id));
+        await db.update(fragmentDomains).set({ validated: 1, status: 'active' }).where(eq(fragmentDomains.slug, id));
       else
         await db
           .update(entities)
-          .set({ validated: 1 })
+          .set({ validated: 1, status: 'active' })
           .where(eq(entities.id, Number(id)));
       return { success: true, id, kind };
     },
@@ -392,6 +419,21 @@ export function adminMetadataRoutes(
   app.get('/v1/admin/functions', { preHandler: [authenticate] }, async () => {
     const rows = await db.select().from(fragmentFunctions).orderBy(fragmentFunctions.slug);
     return { data: rows, meta: { count: rows.length }, error: null };
+  });
+
+  // GET /v1/admin/metadata/pending-count — lightweight badge counter
+  app.get('/v1/admin/metadata/pending-count', { preHandler: [authenticate, requireRole('admin')] }, async () => {
+    const [tagRows, entityRows, domainRows, typeRows] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(fragmentTags).where(eq(fragmentTags.status, 'pending')),
+      db.select({ count: sql<number>`count(*)` }).from(entities).where(eq(entities.status, 'pending')),
+      db.select({ count: sql<number>`count(*)` }).from(fragmentDomains).where(eq(fragmentDomains.status, 'pending')),
+      db.select({ count: sql<number>`count(*)` }).from(fragmentTypes).where(eq(fragmentTypes.status, 'pending')),
+    ]);
+    const tags = tagRows[0]?.count ?? 0;
+    const entitiesCount = entityRows[0]?.count ?? 0;
+    const domains = domainRows[0]?.count ?? 0;
+    const types = typeRows[0]?.count ?? 0;
+    return { data: { tags, entities: entitiesCount, domains, types, total: tags + entitiesCount + domains + types }, meta: null, error: null };
   });
 
 }

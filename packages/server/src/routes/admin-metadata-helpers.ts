@@ -27,13 +27,20 @@ function similarityRatio(a: string, b: string): number {
   return (longer.length - mat[shorter.length][longer.length]) / longer.length;
 }
 
+function truncateAtWord(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '…';
+}
+
 export async function getPreviewForTag(db: FragmintDb, slug: string): Promise<string> {
   const [row] = await db
     .select({ bodyExcerpt: fragments.body_excerpt })
     .from(fragments)
     .where(like(fragments.tags, `%"${slug}"%`))
     .limit(1);
-  return (row?.bodyExcerpt ?? '').slice(0, 150);
+  return truncateAtWord(row?.bodyExcerpt ?? '', 200);
 }
 
 export async function getPreviewForEntity(db: FragmintDb, entityId: number): Promise<string> {
@@ -43,7 +50,7 @@ export async function getPreviewForEntity(db: FragmintDb, entityId: number): Pro
     .innerJoin(fragmentEntities, eq(fragmentEntities.fragment_id, fragments.id))
     .where(eq(fragmentEntities.entity_id, entityId))
     .limit(1);
-  return (row?.bodyExcerpt ?? '').slice(0, 150);
+  return truncateAtWord(row?.bodyExcerpt ?? '', 200);
 }
 
 export async function computeFlagsForTag(
@@ -63,8 +70,10 @@ export async function computeFlagsForTag(
       .from(fragmentTags)
       .where(eq(fragmentTags.validated, 1)));
   for (const vt of validatedTags) {
-    if (similarityRatio(tag.slug, vt.slug) > 0.7 && tag.slug !== vt.slug) {
-      flags.push({ type: 'info', label: `Similar to ${vt.slug}`, merge_target: vt.slug });
+    const vtNorm = vt.slug.replace(/^NEW:/i, '');
+    if (vtNorm === tag.slug) continue;
+    if (similarityRatio(tag.slug, vtNorm) > 0.7) {
+      flags.push({ type: 'info', label: `Similar to ${vtNorm}`, merge_target: vtNorm });
       break;
     }
   }

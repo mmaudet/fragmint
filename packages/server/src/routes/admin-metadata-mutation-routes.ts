@@ -98,21 +98,21 @@ export function adminMetadataMutationRoutes(
             action === 'approve'
               ? await db
                   .update(fragmentTags)
-                  .set({ validated: 1 })
+                  .set({ validated: 1, status: 'active' })
                   .where(eq(fragmentTags.slug, String(item.id)))
               : await db.delete(fragmentTags).where(eq(fragmentTags.slug, String(item.id)));
           } else if (item.kind === 'domain') {
             action === 'approve'
               ? await db
                   .update(fragmentDomains)
-                  .set({ validated: 1 })
+                  .set({ validated: 1, status: 'active' })
                   .where(eq(fragmentDomains.slug, String(item.id)))
               : await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, String(item.id)));
           } else {
             action === 'approve'
               ? await db
                   .update(entities)
-                  .set({ validated: 1 })
+                  .set({ validated: 1, status: 'active' })
                   .where(eq(entities.id, Number(item.id)))
               : await db.delete(entities).where(eq(entities.id, Number(item.id)));
           }

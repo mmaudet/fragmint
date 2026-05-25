@@ -43,6 +43,7 @@ import {
   ComposerService,
   PlanService,
 } from './services/index.js';
+import { PlanAssembler } from './services/plan-assembler.js';
 import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
@@ -58,11 +59,15 @@ import { adminMetadataRoutes } from './routes/admin-metadata-routes.js';
 import { adminMetadataMutationRoutes } from './routes/admin-metadata-mutation-routes.js';
 import { adminMetadataLookupRoutes } from './routes/admin-metadata-lookup-routes.js';
 import { adminSupersedureRoutes } from './routes/admin-supersedure-routes.js';
+import { adminReferentialRoutes } from './routes/admin-referential-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
 import { LlmClient } from './services/llm-client.js';
 import { HarvesterService } from './services/harvester-service.js';
+import { IndexService } from './services/index-service.js';
+import { indexRoutes } from './routes/index-routes.js';
+import { referencesRoutes } from './routes/references-routes.js';
 
 export interface FragmintServer {
   app: ReturnType<typeof Fastify>;
@@ -308,7 +313,7 @@ export async function createServer(options?: {
     storePath,
   );
 
-  const planService = new PlanService(db, {
+  const planService = new PlanAssembler(db, {
     fragmentMaxChars: config.plan_fragment_max_chars,
     docxReferencePath: config.plan_docx_reference_path,
     llm: llmClient,
@@ -316,11 +321,16 @@ export async function createServer(options?: {
     fragments: fragmentService,
   });
 
+  // Index service (agentique pipeline)
+  const indexService = new IndexService(db);
+
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
-  (app as unknown as { planService: PlanService }).planService = planService;
+  (app as unknown as { planService: PlanAssembler }).planService = planService;
 
   // Routes
   authRoutes(app, userService, authenticate);
+  indexRoutes(app, indexService, authenticate);
+  referencesRoutes(app, db, authenticate);
   fragmentRoutes(app, fragmentService, authenticate, { jobService, db });
   jobRoutes(app, jobService, authenticate);
   adminRoutes(
@@ -343,6 +353,7 @@ export async function createServer(options?: {
   adminMetadataMutationRoutes(app, db, authenticate);
   adminMetadataLookupRoutes(app, db, authenticate);
   adminSupersedureRoutes(app, db, authenticate);
+  adminReferentialRoutes(app, db, authenticate, jobService);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);
