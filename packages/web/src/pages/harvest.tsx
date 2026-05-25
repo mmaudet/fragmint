@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
@@ -14,11 +14,77 @@ import type { UploadHints } from '@/types/trust-source';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText, FileSearch, Sparkles, Tags, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
+
+const PIPELINE_STEPS = [
+  { key: 'convert', icon: FileSearch, labelKey: 'stepConvert' as const },
+  { key: 'segment', icon: Sparkles, labelKey: 'stepSegment' as const },
+  { key: 'classify', icon: Tags, labelKey: 'stepClassify' as const },
+  { key: 'judge', icon: ShieldCheck, labelKey: 'stepJudge' as const },
+];
+
+function HarvestProcessingView({ files, t }: { files: string[]; t: ReturnType<typeof useI18n>['t'] }) {
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const durations = [4000, 20000, 15000, 8000];
+    let step = 0;
+    const advance = () => {
+      step = Math.min(step + 1, PIPELINE_STEPS.length - 1);
+      setActiveStep(step);
+      if (step < PIPELINE_STEPS.length - 1) {
+        setTimeout(advance, durations[step]);
+      }
+    };
+    const timer = setTimeout(advance, durations[0]);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="p-6 space-y-8">
+      <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
+
+      <div className="flex flex-col gap-2 max-w-sm">
+        {PIPELINE_STEPS.map((step, i) => {
+          const Icon = step.icon;
+          const isDone = i < activeStep;
+          const isActive = i === activeStep;
+          return (
+            <div key={step.key} className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-500',
+              isDone && 'text-muted-foreground',
+              isActive && 'bg-muted font-medium text-foreground',
+              !isDone && !isActive && 'text-muted-foreground/40',
+            )}>
+              {isDone ? (
+                <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+              ) : isActive ? (
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              ) : (
+                <Icon className="h-4 w-4 shrink-0" />
+              )}
+              <span>{t('harvest', step.labelKey)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <div key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1">
+              <FileText className="h-3 w-3" />
+              {f}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function HarvestPage() {
   const { t } = useI18n();
@@ -229,20 +295,7 @@ export default function HarvestPage() {
   // ─── Phase 2: Candidate Review ───
 
   if (jobLoading || job?.status === 'processing') {
-    return (
-      <div className="p-6 space-y-6">
-        <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>{t('harvest', 'analyzing')}</span>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    );
+    return <HarvestProcessingView files={job?.files ?? files.map((f) => f.name)} t={t as ReturnType<typeof useI18n>['t']} />;
   }
 
   if (job?.status === 'error') {
@@ -272,11 +325,10 @@ export default function HarvestPage() {
       </div>
 
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           {[
             { label: t('harvest', 'total'), value: stats.total, color: '' },
             { label: t('harvest', 'duplicates'), value: stats.duplicates, color: 'text-amber-600' },
-            { label: t('harvest', 'lowConfidence'), value: stats.low_confidence, color: 'text-red-600' },
             { label: t('harvest', 'valid'), value: stats.valid, color: 'text-green-600' },
           ].map(({ label, value, color }) => (
             <Card key={label}>

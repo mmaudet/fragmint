@@ -2,10 +2,11 @@ import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-e
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info, Wand2, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import type { HarvestCandidate } from '@/api/types';
+import type { HarvestCandidate, SuggestedMetadata } from '@/api/types';
 
 export interface CandidateEdits {
   type?: string;
@@ -39,10 +40,26 @@ export function CandidateDetailSheet({
   onClose,
 }: Props) {
   const { t } = useI18n();
+  const appliedSuggestionsRef = useRef<SuggestedMetadata | null>(null);
+
+  // Auto-apply LLM suggestions when a new candidate opens
+  useEffect(() => {
+    if (!candidate?.judge_result?.suggested_metadata) return;
+    const s = candidate.judge_result.suggested_metadata;
+    appliedSuggestionsRef.current = s;
+    onEditsChange({
+      ...edits,
+      ...(s.type && { type: s.type }),
+      ...(s.domain && { domain: s.domain }),
+      ...(s.tags && { tags: s.tags }),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidate?.id]);
 
   if (!candidate) return null;
 
   const current = { ...candidate, ...edits };
+  const appliedSuggestions = appliedSuggestionsRef.current;
 
   const confidenceColor =
     candidate.confidence >= 0.8
@@ -95,7 +112,7 @@ export function CandidateDetailSheet({
 
         {candidate.quality_signals && candidate.quality_signals.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Signaux qualitatifs</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('harvest', 'qualitySignals')}</p>
             {candidate.quality_signals.map((s) => (
               <div key={s.type} className={cn(
                 'flex items-start gap-2 text-xs rounded px-2 py-1',
@@ -122,7 +139,7 @@ export function CandidateDetailSheet({
         {candidate.judge_result && (
           <div className="space-y-2 border-t pt-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Évaluation LLM-as-judge
+              {t('harvest', 'llmJudge')}
             </p>
             <div className={cn(
               'text-xs rounded px-3 py-2 font-medium',
@@ -147,6 +164,52 @@ export function CandidateDetailSheet({
                 </div>
               );
             })}
+
+            {appliedSuggestions && (
+              <div className="mt-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200 flex items-center gap-1">
+                    <Wand2 className="h-3 w-3" />
+                    {t('harvest', 'llmApplied')}
+                  </p>
+                  <button
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                    onClick={() => {
+                      appliedSuggestionsRef.current = null;
+                      onEditsChange({
+                        ...edits,
+                        type: candidate.type,
+                        domain: candidate.domain,
+                        tags: candidate.tags,
+                      });
+                    }}
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" />
+                    {t('harvest', 'revertSuggestions')}
+                  </button>
+                </div>
+                <p className="text-xs text-blue-700 dark:text-blue-300 italic">
+                  {appliedSuggestions.reason}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {appliedSuggestions.type && (
+                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                      {t('harvest', 'suggestedType')}: {appliedSuggestions.type}
+                    </Badge>
+                  )}
+                  {appliedSuggestions.domain && (
+                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                      {t('harvest', 'suggestedDomain')}: {appliedSuggestions.domain}
+                    </Badge>
+                  )}
+                  {(appliedSuggestions.tags ?? []).map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                      #{tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

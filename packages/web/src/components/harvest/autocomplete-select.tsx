@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { X } from 'lucide-react';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
 import type { ReferenceItem } from '@/api/hooks/use-reference-lookup';
@@ -9,9 +11,22 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  valueField?: 'slug' | 'label';
+  allowCreate?: boolean;
+  chipMode?: boolean;
+  onConfirm?: (value: string) => void;
 }
 
-export function AutocompleteSelect({ kind, value, onChange, placeholder }: Props) {
+export function AutocompleteSelect({
+  kind,
+  value,
+  onChange,
+  placeholder,
+  valueField = 'slug',
+  allowCreate,
+  chipMode,
+  onConfirm,
+}: Props) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -31,10 +46,49 @@ export function AutocompleteSelect({ kind, value, onChange, placeholder }: Props
   }, []);
 
   const select = (item: ReferenceItem) => {
-    setQuery(item.slug);
-    onChange(item.slug);
+    const v = valueField === 'label' ? (item.label || item.slug) : item.slug;
+    setQuery(v);
+    onChange(v);
+    onConfirm?.(v);
     setOpen(false);
   };
+
+  const create = () => {
+    const v = query.trim();
+    if (!v) return;
+    setQuery(v);
+    onChange(v);
+    onConfirm?.(v);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    setQuery('');
+    onChange('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (allowCreate && data.length === 0 && query.trim()) create();
+    }
+  };
+
+  const showCreate = allowCreate && open && query.trim().length > 0 && data.length === 0 && debouncedQuery === query;
+
+  // Chip mode: once confirmed, show a removable badge instead of input
+  if (chipMode && value.trim()) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+          {value}
+          <button type="button" onClick={clear} className="ml-1">
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </Badge>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -45,10 +99,11 @@ export function AutocompleteSelect({ kind, value, onChange, placeholder }: Props
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="text-sm"
       />
-      {open && data.length > 0 && (
+      {open && (data.length > 0 || showCreate) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
           {data.map((item) => (
             <button
@@ -61,6 +116,15 @@ export function AutocompleteSelect({ kind, value, onChange, placeholder }: Props
               {item.type && <span className="ml-1 text-xs text-muted-foreground">({item.type})</span>}
             </button>
           ))}
+          {showCreate && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic"
+              onMouseDown={create}
+            >
+              Créer &ldquo;{query.trim()}&rdquo;
+            </button>
+          )}
         </div>
       )}
     </div>

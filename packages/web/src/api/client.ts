@@ -52,7 +52,12 @@ export async function apiRequest<T>(method: string, path: string, body?: unknown
     return null as T;
   }
 
-  const json = (await res.json()) as ApiResponse<T>;
+  let json: ApiResponse<T>;
+  try {
+    json = (await res.json()) as ApiResponse<T>;
+  } catch {
+    throw new Error(`HTTP ${res.status}: réponse invalide du serveur`);
+  }
   if (!res.ok || json.error) {
     throw new Error(json.error ?? `HTTP ${res.status}`);
   }

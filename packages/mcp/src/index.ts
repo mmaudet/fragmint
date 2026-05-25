@@ -15,6 +15,8 @@ import { lineageDefinition, lineageHandler } from './tools/fragment-lineage.js';
 import { composeDefinition, composeHandler } from './tools/document-compose.js';
 import { harvestDefinition, harvestHandler } from './tools/fragment-harvest.js';
 import { collectionListDefinition, collectionListHandler } from './tools/collection-list.js';
+import { getIndexDefinition, getIndexHandler } from './tools/index-get.js';
+import { listSubjectsDefinition, listSubjectsHandler, listEntitiesDefinition, listEntitiesHandler, listTagsDefinition, listTagsHandler } from './tools/references-list.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -38,6 +40,10 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: lineageDefinition, handler: lineageHandler(client) },
   { definition: composeDefinition, handler: composeHandler(client) },
   { definition: harvestDefinition, handler: harvestHandler(client) },
+  { definition: getIndexDefinition, handler: getIndexHandler(client) },
+  { definition: listSubjectsDefinition, handler: listSubjectsHandler(client) },
+  { definition: listEntitiesDefinition, handler: listEntitiesHandler(client) },
+  { definition: listTagsDefinition, handler: listTagsHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));

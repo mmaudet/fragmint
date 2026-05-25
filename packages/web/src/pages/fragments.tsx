@@ -143,17 +143,17 @@ export default function FragmentsPage() {
       {/* Filter row */}
       <div className="flex flex-wrap gap-3">
         {([
-          { value: type, set: setType, allLabel: t('fragments', 'allTypes'), width: 'w-44',
+          { value: type, set: setType, allLabel: t('fragments', 'allTypes'),
             items: fragmentTypes.map((ft) => ({ value: ft.slug, label: ft.label })) },
-          { value: domain, set: setDomain, allLabel: t('fragments', 'allDomains'), width: 'w-48',
+          { value: domain, set: setDomain, allLabel: t('fragments', 'allDomains'),
             items: domainsData.map((d) => ({ value: d.slug, label: d.label ?? d.slug })) },
-          { value: lang, set: setLang, allLabel: t('fragments', 'allLanguages'), width: 'w-36',
+          { value: lang, set: setLang, allLabel: t('fragments', 'allLanguages'),
             items: LANG_VALUES.map((v) => ({ value: v, label: t('fragments', v === 'fr' ? 'langFr' : 'langEn') })) },
-          { value: quality, set: setQuality, allLabel: t('fragments', 'allQualities'), width: 'w-40',
+          { value: quality, set: setQuality, allLabel: t('fragments', 'allQualities'),
             items: QUALITY_VALUES.map((q) => ({ value: q, label: t('quality', q as 'draft' | 'reviewed' | 'approved') })) },
-        ] as { value: string; set: (v: string) => void; allLabel: string; width: string; items: { value: string; label: string }[] }[]).map(({ value: val, set, allLabel, width, items }) => (
+        ] as { value: string; set: (v: string) => void; allLabel: string; items: { value: string; label: string }[] }[]).map(({ value: val, set, allLabel, items }) => (
           <Select key={allLabel} value={val || '__all__'} onValueChange={(v) => { set(v === '__all__' ? '' : v); setOffset(0); setSelectedIds(new Set()); }}>
-            <SelectTrigger className={width}>
+            <SelectTrigger className="flex-1 min-w-36 border-slate-300 bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

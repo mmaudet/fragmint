@@ -11,9 +11,11 @@ interface Props {
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
+  allowCreate?: boolean;
+  knownSlugs?: string[];
 }
 
-export function MultiAutocompleteSelect({ kind, values, onChange, placeholder }: Props) {
+export function MultiAutocompleteSelect({ kind, values, onChange, placeholder, allowCreate, knownSlugs }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -34,15 +36,30 @@ export function MultiAutocompleteSelect({ kind, values, onChange, placeholder }:
     setOpen(false);
   };
 
+  const addFreeText = () => {
+    const v = query.trim();
+    if (!v || values.includes(v)) return;
+    onChange([...values, v]);
+    setQuery('');
+    setOpen(false);
+  };
+
   const remove = (slug: string) => onChange(values.filter((v) => v !== slug));
 
   const filteredItems = data.filter((item) => !values.includes(item.slug));
+  const showCreate = allowCreate && open && query.trim().length > 0 && filteredItems.length === 0 && debouncedQuery === query;
+
+  const isKnown = (v: string) => !knownSlugs || knownSlugs.includes(v);
 
   return (
     <div ref={ref} className="relative">
       <div className="flex flex-wrap gap-1 mb-1">
         {values.map((v) => (
-          <Badge key={v} variant="secondary" className="text-xs gap-1">
+          <Badge
+            key={v}
+            variant="secondary"
+            className={`text-xs gap-1 ${!isKnown(v) ? 'border border-dashed border-blue-400 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30' : ''}`}
+          >
             {v}
             <button type="button" onClick={() => remove(v)}>
               <X className="h-2.5 w-2.5" />
@@ -57,10 +74,16 @@ export function MultiAutocompleteSelect({ kind, values, onChange, placeholder }:
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (allowCreate && query.trim()) addFreeText();
+          }
+        }}
         placeholder={placeholder}
         className="text-sm"
       />
-      {open && filteredItems.length > 0 && (
+      {open && (filteredItems.length > 0 || showCreate) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
           {filteredItems.map((item) => (
             <button
@@ -72,6 +95,15 @@ export function MultiAutocompleteSelect({ kind, values, onChange, placeholder }:
               {item.label}
             </button>
           ))}
+          {showCreate && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic"
+              onMouseDown={addFreeText}
+            >
+              Créer &ldquo;{query.trim()}&rdquo;
+            </button>
+          )}
         </div>
       )}
     </div>

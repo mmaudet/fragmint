@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TrustBadge } from '@/components/admin/harvest/trust-badge';
+import { useI18n } from '@/lib/i18n';
 import type { HarvestCandidate } from '@/api/types';
 
 export interface CandidateMod {
@@ -43,6 +44,8 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
     }
   }, [candidate?.id]);
 
+  const { t } = useI18n();
+
   if (!candidate) return null;
 
   const isModified =
@@ -71,16 +74,16 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
         <SheetHeader className="mb-4">
           <SheetTitle className="text-base flex items-center gap-2">
             <Eye className="h-4 w-4" />
-            Détail du candidat
+            {t('harvest', 'candidateDetail')}
           </SheetTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <TrustBadge trustSourcesJson={candidate.trust_sources_json} />
             <Badge variant="outline" className="text-xs">
-              {(candidate.confidence * 100).toFixed(0)}% confiance
+              {(candidate.confidence * 100).toFixed(0)}%
             </Badge>
             {candidate.duplicate_of && (
               <Badge variant="destructive" className="text-xs">
-                Doublon potentiel
+                {t('harvest', 'duplicatePotential')}
               </Badge>
             )}
           </div>

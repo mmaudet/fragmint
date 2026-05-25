@@ -17,10 +17,10 @@ interface Props {
 export function EntitySelector({ values, onChange }: Props) {
   const [pending, setPending] = useState('');
 
-  const add = () => {
-    if (!pending.trim()) return;
-    const id = crypto.randomUUID();
-    onChange([...values, { id, name: pending.trim() }]);
+  const add = (name?: string) => {
+    const v = (name ?? pending).trim();
+    if (!v) return;
+    onChange([...values, { id: crypto.randomUUID(), name: v }]);
     setPending('');
   };
 
@@ -43,9 +43,12 @@ export function EntitySelector({ values, onChange }: Props) {
           kind="entity"
           value={pending}
           onChange={setPending}
-          placeholder="Search entities..."
+          placeholder="Search or type a new entity..."
+          valueField="label"
+          allowCreate
+          onConfirm={(v) => add(v)}
         />
-        <Button type="button" size="sm" variant="outline" onClick={add}>
+        <Button type="button" size="sm" variant="outline" onClick={() => add()}>
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>

@@ -32,7 +32,7 @@ export function CandidateCard({ candidate, decision, onAccept, onReject, onClick
           <h3 className="font-bold text-sm leading-tight">{candidate.title}</h3>
           {candidate.duplicate_of ? (
             <Badge className="text-xs shrink-0 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-              Doublon
+              {t('harvest', 'duplicates')}
             </Badge>
           ) : (
             <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">

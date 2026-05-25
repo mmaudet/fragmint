@@ -18,6 +18,14 @@ export class FragmintApiClient {
     return this.request<T>('PUT', path, body);
   }
 
+  async getText(path: string): Promise<string> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.text();
+  }
+
   async postMultipart<T>(path: string, form: FormData): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',

@@ -51,10 +51,10 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
           <label className="text-xs text-muted-foreground">Type</label>
           <Select value={edits.type} onValueChange={(v) => set({ type: v })}>
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
+              <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              {types.map((t) => (
+              {[...new Set([...(edits.type ? [edits.type] : []), ...types])].map((t) => (
                 <SelectItem key={t} value={t} className="text-xs">
                   {t}
                 </SelectItem>
@@ -66,10 +66,10 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
           <label className="text-xs text-muted-foreground">Domaine</label>
           <Select value={edits.domain} onValueChange={(v) => set({ domain: v })}>
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
+              <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              {domains.map((d) => (
+              {[...new Set([...(edits.domain ? [edits.domain] : []), ...domains])].map((d) => (
                 <SelectItem key={d} value={d} className="text-xs">
                   {d}
                 </SelectItem>

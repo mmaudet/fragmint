@@ -14,7 +14,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import {
   BookOpen,
-  BarChart3,
   CheckCircle,
   Upload,
   LogOut,

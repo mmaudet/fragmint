@@ -123,12 +123,20 @@ export interface JudgeVerdict {
   reason: string;
 }
 
+export interface SuggestedMetadata {
+  type?: string;
+  domain?: string;
+  tags?: string[];
+  reason: string;
+}
+
 export interface JudgeResult {
   reusability: JudgeVerdict;
   semantic_coherence: JudgeVerdict;
   classification_accuracy: JudgeVerdict;
   overall_recommendation: 'accept' | 'review' | 'reject';
   overall_reason: string;
+  suggested_metadata?: SuggestedMetadata;
 }
 
 export interface HarvestCandidate {
