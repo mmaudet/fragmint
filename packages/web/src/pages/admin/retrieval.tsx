@@ -3,9 +3,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useRetrievalMode, useSetRetrievalMode, type RetrievalMode } from '@/api/hooks/use-retrieval-mode';
+import { useIndexStatus, useTriggerReindex } from '@/api/hooks/use-index';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Zap, Brain, Layers3, CheckCircle2 } from 'lucide-react';
+import { Zap, Brain, Layers3, CheckCircle2, RefreshCw, AlertTriangle, Database } from 'lucide-react';
 
 interface ModeSpec {
   value: RetrievalMode;
@@ -150,6 +151,8 @@ export default function AdminRetrievalPage() {
   const { data } = useRetrievalMode();
   const setMode = useSetRetrievalMode();
   const current = data?.mode ?? null;
+  const { data: indexStatus, isLoading: statusLoading } = useIndexStatus();
+  const reindex = useTriggerReindex();
 
   const [pending, setPending] = useState<RetrievalMode | null>(null);
 
@@ -165,6 +168,19 @@ export default function AdminRetrievalPage() {
 
   const l = (obj: { fr: string; en: string }) => (lang === 'en' ? obj.en : obj.fr);
   const la = (obj: { fr: string[]; en: string[] }) => (lang === 'en' ? obj.en : obj.fr);
+
+  const handleReindex = () => {
+    reindex.mutate(undefined, {
+      onSuccess: (data) => {
+        toast.success(
+          lang === 'fr'
+            ? `Réindexation terminée — ${data.indexed} fragment(s) indexé(s)`
+            : `Reindex done — ${data.indexed} fragment(s) indexed`,
+        );
+      },
+      onError: () => toast.error(lang === 'fr' ? 'Erreur de réindexation' : 'Reindex failed'),
+    });
+  };
 
   const handleSave = () => {
     if (!selected || !isDirty || setMode.isPending) return;
@@ -203,6 +219,60 @@ export default function AdminRetrievalPage() {
           </Button>
         )}
       </div>
+
+      {/* Milvus status banner */}
+      {!statusLoading && indexStatus && (
+        <div
+          className={cn(
+            'flex items-center justify-between gap-4 rounded-lg border px-4 py-3',
+            indexStatus.milvus
+              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20'
+              : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20',
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Database
+              className={cn(
+                'h-4 w-4 shrink-0',
+                indexStatus.milvus ? 'text-emerald-600' : 'text-amber-600',
+              )}
+            />
+            <div className="text-sm">
+              {indexStatus.milvus ? (
+                <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                  {lang === 'fr' ? 'Milvus connecté' : 'Milvus connected'}
+                  <span className="ml-2 font-normal text-emerald-600 dark:text-emerald-500">
+                    {lang === 'fr'
+                      ? `— mode actif : ${indexStatus.mode}`
+                      : `— active mode: ${indexStatus.mode}`}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {lang === 'fr'
+                    ? 'Milvus non disponible — les modes Vectoriel et Hybride ne fonctionneront pas'
+                    : 'Milvus unavailable — Vector-only and Hybrid modes will not work'}
+                </span>
+              )}
+            </div>
+          </div>
+          {indexStatus.milvus && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReindex}
+              disabled={reindex.isPending}
+              className="shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-400"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', reindex.isPending && 'animate-spin')} />
+              {reindex.isPending
+                ? lang === 'fr' ? 'Réindexation…' : 'Reindexing…'
+                : lang === 'fr' ? 'Réindexer les fragments' : 'Reindex fragments'}
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Mode cards */}
       <div className="grid gap-4 md:grid-cols-3">
