@@ -133,7 +133,11 @@ export function fragmentRoutes(
     const frag = await fragmentService.getById(id);
     if (!frag)
       return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
-    return { data: frag, meta: null, error: null };
+    const data = {
+      ...frag,
+      tags: frag.tags ? (typeof frag.tags === 'string' ? (JSON.parse(frag.tags) as string[]) : frag.tags) : [],
+    };
+    return { data, meta: null, error: null };
   });
 
   // Git history
@@ -226,6 +230,19 @@ export function fragmentRoutes(
       request.ip,
     );
     return { data: result, meta: null, error: null };
+  });
+
+  // Update entity links
+  app.put(`${prefix}/fragments/:id/entities`, { preHandler: writeHandlers }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { entity_ids } = request.body as { entity_ids?: unknown };
+    if (!Array.isArray(entity_ids) || entity_ids.some((x) => typeof x !== 'number')) {
+      return reply.status(400).send({ data: null, meta: null, error: 'entity_ids must be an array of numbers' });
+    }
+    const frag = await fragmentService.getById(id);
+    if (!frag) return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
+    await fragmentService.updateEntities(id, entity_ids as number[]);
+    return { data: { updated: entity_ids.length }, meta: null, error: null };
   });
 
   // Review
