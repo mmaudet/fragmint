@@ -3,7 +3,7 @@ import { eq, and, or, desc, like, isNull, lte, gte, count, inArray, ne } from 'd
 import { join, relative } from 'node:path';
 import { readdirSync, unlinkSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, collections, fragmentDomains, fragmentTags } from '../db/schema.js';
+import { fragments, collections, fragmentDomains, fragmentTags, fragmentEntities, entities as entitiesTable } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
 import { buildCommitMessage } from '../git/commit-message.js';
@@ -19,14 +19,14 @@ import type { LlmClient } from './llm-client.js';
 import { detectAndPropose } from './supersedure-detector.js';
 
 export class FragmentService {
-  private git: GitRepository;
+  protected git: GitRepository;
   llmClient?: LlmClient;
 
   constructor(
-    private db: FragmintDb,
-    private storePath: string,
-    private audit: AuditService,
-    private searchService: SearchService,
+    protected db: FragmintDb,
+    protected storePath: string,
+    protected audit: AuditService,
+    protected searchService: SearchService,
   ) {
     this.git = new GitRepository(storePath);
   }
@@ -36,26 +36,16 @@ export class FragmentService {
   }
 
   /**
-   * Resolve the correct store path for a fragment based on its collection_slug.
-   * Falls back to the default storePath for 'common' or null slugs.
+   * Compute the fragments directory for a collection.
+   * Domain is NOT used as a subdirectory — it's already baked into the filename.
+   * common (or null) → <root>/fragments/
+   * named collection  → <root>/fragments/<slug>/
    */
-  private async resolveStorePath(collectionSlug: string | null): Promise<string> {
+  protected fragmentsDir(collectionSlug: string | null | undefined): string {
     if (!collectionSlug || collectionSlug === 'common') {
-      return this.storePath;
+      return join(this.storePath, 'fragments');
     }
-    const colRows = await this.db
-      .select()
-      .from(collections)
-      .where(eq(collections.slug, collectionSlug))
-      .limit(1);
-    if (colRows.length > 0) {
-      return colRows[0].git_path;
-    }
-    return this.storePath;
-  }
-
-  private resolveGit(storePath: string): GitRepository {
-    return storePath === this.storePath ? this.git : new GitRepository(storePath);
+    return join(this.storePath, 'fragments', collectionSlug);
   }
 
   async create(
@@ -69,7 +59,9 @@ export class FragmentService {
     const id = generateId();
     const now = new Date().toISOString();
     const effectivePath = storePathOverride ?? this.storePath;
-    const fragmentsDir = join(effectivePath, 'fragments', input.domain);
+    const fragmentsDir = storePathOverride
+      ? join(storePathOverride, 'fragments')
+      : this.fragmentsDir(collectionSlug);
 
     // Ensure domain directory exists
     const { mkdirSync } = await import('node:fs');
@@ -96,6 +88,8 @@ export class FragmentService {
       last_used: null,
       access: input.access,
       origin: input.origin,
+      origin_source: input.origin_source ?? null,
+      origin_page: input.origin_page ?? null,
       function_type: input.function_type ?? null,
       audience: input.audience ?? [],
       maturity: input.maturity ?? null,
@@ -114,9 +108,7 @@ export class FragmentService {
       qualityTransition: 'draft',
     });
 
-    // Use a scoped GitRepository if storePath is overridden
-    const git = storePathOverride ? new GitRepository(effectivePath) : this.git;
-    const commitHash = await git.commit(relPath, commitMsg);
+    const commitHash = await this.git.commit(relPath, commitMsg);
 
     // Index in SQLite
     const title = deriveTitle(input.body);
@@ -135,6 +127,8 @@ export class FragmentService {
       git_hash: commitHash,
       collection_slug: collectionSlug ?? 'common',
       origin: input.origin,
+      origin_source: input.origin_source ?? null,
+      origin_page: input.origin_page ?? null,
       parent_id: input.parent_id ?? null,
       translation_of: input.translation_of ?? null,
       tags: input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null,
@@ -178,11 +172,41 @@ export class FragmentService {
     if (rows.length === 0) return null;
 
     const row = rows[0];
-    const storePath = await this.resolveStorePath(row.collection_slug);
-    const filePath = join(storePath, row.file_path);
-    const { frontmatter, body } = readFragment(filePath);
+    const filePath = join(this.storePath, row.file_path);
 
-    return { ...row, frontmatter, body };
+    const entityRows = await this.db
+      .select({ id: entitiesTable.id, canonicalName: entitiesTable.canonicalName, type: entitiesTable.type })
+      .from(fragmentEntities)
+      .innerJoin(entitiesTable, eq(entitiesTable.id, fragmentEntities.entity_id))
+      .where(eq(fragmentEntities.fragment_id, id));
+
+    try {
+      const { frontmatter, body } = readFragment(filePath);
+      return { ...row, frontmatter, body, entities: entityRows };
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') return null; // fichier manquant → 404 propre
+      throw e;
+    }
+  }
+
+  /** Replace the full set of entity links for a fragment. Only links to validated entities. */
+  async updateEntities(fragmentId: string, entityIds: number[]): Promise<void> {
+    // Verify all requested IDs are validated entities
+    const valid = entityIds.length > 0
+      ? await this.db
+          .select({ id: entitiesTable.id })
+          .from(entitiesTable)
+          .where(and(inArray(entitiesTable.id, entityIds), eq(entitiesTable.validated, 1)))
+      : [];
+    const validIds = valid.map((r) => r.id);
+
+    await this.db.delete(fragmentEntities).where(eq(fragmentEntities.fragment_id, fragmentId));
+    if (validIds.length > 0) {
+      await this.db
+        .insert(fragmentEntities)
+        .values(validIds.map((entity_id) => ({ fragment_id: fragmentId, entity_id })))
+        .onConflictDoNothing();
+    }
   }
 
   async list(filters?: {
@@ -304,9 +328,7 @@ export class FragmentService {
       }
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const updatedFrontmatter = { ...frontmatter };
@@ -327,11 +349,11 @@ export class FragmentService {
     updatedFrontmatter.updated_at = new Date().toISOString();
 
     const newAbsPath = writeFragment(
-      join(storePath, 'fragments', updatedFrontmatter.domain),
+      this.fragmentsDir(existing.collection_slug),
       updatedFrontmatter,
       newBody,
     );
-    const newRelPath = relative(storePath, newAbsPath);
+    const newRelPath = relative(this.storePath, newAbsPath);
 
     const commitMsg = buildCommitMessage({
       action: 'update',
@@ -346,13 +368,13 @@ export class FragmentService {
     let commitHash: string;
     if (newRelPath !== existing.file_path) {
       try {
-        unlinkSync(join(storePath, existing.file_path));
+        unlinkSync(join(this.storePath, existing.file_path));
       } catch {
         /* already gone */
       }
-      commitHash = await git.commitMove(commitMsg);
+      commitHash = await this.git.commitMove(commitMsg);
     } else {
-      commitHash = await git.commit(existing.file_path, commitMsg);
+      commitHash = await this.git.commit(existing.file_path, commitMsg);
     }
 
     await this.db
@@ -433,16 +455,14 @@ export class FragmentService {
       );
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     frontmatter.quality = 'approved';
     frontmatter.approved_by = userId;
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(this.fragmentsDir(existing.collection_slug), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'approve',
@@ -454,7 +474,7 @@ export class FragmentService {
       qualityTransition: 'reviewed → approved',
     });
 
-    const commitHash = await git.commit(existing.file_path, commitMsg);
+    const commitHash = await this.git.commit(existing.file_path, commitMsg);
 
     await this.db
       .update(fragments)
@@ -502,16 +522,14 @@ export class FragmentService {
       );
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const oldQuality = frontmatter.quality;
     frontmatter.quality = 'deprecated';
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(this.fragmentsDir(existing.collection_slug), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'deprecate',
@@ -523,7 +541,7 @@ export class FragmentService {
       qualityTransition: `${oldQuality} → deprecated`,
     });
 
-    const commitHash = await git.commit(existing.file_path, commitMsg);
+    const commitHash = await this.git.commit(existing.file_path, commitMsg);
 
     await this.db
       .update(fragments)
@@ -561,9 +579,6 @@ export class FragmentService {
 
     if (!row) throw new Error(`Fragment not found (id=${id})`);
 
-    const storePath = await this.resolveStorePath(row.collection_slug);
-    const git = this.resolveGit(storePath);
-
     const commitMsg = buildCommitMessage({
       action: 'delete',
       type: row.type,
@@ -574,7 +589,7 @@ export class FragmentService {
     });
 
     try {
-      await git.rmFiles([row.file_path], commitMsg);
+      await this.git.rmFiles([row.file_path], commitMsg);
     } catch (e) {
       console.warn(`[delete] git rm failed for ${row.file_path}, forcing DB delete:`, e);
     }
@@ -598,299 +613,7 @@ export class FragmentService {
       .where(eq(fragments.id, id))
       .limit(1);
     if (rows.length === 0) throw new Error('Fragment not found');
-    const storePath = await this.resolveStorePath(rows[0].collection_slug);
-    const git = this.resolveGit(storePath);
-    return git.log(rows[0].file_path);
-  }
-
-  async bulkReview(
-    ids: string[],
-    userId: string,
-    ip: string | undefined,
-    onProgress?: (done: number) => void,
-  ): Promise<{ done: number; errors: number }> {
-    const now = new Date().toISOString();
-    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
-    const groups = new Map<string, Group>();
-    let errors = 0;
-
-    for (const id of ids) {
-      try {
-        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
-        if (!frag || frag.quality !== 'draft') continue;
-        const storePath = await this.resolveStorePath(frag.collection_slug);
-        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
-        frontmatter.quality = 'reviewed';
-        frontmatter.reviewed_by = userId;
-        frontmatter.updated_at = now;
-        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath))
-          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
-        const g = groups.get(storePath)!;
-        g.filePaths.push(frag.file_path);
-        g.ids.push(id);
-      } catch (e) {
-        console.error(`[bulkReview] fragment ${id} failed:`, e);
-        errors++;
-      }
-    }
-
-    let done = 0;
-    for (const [, { git, filePaths, ids: gIds }] of groups) {
-      try {
-        const hash = await git.commitFiles(
-          filePaths,
-          `chore: bulk review ${gIds.length} fragments by ${userId}`,
-        );
-        await this.db
-          .update(fragments)
-          .set({ quality: 'reviewed', updated_at: now, git_hash: hash })
-          .where(inArray(fragments.id, gIds));
-        await this.audit.log({
-          user_id: userId,
-          role: 'contributor',
-          action: 'bulk_review',
-          fragment_id: gIds.join(','),
-          ip_source: ip,
-        });
-        done += gIds.length;
-        onProgress?.(done);
-      } catch (e) {
-        console.error(`[bulkReview] git commit failed:`, e);
-        errors += gIds.length;
-      }
-    }
-    return { done, errors };
-  }
-
-  async bulkApprove(
-    ids: string[],
-    userId: string,
-    ip: string | undefined,
-    onProgress?: (done: number) => void,
-  ): Promise<{ done: number; errors: number }> {
-    const now = new Date().toISOString();
-    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
-    const groups = new Map<string, Group>();
-    let errors = 0;
-
-    for (const id of ids) {
-      try {
-        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
-        if (!frag || frag.quality !== 'reviewed') continue;
-        const storePath = await this.resolveStorePath(frag.collection_slug);
-        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
-        frontmatter.quality = 'approved';
-        frontmatter.approved_by = userId;
-        frontmatter.updated_at = now;
-        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath))
-          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
-        const g = groups.get(storePath)!;
-        g.filePaths.push(frag.file_path);
-        g.ids.push(id);
-      } catch (e) {
-        console.error(`[bulkApprove] fragment ${id} failed:`, e);
-        errors++;
-      }
-    }
-
-    let done = 0;
-    for (const [, { git, filePaths, ids: gIds }] of groups) {
-      try {
-        const hash = await git.commitFiles(
-          filePaths,
-          `chore: bulk approve ${gIds.length} fragments by ${userId}`,
-        );
-        await this.db
-          .update(fragments)
-          .set({ quality: 'approved', updated_at: now, git_hash: hash })
-          .where(inArray(fragments.id, gIds));
-        await this.audit.log({
-          user_id: userId,
-          role: 'expert',
-          action: 'bulk_approve',
-          fragment_id: gIds.join(','),
-          ip_source: ip,
-        });
-        done += gIds.length;
-        onProgress?.(done);
-      } catch (e) {
-        console.error(`[bulkApprove] git commit failed:`, e);
-        errors += gIds.length;
-      }
-    }
-    return { done, errors };
-  }
-
-  async bulkDelete(
-    ids: string[],
-    userId: string,
-    ip: string | undefined,
-    onProgress?: (done: number) => void,
-    role: string = 'admin',
-  ): Promise<{ done: number; errors: number }> {
-    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
-    const groups = new Map<string, Group>();
-    let errors = 0;
-
-    for (const id of ids) {
-      try {
-        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
-        if (!frag) continue;
-        const storePath = await this.resolveStorePath(frag.collection_slug);
-        if (!groups.has(storePath))
-          groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
-        const g = groups.get(storePath)!;
-        g.filePaths.push(frag.file_path);
-        g.ids.push(id);
-      } catch (e) {
-        console.error(`[bulkDelete] fragment ${id} failed:`, e);
-        errors++;
-      }
-    }
-
-    let done = 0;
-    for (const [, { git, filePaths, ids: gIds }] of groups) {
-      try {
-        await git.rmFiles(filePaths, `chore: bulk delete ${gIds.length} fragments by ${userId}`);
-        await this.db.delete(fragments).where(inArray(fragments.id, gIds));
-        for (const id of gIds) await this.searchService.removeFromIndex(id);
-        await this.audit.log({
-          user_id: userId,
-          role,
-          action: 'bulk_delete',
-          fragment_id: gIds.join(','),
-          ip_source: ip,
-        });
-        done += gIds.length;
-        onProgress?.(done);
-      } catch (e) {
-        console.error(`[bulkDelete] git commit failed:`, e);
-        errors += gIds.length;
-      }
-    }
-    return { done, errors };
-  }
-
-  async bulkCreateDraftFragments(
-    items: Array<{
-      type: string;
-      domain: string;
-      lang: string;
-      body: string;
-      tags: string[];
-      origin: 'manual' | 'harvested' | 'generated';
-      function_type: string | null;
-      audience: string[];
-      maturity: string | null;
-      harvest_confidence?: number;
-      collectionSlug?: string;
-    }>,
-    author: string,
-  ): Promise<Array<{ idx: number; id: string; file_path: string; commit_hash: string }>> {
-    const now = new Date().toISOString();
-    const { mkdirSync } = await import('node:fs');
-    type Group = {
-      git: GitRepository;
-      storePath: string;
-      items: Array<{ idx: number; id: string; relPath: string; item: (typeof items)[number] }>;
-    };
-    const groups = new Map<string, Group>();
-
-    for (let idx = 0; idx < items.length; idx++) {
-      const item = items[idx];
-      try {
-        const storePath = await this.resolveStorePath(item.collectionSlug ?? null);
-        const id = generateId();
-        const fragmentsDir = join(storePath, 'fragments', item.domain);
-        mkdirSync(fragmentsDir, { recursive: true });
-
-        const frontmatter = {
-          id,
-          type: item.type,
-          domain: item.domain,
-          tags: item.tags,
-          lang: item.lang,
-          translation_of: null,
-          quality: 'draft' as const,
-          author,
-          reviewed_by: null,
-          approved_by: null,
-          created_at: now,
-          updated_at: now,
-          valid_from: null,
-          valid_until: null,
-          parent_id: null,
-          generation: 0,
-          uses: 0,
-          last_used: null,
-          access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-          origin: item.origin,
-          function_type: item.function_type,
-          audience: item.audience,
-          maturity: item.maturity,
-        };
-
-        const absPath = writeFragment(fragmentsDir, frontmatter, item.body);
-        const relPath = relative(storePath, absPath);
-
-        if (!groups.has(storePath)) {
-          groups.set(storePath, { git: this.resolveGit(storePath), storePath, items: [] });
-        }
-        groups.get(storePath)!.items.push({ idx, id, relPath, item });
-      } catch (e) {
-        console.error(`[bulkCreate] item ${idx} failed to prepare:`, e);
-      }
-    }
-
-    const results: Array<{ idx: number; id: string; file_path: string; commit_hash: string }> = [];
-
-    for (const [, { git, storePath: _sp, items: groupItems }] of groups) {
-      try {
-        const filePaths = groupItems.map((i) => i.relPath);
-        const commitHash = await git.commitFiles(
-          filePaths,
-          `chore: bulk accept ${groupItems.length} harvested fragments by ${author}`,
-        );
-
-        await this.db.insert(fragments).values(
-          groupItems.map(({ id, relPath, item }) => ({
-            id,
-            type: item.type,
-            domain: item.domain,
-            lang: item.lang,
-            quality: 'draft' as const,
-            author,
-            title: deriveTitle(item.body),
-            body_excerpt: item.body.slice(0, 200),
-            created_at: now,
-            updated_at: now,
-            file_path: relPath,
-            git_hash: commitHash,
-            collection_slug: item.collectionSlug ?? 'common',
-            origin: item.origin,
-            parent_id: null,
-            translation_of: null,
-            tags: item.tags.length > 0 ? JSON.stringify(item.tags) : null,
-            valid_from: null,
-            valid_until: null,
-            function_type: item.function_type,
-            audience: item.audience ? JSON.stringify(item.audience) : null,
-            maturity: item.maturity,
-            harvest_confidence: item.harvest_confidence ?? null,
-          })),
-        );
-
-        for (const { idx, id, relPath } of groupItems) {
-          results.push({ idx, id, file_path: relPath, commit_hash: commitHash });
-        }
-      } catch (e) {
-        console.error(`[bulkCreate] commit/insert failed:`, e);
-      }
-    }
-
-    return results;
+    return this.git.log(rows[0].file_path);
   }
 
   async filterOwnedIds(ids: string[], authorLogin: string): Promise<string[]> {
@@ -1031,89 +754,100 @@ export class FragmentService {
   }
 
   async reindex() {
-    const fragmentsDir = join(this.storePath, 'fragments');
-    const files = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
+    // Single vault: all collections live under fragments/<slug>/ in the root git.
+    const customCollections = await this.db.select({ slug: collections.slug }).from(collections);
+    const collectionSlugs = new Set(customCollections.map((c) => c.slug).filter((s) => s !== 'common'));
+    const vaults: Array<{ storePath: string; collectionSlug: string; fragmentsSubdir: string }> = [
+      { storePath: this.storePath, collectionSlug: 'common', fragmentsSubdir: 'fragments' },
+      ...[...collectionSlugs].map((slug) => ({
+        storePath: this.storePath,
+        collectionSlug: slug,
+        fragmentsSubdir: `fragments/${slug}`,
+      })),
+    ];
+
     let indexed = 0;
+    let totalFiles = 0;
+    const batchItems: Array<{ id: string; body: string; metadata: Record<string, unknown> }> = [];
 
-    for (const absPath of files) {
-      try {
-        const { frontmatter, body } = readFragment(absPath);
-        const relPath = relative(this.storePath, absPath);
-        const title = deriveTitle(body);
+    for (const { storePath, collectionSlug, fragmentsSubdir } of vaults) {
+      const fragmentsDir = join(storePath, fragmentsSubdir);
+      const files = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
 
-        await this.db
-          .insert(fragments)
-          .values({
-            id: frontmatter.id,
-            type: frontmatter.type,
-            domain: frontmatter.domain,
-            lang: frontmatter.lang,
-            quality: frontmatter.quality,
-            author: frontmatter.author,
-            title,
-            body_excerpt: body.slice(0, 200),
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            file_path: relPath,
-            collection_slug: 'common',
-            origin: frontmatter.origin ?? 'manual',
-            parent_id: frontmatter.parent_id ?? null,
-            translation_of: frontmatter.translation_of ?? null,
-            valid_from: frontmatter.valid_from ?? null,
-            valid_until: frontmatter.valid_until ?? null,
-          })
-          .onConflictDoUpdate({
-            target: fragments.id,
-            set: {
+      for (const absPath of files) {
+        totalFiles++;
+        try {
+          const { frontmatter, body } = readFragment(absPath);
+          const relPath = relative(storePath, absPath);
+          const title = deriveTitle(body);
+
+          await this.db
+            .insert(fragments)
+            .values({
+              id: frontmatter.id,
+              type: frontmatter.type,
+              domain: frontmatter.domain,
+              lang: frontmatter.lang,
               quality: frontmatter.quality,
-              updated_at: frontmatter.updated_at,
+              author: frontmatter.author,
               title,
               body_excerpt: body.slice(0, 200),
+              created_at: frontmatter.created_at,
+              updated_at: frontmatter.updated_at,
               file_path: relPath,
-              collection_slug: 'common',
+              collection_slug: collectionSlug,
+              origin: frontmatter.origin ?? 'manual',
+              parent_id: frontmatter.parent_id ?? null,
+              translation_of: frontmatter.translation_of ?? null,
               valid_from: frontmatter.valid_from ?? null,
               valid_until: frontmatter.valid_until ?? null,
+            })
+            .onConflictDoUpdate({
+              target: fragments.id,
+              set: {
+                quality: frontmatter.quality,
+                updated_at: frontmatter.updated_at,
+                title,
+                body_excerpt: body.slice(0, 200),
+                file_path: relPath,
+                collection_slug: collectionSlug,
+                valid_from: frontmatter.valid_from ?? null,
+                valid_until: frontmatter.valid_until ?? null,
+              },
+            });
+
+          batchItems.push({
+            id: frontmatter.id,
+            body,
+            metadata: {
+              type: frontmatter.type,
+              domain: frontmatter.domain,
+              lang: frontmatter.lang,
+              quality: frontmatter.quality,
+              author: frontmatter.author,
+              tags: frontmatter.tags,
+              access_read: frontmatter.access?.read ?? ['*'],
+              created_at: frontmatter.created_at,
+              updated_at: frontmatter.updated_at,
+              function_type: frontmatter.function_type ?? null,
+              audience: frontmatter.audience ?? [],
+              maturity: frontmatter.maturity ?? null,
             },
           });
-        indexed++;
-      } catch (err) {
-        console.error(`Failed to index ${absPath}:`, err);
+          indexed++;
+        } catch (err) {
+          console.error(`Failed to index ${absPath}:`, err);
+        }
       }
     }
 
     // Batch index into vector store
-    const batchItems = [];
-    for (const absPath of files) {
-      try {
-        const { frontmatter, body } = readFragment(absPath);
-        batchItems.push({
-          id: frontmatter.id,
-          body,
-          metadata: {
-            type: frontmatter.type,
-            domain: frontmatter.domain,
-            lang: frontmatter.lang,
-            quality: frontmatter.quality,
-            author: frontmatter.author,
-            tags: frontmatter.tags,
-            access_read: frontmatter.access.read,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            function_type: frontmatter.function_type ?? null,
-            audience: frontmatter.audience ?? [],
-            maturity: frontmatter.maturity ?? null,
-          },
-        });
-      } catch {
-        /* already logged above */
-      }
-    }
     if (batchItems.length > 0) {
       const vectorResult = await this.searchService.indexBatch(batchItems);
       console.log(`Vector-indexed ${vectorResult.indexed} fragments`);
     }
 
-    return { indexed, total: files.length };
+    return { indexed, total: totalFiles };
   }
 
   private walkDir(dir: string): string[] {
