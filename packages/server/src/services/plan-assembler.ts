@@ -68,6 +68,8 @@ export class PlanAssembler extends PlanService {
               maturity: null,
               harvest_confidence: null,
               origin: 'generated',
+              origin_source: null,
+              origin_page: null,
               access: {
                 read: ['*'],
                 write: ['contributor', 'admin'],

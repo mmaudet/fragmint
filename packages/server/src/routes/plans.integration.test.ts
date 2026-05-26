@@ -179,4 +179,33 @@ describe('Plan routes', () => {
       expect(res.statusCode, `expected 403 for ${ep.path}, got ${res.statusCode}`).toBe(403);
     }
   });
+
+  it('planService uses the configured retriever when retrieval mode is set', async () => {
+    // Switch to hybrid mode
+    const modeRes = await server.app.inject({
+      method: 'POST',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ mode: 'hybrid' }),
+    });
+    expect(modeRes.statusCode).toBe(200);
+    expect(JSON.parse(modeRes.body).data.mode).toBe('hybrid');
+
+    // Verify GET mode also returns hybrid
+    const getRes = await server.app.inject({
+      method: 'GET',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(JSON.parse(getRes.body).data.mode).toBe('hybrid');
+
+    // Reset to vector-only
+    await server.app.inject({
+      method: 'POST',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ mode: 'vector-only' }),
+    });
+  });
 });

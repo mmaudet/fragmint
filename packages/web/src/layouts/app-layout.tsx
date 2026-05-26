@@ -9,6 +9,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
@@ -21,15 +26,27 @@ import {
   PenLine,
   Home,
   Shield,
+  SquareArrowOutUpRight,
+  SlidersHorizontal,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useRetrievalMode, useSetRetrievalMode, type RetrievalMode } from '@/api/hooks/use-retrieval-mode';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
+
+const RETRIEVAL_LABELS: Record<RetrievalMode, string> = {
+  'vector-only': 'Vectoriel',
+  'agentic-only': 'Agentique',
+  'hybrid': 'Hybride',
+};
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useI18n();
   const { setCollections } = useCollection();
   const { data: cols } = useCollections();
+  const { data: modeData } = useRetrievalMode();
+  const setMode = useSetRetrievalMode();
 
   useEffect(() => {
     if (cols) setCollections(cols);
@@ -105,24 +122,6 @@ export default function AppLayout() {
         </nav>
         <Separator className="bg-slate-700" />
         <div className="p-3 space-y-2">
-          {hasRole('admin') && (
-            <NavLink
-              to="/admin"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border w-full',
-                  isActive
-                    ? 'bg-red-900/60 text-red-200 border-red-700'
-                    : 'text-red-400 border-red-900/50 hover:bg-red-900/40 hover:text-red-200',
-                )
-              }
-            >
-              <Shield className="h-3.5 w-3.5" />
-              Admin
-            </NavLink>
-          )}
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <div className="flex gap-1">
@@ -155,6 +154,55 @@ export default function AppLayout() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {hasRole('admin') && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <NavLink to="/admin" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Administration
+                      <SquareArrowOutUpRight className="h-3 w-3 ml-auto opacity-50" />
+                    </NavLink>
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span>Retrieval</span>
+                      {modeData?.mode && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {RETRIEVAL_LABELS[modeData.mode]}
+                        </span>
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuRadioGroup
+                        value={modeData?.mode ?? ''}
+                        onValueChange={(v) => {
+                          const mode = v as RetrievalMode;
+                          setMode.mutate(mode, {
+                            onSuccess: () =>
+                              toast.success(`Mode ${RETRIEVAL_LABELS[mode]} activé`),
+                            onError: () => toast.error('Erreur lors du changement de mode'),
+                          });
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="vector-only">
+                          Vectoriel
+                          <span className="ml-1.5 text-xs text-muted-foreground">~100ms</span>
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="hybrid">
+                          Hybride ⭐
+                          <span className="ml-1.5 text-xs text-muted-foreground">1–3s</span>
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="agentic-only">
+                          Agentique
+                          <span className="ml-1.5 text-xs text-muted-foreground">2–5s</span>
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <Separator className="my-1" />
+                </>
+              )}
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 {t('nav', 'logout')}

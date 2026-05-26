@@ -16,22 +16,15 @@ import { buildPlanMessages } from './plan-prompts.js';
 import { parsePlanSections } from './plan-section-parser.js';
 import { deriveTitle } from '../git/fragment-file.js';
 import type { LlmClient } from './llm-client.js';
-import type { SearchResult, SearchService } from '../search/search-service.js';
+import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
+import type { FragmentRetriever, RetrievedFragment, SectionQuery } from '../retrieval/fragment-retriever.js';
+import { VectorRetriever } from '../retrieval/vector-retriever.js';
+import { getCurrentRetriever } from '../retrieval/factory.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
-
-function toCandidate(r: SearchResult): FragmentCandidate {
-  return {
-    fragment_id: r.id,
-    score: r.score,
-    title: r.title,
-    body_excerpt: r.body_excerpt,
-    quality: r.quality,
-  };
-}
 
 function normalizeTitle(raw: string | undefined, fallback: string): string {
   const t = raw?.trim();
@@ -43,6 +36,7 @@ export interface PlanServiceConfig {
   docxReferencePath?: string;
   llm?: LlmClient;
   search?: SearchService;
+  retriever?: FragmentRetriever;
   fragments?: FragmentService;
 }
 
@@ -183,9 +177,12 @@ export class PlanService {
     if (!this.config.llm) throw new Error('PlanService: LlmClient not configured');
     return this.config.llm;
   }
-  protected requireSearch(): SearchService {
-    if (!this.config.search) throw new Error('PlanService: SearchService not configured');
-    return this.config.search;
+  protected requireRetriever(): FragmentRetriever {
+    const live = getCurrentRetriever();
+    if (live) return live;
+    if (this.config.retriever) return this.config.retriever;
+    if (this.config.search) return new VectorRetriever(this.config.search);
+    throw new Error('PlanService: neither retriever nor search is configured');
   }
   protected requireFragments(): FragmentService {
     if (!this.config.fragments) throw new Error('PlanService: FragmentService not configured');
@@ -197,19 +194,22 @@ export class PlanService {
     filters: PlanFilters,
     collectionSlug: string | null,
   ): Promise<FragmentCandidate[]> {
-    const results = await this.requireSearch().search(
-      `${section.title}\n${section.description}`,
-      {
-        domain: filters.domain?.length ? filters.domain : undefined,
-        type: filters.type ? [filters.type] : undefined,
-        lang: filters.lang,
-        tags: filters.tags,
-        collectionSlug: collectionSlug ?? undefined,
-        quality_min: 'reviewed',
-      },
-      5,
-    );
-    return results.filter((r) => r.score >= SECTION_SCORE_THRESHOLD).map(toCandidate);
+    const query: SectionQuery = {
+      text: `${section.title}\n${section.description}`,
+      filters,
+      collectionSlug,
+      inferred_type: section.inferred_type,
+    };
+    const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, 5);
+    return results
+      .filter((r) => r.score >= SECTION_SCORE_THRESHOLD)
+      .map((r) => ({
+        fragment_id: r.fragment_id,
+        score: r.score,
+        title: r.title,
+        body_excerpt: r.body_excerpt,
+        quality: r.quality,
+      }));
   }
 
   private async inferSectionTypes(
@@ -386,6 +386,8 @@ export class PlanService {
         maturity: null,
         harvest_confidence: null,
         origin: 'manual',
+        origin_source: null,
+        origin_page: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
       };
       const created = await fragments.create(

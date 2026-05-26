@@ -1,7 +1,7 @@
 // packages/server/src/config.ts
 import { readFileSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import yaml from 'js-yaml';
 
 export interface FragmintConfig {
@@ -48,6 +48,9 @@ export interface FragmintConfig {
 
   // Uploads
   upload_max_bytes: number;
+
+  // Retrieval
+  retrieval_mode: 'vector-only' | 'agentic-only' | 'hybrid';
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -68,7 +71,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     );
   }
   if (!collectionsPath) {
-    collectionsPath = './data/collections';
+    collectionsPath = join(process.env.FRAGMINT_STORE_PATH ?? './example-vault', 'collections');
   }
 
   return {
@@ -136,6 +139,10 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       toNumber(process.env.FRAGMINT_UPLOAD_MAX_BYTES) ??
       fileConfig.upload_max_bytes ??
       50 * 1024 * 1024,
+    retrieval_mode:
+      toRetrievalMode(process.env.FRAGMINT_RETRIEVAL_MODE) ??
+      fileConfig.retrieval_mode ??
+      'vector-only',
   };
 }
 
@@ -149,4 +156,12 @@ function toFloat(val?: string): number | undefined {
   if (!val) return undefined;
   const n = parseFloat(val);
   return isNaN(n) ? undefined : n;
+}
+
+const VALID_RETRIEVAL_MODES = ['vector-only', 'agentic-only', 'hybrid'] as const;
+
+function toRetrievalMode(val?: string): FragmintConfig['retrieval_mode'] | undefined {
+  if (!val) return undefined;
+  const valid = VALID_RETRIEVAL_MODES as readonly string[];
+  return valid.includes(val) ? (val as FragmintConfig['retrieval_mode']) : undefined;
 }

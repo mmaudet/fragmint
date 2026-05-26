@@ -43,6 +43,7 @@ import {
   ComposerService,
   PlanService,
 } from './services/index.js';
+import { FragmentBulkService } from './services/fragment-bulk-service.js';
 import { PlanAssembler } from './services/plan-assembler.js';
 import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
@@ -60,6 +61,7 @@ import { adminMetadataMutationRoutes } from './routes/admin-metadata-mutation-ro
 import { adminMetadataLookupRoutes } from './routes/admin-metadata-lookup-routes.js';
 import { adminSupersedureRoutes } from './routes/admin-supersedure-routes.js';
 import { adminReferentialRoutes } from './routes/admin-referential-routes.js';
+import { adminFragmentRoutes } from './routes/admin-fragment-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -68,6 +70,7 @@ import { HarvesterService } from './services/harvester-service.js';
 import { IndexService } from './services/index-service.js';
 import { indexRoutes } from './routes/index-routes.js';
 import { referencesRoutes } from './routes/references-routes.js';
+import { createRetriever } from './retrieval/factory.js';
 
 export interface FragmintServer {
   app: ReturnType<typeof Fastify>;
@@ -276,7 +279,7 @@ export async function createServer(options?: {
   const auditService = new AuditService(db);
   const userService = new UserService(db);
   const tokenService = new TokenService(db);
-  const fragmentService = new FragmentService(db, storePath, auditService, searchService);
+  const fragmentService = new FragmentBulkService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
   const composerService = new ComposerService(
     fragmentService,
@@ -291,7 +294,7 @@ export async function createServer(options?: {
 
   // Collection service and middleware
   const collectionService = new CollectionService(db, {
-    collections_path: config.collections_path,
+    store_path: config.store_path,
   });
   const requireCollRole = buildCollectionMiddleware(db);
 
@@ -313,16 +316,23 @@ export async function createServer(options?: {
     storePath,
   );
 
+  // Index service (agentique pipeline)
+  const indexService = new IndexService(db);
+
+  const retriever = createRetriever(config.retrieval_mode, {
+    searchService,
+    llm: llmClient,
+    indexService,
+    fragmentService,
+  });
+
   const planService = new PlanAssembler(db, {
     fragmentMaxChars: config.plan_fragment_max_chars,
     docxReferencePath: config.plan_docx_reference_path,
     llm: llmClient,
-    search: searchService,
+    retriever,
     fragments: fragmentService,
   });
-
-  // Index service (agentique pipeline)
-  const indexService = new IndexService(db);
 
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
   (app as unknown as { planService: PlanAssembler }).planService = planService;
@@ -352,8 +362,9 @@ export async function createServer(options?: {
   adminMetadataRoutes(app, db, authenticate);
   adminMetadataMutationRoutes(app, db, authenticate);
   adminMetadataLookupRoutes(app, db, authenticate);
-  adminSupersedureRoutes(app, db, authenticate);
+  adminSupersedureRoutes(app, db, authenticate, llmClient);
   adminReferentialRoutes(app, db, authenticate, jobService);
+  adminFragmentRoutes(app, db, authenticate, fragmentService, jobService);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);

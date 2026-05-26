@@ -1,5 +1,5 @@
 // packages/server/src/services/index-service.ts
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and, type SQL } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments, entities, fragmentEntities } from '../db/schema.js';
 
@@ -91,12 +91,16 @@ export class IndexService {
     this.cachedData = null;
   }
 
-  async getIndex(format: 'md' | 'json'): Promise<string | IndexData> {
-    const data = await this.getData();
+  async getIndex(format: 'md' | 'json', collectionSlug?: string): Promise<string | IndexData> {
+    const data = await this.getData(false, collectionSlug);
     return format === 'json' ? data : renderMarkdown(data);
   }
 
-  async getData(forceRefresh = false): Promise<IndexData> {
+  async getData(forceRefresh = false, collectionSlug?: string): Promise<IndexData> {
+    if (collectionSlug) {
+      // Filtered queries never use the global cache
+      return this.generate(collectionSlug);
+    }
     const now = Date.now();
     if (!forceRefresh && this.cachedData && now - this.cacheTimestamp < this.CACHE_TTL) {
       return this.cachedData;
@@ -106,11 +110,14 @@ export class IndexService {
     return this.cachedData;
   }
 
-  private async generate(): Promise<IndexData> {
+  private async generate(collectionSlug?: string): Promise<IndexData> {
+    const conditions: SQL[] = [eq(fragments.quality, 'approved')];
+    if (collectionSlug) conditions.push(eq(fragments.collection_slug, collectionSlug));
+
     const rows = await this.db
       .select()
       .from(fragments)
-      .where(eq(fragments.quality, 'approved'));
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions));
 
     const entityMap = await this.loadEntities(rows.map((r) => r.id));
     const subjects: Record<string, IndexSubject> = {};
