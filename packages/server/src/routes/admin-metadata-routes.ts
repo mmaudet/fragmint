@@ -189,15 +189,25 @@ export function adminMetadataRoutes(
         .safeParse(request.body);
       if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
       const { kind } = parsed.data;
-      if (kind === 'tag')
-        await db.update(fragmentTags).set({ validated: 1, status: 'active' }).where(eq(fragmentTags.slug, id));
-      else if (kind === 'domain')
-        await db.update(fragmentDomains).set({ validated: 1, status: 'active' }).where(eq(fragmentDomains.slug, id));
-      else
+      const stripNew = (s: string) => s.replace(/^NEW:\s*/i, '').trim();
+      if (kind === 'tag') {
+        const cleanLabel = stripNew(id);
+        await db.update(fragmentTags).set({ validated: 1, status: 'active', label: cleanLabel }).where(eq(fragmentTags.slug, id));
+      } else if (kind === 'domain') {
+        const cleanLabel = stripNew(id);
+        await db.update(fragmentDomains).set({ validated: 1, status: 'active', label: cleanLabel }).where(eq(fragmentDomains.slug, id));
+      } else {
+        // For entities, fetch the current name and strip NEW: prefix
+        const [ent] = await db.select({ name: entities.name, canonicalName: entities.canonicalName }).from(entities).where(eq(entities.id, Number(id))).limit(1);
         await db
           .update(entities)
-          .set({ validated: 1, status: 'active' })
+          .set({
+            validated: 1,
+            status: 'active',
+            ...(ent && { name: stripNew(ent.name), canonicalName: stripNew(ent.canonicalName ?? ent.name) }),
+          })
           .where(eq(entities.id, Number(id)));
+      }
       return { success: true, id, kind };
     },
   );

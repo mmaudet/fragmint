@@ -88,6 +88,7 @@ export function adminReferentialRoutes(
 
     const {
       status: statusParam,
+      trust_source: trustSourceParam,
       search,
       category,
       sort = 'usage',
@@ -96,15 +97,21 @@ export function adminReferentialRoutes(
       offset = '0',
     } = request.query as Record<string, string>;
 
+    const VALID_TRUST_SOURCES = ['human-direct', 'llm-confirmed', 'llm-inferred', 'llm-deviation'];
+
     const statusFilter = !statusParam || statusParam === 'all'
       ? undefined
       : eq(table.status, statusParam);
+
+    const trustFilter = trustSourceParam && VALID_TRUST_SOURCES.includes(trustSourceParam)
+      ? eq(table.trustSource, trustSourceParam)
+      : undefined;
 
     const labelField = refType === 'entity' ? entities.canonicalName : (table as any).label;
     const searchFilter = search ? like(labelField, `%${search}%`) : undefined;
     const categoryFilter = refType === 'entity' && category ? eq(entities.type, category) : undefined;
 
-    const conditions = [statusFilter, searchFilter, categoryFilter].filter(Boolean) as any[];
+    const conditions = [statusFilter, trustFilter, searchFilter, categoryFilter].filter(Boolean) as any[];
 
     let orderClause: any;
     switch (sort) {

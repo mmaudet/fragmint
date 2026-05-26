@@ -94,27 +94,35 @@ export function adminMetadataMutationRoutes(
       const results = [];
       for (const item of items) {
         try {
+          const stripNew = (s: string) => s.replace(/^NEW:\s*/i, '').trim();
           if (item.kind === 'tag') {
             action === 'approve'
               ? await db
                   .update(fragmentTags)
-                  .set({ validated: 1, status: 'active' })
+                  .set({ validated: 1, status: 'active', label: stripNew(String(item.id)) })
                   .where(eq(fragmentTags.slug, String(item.id)))
               : await db.delete(fragmentTags).where(eq(fragmentTags.slug, String(item.id)));
           } else if (item.kind === 'domain') {
             action === 'approve'
               ? await db
                   .update(fragmentDomains)
-                  .set({ validated: 1, status: 'active' })
+                  .set({ validated: 1, status: 'active', label: stripNew(String(item.id)) })
                   .where(eq(fragmentDomains.slug, String(item.id)))
               : await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, String(item.id)));
           } else {
-            action === 'approve'
-              ? await db
-                  .update(entities)
-                  .set({ validated: 1, status: 'active' })
-                  .where(eq(entities.id, Number(item.id)))
-              : await db.delete(entities).where(eq(entities.id, Number(item.id)));
+            if (action === 'approve') {
+              const [ent] = await db.select({ name: entities.name, canonicalName: entities.canonicalName }).from(entities).where(eq(entities.id, Number(item.id))).limit(1);
+              await db
+                .update(entities)
+                .set({
+                  validated: 1,
+                  status: 'active',
+                  ...(ent && { name: stripNew(ent.name), canonicalName: stripNew(ent.canonicalName ?? ent.name) }),
+                })
+                .where(eq(entities.id, Number(item.id)));
+            } else {
+              await db.delete(entities).where(eq(entities.id, Number(item.id)));
+            }
           }
           results.push({ id: item.id, success: true });
         } catch (e: any) {

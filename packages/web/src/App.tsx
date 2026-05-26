@@ -18,14 +18,14 @@ import HarvestPage from '@/pages/harvest';
 import HarvestDebriefPage from '@/pages/harvest-debrief';
 import PlanGenerationPage from '@/pages/plan-generation';
 import HomePage from '@/pages/home';
-import AdminHarvestPage from '@/pages/admin/harvest';
-import AdminHarvestJobPage from '@/pages/admin/harvest-job';
+import AdminFragmentsPage from '@/pages/admin/fragments';
 import AdminMetadataPage from '@/pages/admin/metadata';
 import AdminSupersedurePage from '@/pages/admin/supersedure';
 import AdminCollectionsPage from '@/pages/admin/collections';
 import AdminUsersPage from '@/pages/admin/users';
 import { AdminPlaceholderPage } from '@/pages/admin/placeholder';
 import { AdminHomePage } from '@/pages/admin/home';
+import AdminRetrievalPage from '@/pages/admin/retrieval';
 import { ReferentialItemDetailPage } from '@/pages/admin/referential-item-detail';
 import { ActiveJobsProvider } from '@/contexts/active-jobs-context';
 
@@ -100,14 +100,14 @@ export default function App() {
                     }
                   >
                     <Route index element={<AdminHomePage />} />
-                    <Route path="harvest" element={<AdminHarvestPage />} />
-                    <Route path="harvest/jobs/:jobId" element={<AdminHarvestJobPage />} />
+                    <Route path="fragments" element={<AdminFragmentsPage />} />
                     <Route path="metadata" element={<AdminMetadataPage />} />
                     <Route path="relations" element={<AdminPlaceholderPage title="Relations" description="Fragment relationship graph — coming soon" />} />
                     <Route path="supersedure" element={<AdminSupersedurePage />} />
                     <Route path="contradictions" element={<AdminPlaceholderPage title="Contradictions" description="Detected contradictions between fragments — coming soon" />} />
                     <Route path="users" element={<AdminUsersPage />} />
                     <Route path="collections" element={<AdminCollectionsPage />} />
+                    <Route path="retrieval" element={<AdminRetrievalPage />} />
                     <Route path="referential/:type/:id" element={<ReferentialItemDetailPage />} />
                   </Route>
                 </Routes>
