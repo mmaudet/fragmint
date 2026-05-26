@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, GitMerge, X } from 'lucide-react';
+import { AlertTriangle, Check, ExternalLink, GitMerge, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -108,25 +108,47 @@ export function SupersedureDiffSheet({ proposal, open, onOpenChange }: Props) {
           <SheetTitle className="text-base">{t('supersedure', 'viewDiff')}</SheetTitle>
           {proposal && (
             <div className="space-y-1 text-sm">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+              <div className="flex items-start gap-1.5">
+                <span className="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
                   {t('supersedure', 'newFragment')}
                 </span>
-                <span className="truncate text-foreground">
-                  {proposal.new_fragment?.title ??
-                    proposal.new_fragment?.body_excerpt?.slice(0, 60) ??
-                    proposal.new_fragment_id}
-                </span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-sm text-foreground truncate">
+                    {proposal.new_fragment?.title ??
+                      proposal.new_fragment?.body_excerpt?.slice(0, 60) ??
+                      proposal.new_fragment_id}
+                  </span>
+                  <a
+                    href={`/ui/admin/fragments?fragment=${proposal.new_fragment_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1 w-fit"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Ouvrir le fragment
+                  </a>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-red-700 bg-red-50 px-1.5 py-0.5 rounded">
+              <div className="flex items-start gap-1.5">
+                <span className="text-xs font-medium text-red-700 bg-red-50 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
                   {t('supersedure', 'oldFragment')}
                 </span>
-                <span className="truncate text-muted-foreground">
-                  {proposal.old_fragment?.title ??
-                    proposal.old_fragment?.body_excerpt?.slice(0, 60) ??
-                    proposal.old_fragment_id}
-                </span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-sm text-muted-foreground truncate">
+                    {proposal.old_fragment?.title ??
+                      proposal.old_fragment?.body_excerpt?.slice(0, 60) ??
+                      proposal.old_fragment_id}
+                  </span>
+                  <a
+                    href={`/ui/admin/fragments?fragment=${proposal.old_fragment_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1 w-fit"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Ouvrir le fragment
+                  </a>
+                </div>
               </div>
               <div className="flex gap-2 pt-1">
                 <Badge variant="outline" className="text-xs">

@@ -17,7 +17,7 @@ export function detectExactDuplicate(
 }
 
 export interface CoherenceFlag {
-  type: 'subject_coherence' | 'entity_coverage' | 'duplicate_check' | 'prototype_distance';
+  type: 'subject_coherence' | 'entity_coverage' | 'hint_entity_coverage' | 'duplicate_check' | 'prototype_distance';
   level: 'ok' | 'warning' | 'error' | 'info';
   message: string;
 }
@@ -69,15 +69,59 @@ export function checkEntityCoverage(block: {
   return { type: 'entity_coverage', level: 'ok', message: 'Expected entities present' };
 }
 
+function duplicateSignal(dupResult: { id: string; score: number } | null): CoherenceFlag {
+  if (!dupResult) {
+    return { type: 'duplicate_check', level: 'ok', message: 'No duplicates detected' };
+  }
+  const pct = Math.round(dupResult.score * 100);
+  if (dupResult.score >= 0.95) {
+    return {
+      type: 'duplicate_check',
+      level: 'error',
+      message: `Doublon quasi-exact de ${dupResult.id} (${pct}%)`,
+    };
+  }
+  if (dupResult.score >= 0.80) {
+    return {
+      type: 'duplicate_check',
+      level: 'warning',
+      message: `Forte similarité avec ${dupResult.id} (${pct}%) — possible mise à jour`,
+    };
+  }
+  // 0.70–0.80
+  return {
+    type: 'duplicate_check',
+    level: 'info',
+    message: `Similarité modérée avec ${dupResult.id} (${pct}%)`,
+  };
+}
+
+/** Check that hint entities from upload hints are present in the fragment body. */
+export function checkHintEntityCoverage(body: string, hintEntities: string[]): CoherenceFlag | null {
+  if (hintEntities.length === 0) return null;
+  const missing = hintEntities.filter((name) => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return !new RegExp(`\\b${escaped}\\b`, 'i').test(body);
+  });
+  if (missing.length === 0) return null;
+  return {
+    type: 'hint_entity_coverage',
+    level: 'info',
+    message: `Entité(s) hint non trouvée(s) dans ce fragment : ${missing.join(', ')}`,
+  };
+}
+
 export function computeQualitySignals(
   block: { type: string; body: string; domain: string; function_type?: string | null; entities?: Record<string, string[]> },
   dupResult: { id: string; score: number } | null,
+  hintEntities: string[] = [],
 ): CoherenceFlag[] {
-  return [
+  const signals: CoherenceFlag[] = [
     checkSubjectCoherence({ domain: block.domain, body: block.body }),
     checkEntityCoverage({ function_type: block.function_type, entities: block.entities ?? {} }),
-    dupResult
-      ? { type: 'duplicate_check' as const, level: 'error' as const, message: `Exact duplicate of ${dupResult.id}` }
-      : { type: 'duplicate_check' as const, level: 'ok' as const, message: 'No duplicates detected' },
+    duplicateSignal(dupResult),
   ];
+  const hintSignal = checkHintEntityCoverage(block.body, hintEntities);
+  if (hintSignal) signals.push(hintSignal);
+  return signals;
 }

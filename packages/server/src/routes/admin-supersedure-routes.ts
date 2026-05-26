@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments, supersedureProposals } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
+import type { LlmClient } from '../services/llm-client.js';
+import { detectAndPropose } from '../services/supersedure-detector.js';
 
 type ProposalRow = typeof supersedureProposals.$inferSelect;
 
@@ -27,6 +29,7 @@ export function adminSupersedureRoutes(
   app: FastifyInstance,
   db: FragmintDb,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
+  llmClient?: LlmClient | null,
 ) {
   // GET /v1/admin/supersedure/proposals
   app.get(
@@ -208,6 +211,63 @@ export function adminSupersedureRoutes(
       }
 
       return { data: { ...counts, total: all.length }, meta: null, error: null };
+    },
+  );
+
+  // POST /v1/admin/supersedure/trigger
+  // Manually run detectAndPropose on given fragment IDs (or all 'reviewed' if none provided).
+  // Useful to backfill proposals without touching fragment statuses.
+  app.post(
+    '/v1/admin/supersedure/trigger',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      if (!llmClient) {
+        return reply.status(503).send({ data: null, meta: null, error: 'LLM client not available' });
+      }
+      const body = (request.body ?? {}) as { fragment_ids?: unknown };
+      const rawIds = body.fragment_ids;
+      if (rawIds !== undefined && (!Array.isArray(rawIds) || rawIds.some((x) => typeof x !== 'string'))) {
+        return reply.status(400).send({ data: null, meta: null, error: 'fragment_ids must be a string array' });
+      }
+      let fragmentIds: string[] = rawIds ?? [];
+
+      if (fragmentIds.length === 0) {
+        // Default: all reviewed fragments not already superseded
+        const rows = await db
+          .select({ id: fragments.id })
+          .from(fragments)
+          .where(eq(fragments.quality, 'reviewed'));
+        fragmentIds = rows.map((r) => r.id);
+      } else {
+        // Validate provided IDs exist
+        const rows = await db
+          .select({ id: fragments.id })
+          .from(fragments)
+          .where(inArray(fragments.id, fragmentIds));
+        fragmentIds = rows.map((r) => r.id);
+      }
+
+      if (fragmentIds.length === 0) {
+        return { data: { triggered: 0, fragment_ids: [] }, meta: null, error: null };
+      }
+
+      // Run sequentially to avoid overwhelming the LLM endpoint
+      let done = 0;
+      const errors: string[] = [];
+      for (const id of fragmentIds) {
+        try {
+          await detectAndPropose(id, db, llmClient);
+          done++;
+        } catch (err) {
+          errors.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      return {
+        data: { triggered: done, fragment_ids: fragmentIds, errors: errors.length > 0 ? errors : undefined },
+        meta: null,
+        error: null,
+      };
     },
   );
 

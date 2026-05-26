@@ -105,10 +105,6 @@ export async function detectAndPropose(
 
   const newEntityMeta = await loadEntityMeta(db, newFragmentId);
 
-  const functionTypeFilter = newFrag.function_type
-    ? eq(fragments.function_type, newFrag.function_type)
-    : isNull(fragments.function_type);
-
   const candidates = await db
     .select()
     .from(fragments)
@@ -118,28 +114,41 @@ export async function detectAndPropose(
         eq(fragments.lang, newFrag.lang),
         eq(fragments.domain, newFrag.domain),
         eq(fragments.type, newFrag.type),
-        functionTypeFilter,
         or(eq(fragments.quality, 'reviewed'), eq(fragments.quality, 'approved')),
         isNull(fragments.superseded_by),
       ),
     )
     .limit(50);
 
-  // Entity pre-filter: keep only candidates sharing at least one entity with the new fragment
+  // Entity pre-filter: keep candidates that share at least one entity with the new fragment,
+  // OR that have no entities at all (older fragments never had entity extraction — let Jaccard decide).
+  // Candidates WITH entities but zero overlap are excluded (different-topic signal).
   let filteredCandidates = candidates;
   if (newEntityMeta.entityIds.length > 0 && candidates.length > 0) {
     const candidateIds = candidates.map((c) => c.id);
-    const sharedRows = await db
-      .select({ fragment_id: fragmentEntities.fragment_id })
-      .from(fragmentEntities)
-      .where(
-        and(
-          inArray(fragmentEntities.fragment_id, candidateIds),
-          inArray(fragmentEntities.entity_id, newEntityMeta.entityIds),
+
+    const [sharedRows, anyEntityRows] = await Promise.all([
+      db
+        .select({ fragment_id: fragmentEntities.fragment_id })
+        .from(fragmentEntities)
+        .where(
+          and(
+            inArray(fragmentEntities.fragment_id, candidateIds),
+            inArray(fragmentEntities.entity_id, newEntityMeta.entityIds),
+          ),
         ),
-      );
+      db
+        .select({ fragment_id: fragmentEntities.fragment_id })
+        .from(fragmentEntities)
+        .where(inArray(fragmentEntities.fragment_id, candidateIds)),
+    ]);
+
     const withShared = new Set(sharedRows.map((r) => r.fragment_id));
-    filteredCandidates = candidates.filter((c) => withShared.has(c.id));
+    const hasAnyEntities = new Set(anyEntityRows.map((r) => r.fragment_id));
+
+    filteredCandidates = candidates.filter(
+      (c) => withShared.has(c.id) || !hasAnyEntities.has(c.id),
+    );
   }
 
   for (const candidate of filteredCandidates) {
