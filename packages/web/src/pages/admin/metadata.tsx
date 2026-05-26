@@ -10,8 +10,7 @@ export default function AdminMetadataPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-medium mb-1">{t('admin', 'metadataTitle')}</h1>
-      <p className="text-sm text-muted-foreground mb-6">{t('admin', 'descValidation')}</p>
+      <h1 className="text-2xl font-medium mb-4">{t('admin', 'metadataTitle')}</h1>
       <UnifiedMetadataList />
       <div className="pt-6 mt-6 border-t">
         <Tooltip>

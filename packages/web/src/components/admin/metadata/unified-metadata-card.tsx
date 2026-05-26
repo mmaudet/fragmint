@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,7 +62,11 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
   const [renameOpen, setRenameOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const itemKey = `${kind}/${item.id}`;
+  const [sheetOpen, setSheetOpen] = useState(() => searchParams.get('item') === itemKey);
+  // Prevent card click from immediately re-opening after Radix dismisses on pointerdown
+  const lastClosedRef = useRef(0);
   const approve = useApproveProposal();
   const reject = useRejectProposal();
   const { t } = useI18n();
@@ -92,8 +97,22 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
     trust_source: item.trustSource as TrustSource,
   };
 
+  function openSheet() {
+    if (Date.now() - lastClosedRef.current < 150) return;
+    setSheetOpen(true);
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('item', itemKey); return next; }, { replace: true });
+  }
+
+  function handleSheetOpenChange(open: boolean) {
+    if (!open) {
+      lastClosedRef.current = Date.now();
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('item'); return next; }, { replace: true });
+    }
+    setSheetOpen(open);
+  }
+
   return (
-    <Card className={`p-4 cursor-pointer hover:bg-accent/30 transition-colors ${isHidden ? 'opacity-60' : ''}`} onClick={() => setSheetOpen(true)}>
+    <Card className={`p-4 cursor-pointer hover:bg-accent/30 transition-colors ${isHidden ? 'opacity-60' : ''}`} onClick={openSheet}>
       <div className="flex gap-3">
         {isPending && onToggle !== undefined && (
           <div className="mt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -105,38 +124,50 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{item.label}</code>
-            {item.usageCount > 0 && (
-              <Badge variant="secondary">
-                {item.category && <span className="mr-1">{item.category} ·</span>}
-                {item.usageCount} {item.usageCount === 1 ? 'fragment' : 'fragments'}
-              </Badge>
-            )}
-            {item.trustSource && (
-              <Tooltip>
-                <span className={`text-xs px-2 py-0.5 rounded cursor-help ${TRUST_CLASSES[item.trustSource as TrustSource] ?? 'bg-muted text-muted-foreground'}`}>
-                  {TRUST_LABEL_KEYS[item.trustSource as TrustSource] ? t('admin', TRUST_LABEL_KEYS[item.trustSource as TrustSource]) : item.trustSource}
-                </span>
-                {TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource] && (
-                  <TooltipContent side="top" className="max-w-xs">
-                    {t('admin', TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource])}
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            )}
-            {item.flags.map((flag, i) => (
-              <Badge key={i} variant={flag.type === 'warning' ? 'destructive' : 'info'} className="text-xs">
-                {flag.type === 'warning' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <Info className="h-3 w-3 mr-1" />}
-                {FLAG_LABEL_KEYS[flag.label] ? t('admin', FLAG_LABEL_KEYS[flag.label]) : flag.label}
-              </Badge>
-            ))}
-            {item.status === 'archived' && (
-              <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">{t('admin', 'statusArchived')}</Badge>
-            )}
-            {item.status === 'rejected' && (
-              <Badge variant="destructive" className="text-xs">{t('admin', 'statusRejected')}</Badge>
-            )}
+          <div className="flex items-start justify-between gap-2 mb-1">
+            {/* Left: label + usage + trust source + flags */}
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{item.label.replace(/^NEW:\s*/i, '')}</code>
+              {item.usageCount > 0 && (
+                <Badge variant="secondary">
+                  {item.category && <span className="mr-1">{item.category} ·</span>}
+                  {item.usageCount} {item.usageCount === 1 ? 'fragment' : 'fragments'}
+                </Badge>
+              )}
+              {item.trustSource && (
+                <Tooltip>
+                  <span className={`text-xs px-2 py-0.5 rounded cursor-help ${TRUST_CLASSES[item.trustSource as TrustSource] ?? 'bg-muted text-muted-foreground'}`}>
+                    {TRUST_LABEL_KEYS[item.trustSource as TrustSource] ? t('admin', TRUST_LABEL_KEYS[item.trustSource as TrustSource]) : item.trustSource}
+                  </span>
+                  {TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource] && (
+                    <TooltipContent side="top" className="max-w-xs">
+                      {t('admin', TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource])}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              )}
+              {item.flags.map((flag, i) => (
+                <Badge key={i} variant={flag.type === 'warning' ? 'destructive' : 'info'} className="text-xs">
+                  {flag.type === 'warning' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <Info className="h-3 w-3 mr-1" />}
+                  {FLAG_LABEL_KEYS[flag.label] ? t('admin', FLAG_LABEL_KEYS[flag.label]) : flag.label}
+                </Badge>
+              ))}
+            </div>
+            {/* Right: status only */}
+            <div className="shrink-0">
+              {item.status === 'pending' && (
+                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">En attente</Badge>
+              )}
+              {item.status === 'active' && (
+                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">Actif</Badge>
+              )}
+              {item.status === 'archived' && (
+                <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">{t('admin', 'statusArchived')}</Badge>
+              )}
+              {item.status === 'rejected' && (
+                <Badge variant="destructive" className="text-xs">{t('admin', 'statusRejected')}</Badge>
+              )}
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mb-2">
             {item.proposedBy === 'llm-auto'
@@ -200,7 +231,7 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
         type={kind}
         id={item.id}
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={handleSheetOpenChange}
         initialItem={item as SheetInitialItem}
       />
     </Card>

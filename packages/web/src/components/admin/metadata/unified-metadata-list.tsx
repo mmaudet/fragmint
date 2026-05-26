@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,34 +12,93 @@ import type { ProposalKind, UnifiedMetadataItem } from '@/types/admin-metadata';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 
-type StatusFilter = 'pending' | 'active' | 'all' | 'archived' | 'rejected';
-
 const ENTITY_TYPES = ['client', 'product', 'technology', 'partner', 'certification', 'regulation', 'metric'] as const;
 
+const KIND_DESC_KEYS: Record<ProposalKind, string> = {
+  tag: 'descKindTag',
+  entity: 'descKindEntity',
+  domain: 'descKindDomain',
+  type: 'descKindType',
+};
+
 export function UnifiedMetadataList() {
-  const [activeKind, setActiveKind] = useState<ProposalKind>('tag');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [search, setSearch] = useState('');
-  const [entityType, setEntityType] = useState('');
-  const [sortBy, setSortBy] = useState<'usage' | 'name' | 'created'>('created');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
   const { t } = useI18n();
   const bulkAction = useBulkAction();
+  const queryClient = useQueryClient();
+
+  // All filter state lives in the URL.
+  const activeKind = (searchParams.get('kind') ?? 'tag') as ProposalKind;
+  const statusFilter = searchParams.get('status') ?? 'all';
+  const trustFilter = searchParams.get('trust') ?? 'all';
+  const search = searchParams.get('search') ?? '';
+  const entityType = searchParams.get('category') ?? '';
+  const sortBy = (searchParams.get('sort') ?? 'created') as 'usage' | 'name' | 'created';
+  const onlySimilar = searchParams.get('similar') === 'true';
+
+  const updateFilters = useCallback(
+    (updates: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          Object.entries(updates).forEach(([key, val]) => {
+            if (val === null || val === '' || val === 'all' && key !== 'status') {
+              next.delete(key);
+            } else {
+              next.set(key, val);
+            }
+          });
+          return next;
+        },
+        { replace: true },
+      );
+      setSelectedIds(new Set());
+      setPage(1);
+    },
+    [setSearchParams],
+  );
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['referential', activeKind, statusFilter, search, entityType, sortBy, page, pageSize],
+    queryKey: ['referential', activeKind, statusFilter, trustFilter, search, entityType, sortBy, page, pageSize],
     queryFn: () => {
       const order = sortBy === 'name' ? 'asc' : 'desc';
       const offset = (page - 1) * pageSize;
       const params = new URLSearchParams({ status: statusFilter, search, sort: sortBy, order, limit: String(pageSize), offset: String(offset) });
       if (entityType) params.set('category', entityType);
+      if (trustFilter !== 'all') params.set('trust_source', trustFilter);
       return apiRequest<any>('GET', `/v1/admin/referential/${activeKind}?${params}`);
     },
   });
 
-  const items: UnifiedMetadataItem[] = data?.items ?? [];
+  // Fetch pending counts for all kinds in one parallel batch so every tab badge
+  // shows its own real count, independent of which tab is currently active.
+  const { data: pendingCounts, refetch: refetchCounts } = useQuery({
+    queryKey: ['referential-pending-counts'],
+    queryFn: async () => {
+      const [tag, entity, domain, type] = await Promise.all([
+        apiRequest<any>('GET', '/v1/admin/referential/tag?status=pending&limit=1&offset=0'),
+        apiRequest<any>('GET', '/v1/admin/referential/entity?status=pending&limit=1&offset=0'),
+        apiRequest<any>('GET', '/v1/admin/referential/domain?status=pending&limit=1&offset=0'),
+        apiRequest<any>('GET', '/v1/admin/referential/type?status=pending&limit=1&offset=0'),
+      ]);
+      return {
+        tag:    (tag?.stats?.byStatus?.pending    ?? 0) as number,
+        entity: (entity?.stats?.byStatus?.pending ?? 0) as number,
+        domain: (domain?.stats?.byStatus?.pending ?? 0) as number,
+        type:   (type?.stats?.byStatus?.pending   ?? 0) as number,
+      };
+    },
+    staleTime: 30_000,
+  });
+
+  const allItems: UnifiedMetadataItem[] = data?.items ?? [];
+  // Client-side filter for "similar only" — flags are already computed in the API response.
+  const items = onlySimilar
+    ? allItems.filter((i) => (i as any).flags?.some((f: any) => f.label?.toLowerCase().startsWith('similar')))
+    : allItems;
   const stats = data?.stats;
   const isPendingView = statusFilter === 'pending';
   const isAllSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
@@ -50,37 +110,36 @@ export function UnifiedMetadataList() {
     { key: 'type', label: t('admin', 'kindTypes') },
   ];
 
-  const resetPage = () => setPage(1);
-
-  const handleKindChange = (kind: ProposalKind) => {
-    setActiveKind(kind);
-    setSelectedIds(new Set());
-    setEntityType('');
-    resetPage();
-  };
-
-  const toggleSelection = (id: string | number) => {
-    const next = new Set(selectedIds);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelectedIds(next);
-  };
-
   const handleBulk = (action: 'approve' | 'reject') => {
     if (selectedIds.size === 0) return;
     bulkAction.mutate(
       { action, items: Array.from(selectedIds).map((id) => ({ id, kind: activeKind })) },
-      { onSuccess: () => { setSelectedIds(new Set()); refetch(); } },
+      { onSuccess: () => { setSelectedIds(new Set()); refetch(); refetchCounts(); } },
     );
   };
 
   return (
     <div className="space-y-4">
+      {/* Contextual description + trust source legend */}
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {t('admin', KIND_DESC_KEYS[activeKind] as any)}
+        </p>
+        <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
+          <p className="font-medium text-foreground">{t('admin', 'trustLegendTitle')}</p>
+          <p><span className="font-medium">{t('admin', 'filterTrustHuman')}</span> — {t('admin', 'trustLegendHuman')}</p>
+          <p><span className="font-medium">{t('admin', 'filterTrustLlmInferred')}</span> — {t('admin', 'trustLegendInferred')}</p>
+          <p><span className="font-medium">{t('admin', 'filterTrustLlmConfirmed')}</span> — {t('admin', 'trustLegendConfirmed')}</p>
+          <p><span className="font-medium">{t('admin', 'filterTrustLlmDeviation')}</span> — {t('admin', 'trustLegendDeviation')}</p>
+        </div>
+      </div>
+
       {/* Kind sub-tabs */}
       <div className="flex gap-1 border-b">
         {kinds.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => handleKindChange(key)}
+            onClick={() => updateFilters({ kind: key, category: null, similar: null })}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${
               activeKind === key
                 ? 'border-primary text-foreground font-medium'
@@ -88,9 +147,9 @@ export function UnifiedMetadataList() {
             }`}
           >
             {label}
-            {stats && statusFilter === 'pending' && (
+            {statusFilter === 'pending' && (
               <span className="ml-1.5 opacity-70">
-                ({key === 'tag' ? stats.byStatus.pending : key === 'entity' ? stats.byStatus.pending : stats.byStatus.pending})
+                ({pendingCounts?.[key] ?? '…'})
               </span>
             )}
           </button>
@@ -104,12 +163,12 @@ export function UnifiedMetadataList() {
             type="text"
             placeholder={t('admin', 'filterSearch')}
             value={search}
-            onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+            onChange={(e) => updateFilters({ search: e.target.value })}
             className="px-3 py-1.5 border rounded-md text-sm bg-background"
           />
           <select
             value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setSelectedIds(new Set()); resetPage(); }}
+            onChange={(e) => updateFilters({ status: e.target.value })}
             className="px-3 py-1.5 border rounded-md text-sm bg-background"
           >
             <option value="pending">{t('admin', 'filterStatusPending')}</option>
@@ -119,12 +178,42 @@ export function UnifiedMetadataList() {
             <option value="rejected">{t('admin', 'filterStatusRejected')}</option>
           </select>
           {activeKind === 'entity' && (
-            <select value={entityType} onChange={(e) => { setEntityType(e.target.value); resetPage(); }} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+            <select
+              value={entityType}
+              onChange={(e) => updateFilters({ category: e.target.value })}
+              className="px-3 py-1.5 border rounded-md text-sm bg-background"
+            >
               <option value="">{t('admin', 'filterAllEntities')}</option>
               {ENTITY_TYPES.map((et) => <option key={et} value={et}>{et}</option>)}
             </select>
           )}
-          <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); resetPage(); }} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+          <select
+            value={trustFilter}
+            onChange={(e) => updateFilters({ trust: e.target.value })}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          >
+            <option value="all">{t('admin', 'filterTrustAll')}</option>
+            <option value="human-direct">{t('admin', 'filterTrustHuman')}</option>
+            <option value="llm-inferred">{t('admin', 'filterTrustLlmInferred')}</option>
+            <option value="llm-confirmed">{t('admin', 'filterTrustLlmConfirmed')}</option>
+            <option value="llm-deviation">{t('admin', 'filterTrustLlmDeviation')}</option>
+          </select>
+          {isPendingView && (
+            <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onlySimilar}
+                onChange={(e) => updateFilters({ similar: e.target.checked ? 'true' : null })}
+                className="rounded"
+              />
+              {t('admin', 'filterSimilarOnly')}
+            </label>
+          )}
+          <select
+            value={sortBy}
+            onChange={(e) => updateFilters({ sort: e.target.value })}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          >
             <option value="created">{t('admin', 'sortDate')}</option>
             <option value="name">{t('admin', 'sortName')}</option>
             <option value="usage">{t('admin', 'sortUsage')}</option>
@@ -170,7 +259,9 @@ export function UnifiedMetadataList() {
       )}
       {!isLoading && statusFilter !== 'all' && stats && (
         <p className="text-xs text-muted-foreground">
-          {stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? items.length} {t('admin', 'statsResults')}
+          {onlySimilar
+            ? `${items.length} ${t('admin', 'statsResults')}`
+            : `${stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? items.length} ${t('admin', 'statsResults')}`}
         </p>
       )}
 
@@ -187,8 +278,16 @@ export function UnifiedMetadataList() {
               item={item}
               kind={activeKind}
               selected={selectedIds.has(item.id)}
-              onToggle={isPendingView ? () => toggleSelection(item.id) : undefined}
-              onRefresh={() => { setSelectedIds(new Set()); refetch(); }}
+              onToggle={isPendingView ? () => {
+                const next = new Set(selectedIds);
+                next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                setSelectedIds(next);
+              } : undefined}
+              onRefresh={() => {
+                setSelectedIds(new Set());
+                refetch();
+                queryClient.invalidateQueries({ queryKey: ['referential-pending-counts'] });
+              }}
             />
           ))}
         </div>
@@ -196,7 +295,11 @@ export function UnifiedMetadataList() {
 
       {/* Pagination */}
       {stats && (() => {
-        const total = statusFilter === 'all' ? stats.total : (stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? 0);
+        const total = onlySimilar
+          ? items.length
+          : statusFilter === 'all'
+            ? stats.total
+            : (stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? 0);
         const totalPages = Math.ceil(total / pageSize);
         if (total <= PAGE_SIZE_OPTIONS[0]) return null;
         return (

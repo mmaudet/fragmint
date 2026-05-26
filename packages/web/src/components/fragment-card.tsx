@@ -18,8 +18,8 @@ export function FragmentCard({ fragment, onClick, selected, checked, onCheckedCh
     <Card
       className={cn(
         'cursor-pointer transition-colors hover:border-primary/50',
-        selected && 'border-primary bg-primary/5 ring-1 ring-primary/30',
-        !selected && checked && 'border-slate-400/60 ring-1 ring-slate-400/20',
+        selected && 'border-primary/50 bg-primary/5',
+        !selected && checked && 'border-slate-400/60',
       )}
       onClick={onClick}
     >

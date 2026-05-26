@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '@/api/client';
 import { useI18n } from '@/lib/i18n';
 import { Card } from '@/components/ui/card';
@@ -64,7 +65,10 @@ const TRUST_CLASSES: Record<string, string> = {
 export function ReferentialItemCard({ type, item, onChange }: Props) {
   const [showRename, setShowRename] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const itemKey = `${type}/${item.id}`;
+  const [sheetOpen, setSheetOpen] = useState(() => searchParams.get('item') === itemKey);
+  const lastClosedRef = useRef(0);
   const { t } = useI18n();
   const isHidden = item.status === 'archived' || item.status === 'rejected';
 
@@ -92,11 +96,25 @@ export function ReferentialItemCard({ type, item, onChange }: Props) {
     onChange();
   };
 
+  function openSheet() {
+    if (Date.now() - lastClosedRef.current < 150) return;
+    setSheetOpen(true);
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('item', itemKey); return next; }, { replace: true });
+  }
+
+  function handleSheetOpenChange(open: boolean) {
+    if (!open) {
+      lastClosedRef.current = Date.now();
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('item'); return next; }, { replace: true });
+    }
+    setSheetOpen(open);
+  }
+
   return (
     <Card className={`p-4 cursor-pointer hover:bg-accent/40 transition-colors ${isHidden ? 'opacity-60' : ''}`}>
       <div
         className="flex-1 min-w-0"
-        onClick={() => setSheetOpen(true)}
+        onClick={openSheet}
       >
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{item.label}</code>
@@ -186,7 +204,7 @@ export function ReferentialItemCard({ type, item, onChange }: Props) {
         type={type}
         id={item.id}
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={handleSheetOpenChange}
         initialItem={item as SheetInitialItem}
       />
     </Card>

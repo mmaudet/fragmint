@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
   SheetContent,
+  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetDescription,
@@ -194,10 +195,20 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
         }
       }}
     >
-      <SheetContent side="right" className="w-[500px] sm:max-w-lg flex flex-col p-0">
+      <SheetContent side="right" className="w-[500px] sm:max-w-lg flex flex-col p-0 gap-0">
+        {/* Sticky header — same pattern as admin drawer */}
+        <div className="sticky top-0 bg-background border-b px-5 py-3 flex items-center justify-between z-10 shrink-0">
+          <SheetClose asChild>
+            <button className="text-sm hover:underline text-muted-foreground">
+              ← {t('common', 'close')}
+            </button>
+          </SheetClose>
+          {fragment && <QualityBadge quality={fragment.quality} />}
+        </div>
+
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
           {isLoading ? (
-            <div className="space-y-4 pt-6">
+            <div className="space-y-4">
               <Skeleton className="h-6 w-3/4" />
               <Skeleton className="h-4 w-1/4" />
               <Skeleton className="h-32 w-full" />
@@ -205,11 +216,10 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
           ) : fragment ? (
             <>
               <SheetHeader>
-                <div className="flex items-center justify-between pr-8 gap-2">
+                <div className="flex items-center gap-2">
                   <SheetTitle className="text-base truncate">
                     {fragment.title || t('common', 'noTitle')}
                   </SheetTitle>
-                  <QualityBadge quality={fragment.quality} />
                 </div>
                 <SheetDescription asChild>
                   <div className="flex items-center gap-1 flex-wrap mt-1">
