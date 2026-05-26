@@ -127,6 +127,9 @@ export const harvestJobs = sqliteTable('harvest_jobs', {
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at').notNull(),
   upload_hints: text('upload_hints'),
+  // Set when all candidates have been processed (accepted/rejected/merged).
+  // Allows safe cleanup: DELETE FROM harvest_jobs WHERE validated_at IS NOT NULL
+  validated_at: text('validated_at'),
 });
 
 export const harvestCandidates = sqliteTable('harvest_candidates', {

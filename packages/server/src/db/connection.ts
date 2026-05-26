@@ -309,6 +309,30 @@ export function createDb(path: string | ':memory:') {
     sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN upload_hints TEXT');
   } catch (_) {}
 
+  // Migration: single-repo vault — non-common fragments move from fragments/<domain>/
+  // to fragments/<slug>/<domain>/ within the root git repo.
+  // Only runs once: skips fragments whose file_path already contains the slug prefix.
+  try {
+    sqlite.exec(`
+      UPDATE fragments
+      SET file_path = 'fragments/' || collection_slug || '/' || substr(file_path, 11)
+      WHERE collection_slug IS NOT NULL
+        AND collection_slug != 'common'
+        AND file_path LIKE 'fragments/%'
+        AND file_path NOT LIKE 'fragments/' || collection_slug || '/%'
+    `);
+  } catch (_) {}
+
+  // Update collections git_path to root store path (handled by CollectionService.create
+  // going forward; existing rows are updated at startup via index.ts bootstrap if needed).
+
+  // Harvest job lifecycle: validated_at marks when all candidates are processed.
+  // Cleanup query: DELETE FROM harvest_candidates WHERE job_id IN (SELECT id FROM harvest_jobs WHERE validated_at IS NOT NULL);
+  //                DELETE FROM harvest_jobs WHERE validated_at IS NOT NULL;
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN validated_at TEXT');
+  } catch (_) {}
+
   // Audit log enrichment
   try {
     sqlite.exec('ALTER TABLE audit_log ADD COLUMN entity_type TEXT');
@@ -377,6 +401,27 @@ export function createDb(path: string | ':memory:') {
     );
     CREATE INDEX IF NOT EXISTS sp_new_fragment_idx ON supersedure_proposals(new_fragment_id);
     CREATE INDEX IF NOT EXISTS sp_status_idx ON supersedure_proposals(status);
+  `);
+
+  // Cascade delete triggers (SQLite doesn't support ALTER TABLE ADD CONSTRAINT)
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS cascade_delete_fragment
+      BEFORE DELETE ON fragments BEGIN
+        DELETE FROM fragment_entities WHERE fragment_id = OLD.id;
+        DELETE FROM plan_fragment_usages WHERE fragment_id = OLD.id;
+        DELETE FROM supersedure_proposals WHERE new_fragment_id = OLD.id OR old_fragment_id = OLD.id;
+        UPDATE harvest_candidates SET fragment_id = NULL WHERE fragment_id = OLD.id;
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS cascade_delete_harvest_job
+      BEFORE DELETE ON harvest_jobs BEGIN
+        DELETE FROM harvest_candidates WHERE job_id = OLD.id;
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS cascade_delete_plan
+      BEFORE DELETE ON plans BEGIN
+        DELETE FROM plan_fragment_usages WHERE plan_id = OLD.id;
+      END;
   `);
 
   const db = drizzle(sqlite, { schema });
