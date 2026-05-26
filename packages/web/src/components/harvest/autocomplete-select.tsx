@@ -29,13 +29,20 @@ export function AutocompleteSelect({
 }: Props) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debouncedQuery = useDebouncedValue(query, 300);
   const { data = [] } = useReferenceLookup(kind, debouncedQuery);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setQuery(value);
   }, [value]);
+
+  // Reset highlight when suggestions change
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [data]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -47,18 +54,20 @@ export function AutocompleteSelect({
 
   const select = (item: ReferenceItem) => {
     const v = valueField === 'label' ? (item.label || item.slug) : item.slug;
-    setQuery(v);
     onChange(v);
     onConfirm?.(v);
+    setQuery(onConfirm ? '' : v);
+    setHighlightedIndex(-1);
     setOpen(false);
   };
 
   const create = () => {
     const v = query.trim();
     if (!v) return;
-    setQuery(v);
     onChange(v);
     onConfirm?.(v);
+    setQuery(onConfirm ? '' : v);
+    setHighlightedIndex(-1);
     setOpen(false);
   };
 
@@ -67,14 +76,39 @@ export function AutocompleteSelect({
     onChange('');
   };
 
+  const showCreate = allowCreate && open && query.trim().length > 0 && data.length === 0 && debouncedQuery === query;
+
+  // Total navigable items: data items + optional "create" entry
+  const totalItems = data.length + (showCreate ? 1 : 0);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (!open || totalItems === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (allowCreate && query.trim()) create();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (allowCreate && data.length === 0 && query.trim()) create();
+      setHighlightedIndex((i) => (i + 1) % totalItems);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i - 1 + totalItems) % totalItems);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < data.length) {
+        select(data[highlightedIndex]);
+      } else if (highlightedIndex === data.length && showCreate) {
+        create();
+      } else if (allowCreate && query.trim()) {
+        create();
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setHighlightedIndex(-1);
     }
   };
-
-  const showCreate = allowCreate && open && query.trim().length > 0 && data.length === 0 && debouncedQuery === query;
 
   // Chip mode: once confirmed, show a removable badge instead of input
   if (chipMode && value.trim()) {
@@ -104,12 +138,12 @@ export function AutocompleteSelect({
         className="text-sm"
       />
       {open && (data.length > 0 || showCreate) && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
-          {data.map((item) => (
+        <div ref={listRef} className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+          {data.map((item, idx) => (
             <button
               key={item.slug}
               type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent ${highlightedIndex === idx ? 'bg-accent' : ''}`}
               onMouseDown={() => select(item)}
             >
               {item.label}
@@ -119,7 +153,7 @@ export function AutocompleteSelect({
           {showCreate && (
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic"
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic ${highlightedIndex === data.length ? 'bg-accent' : ''}`}
               onMouseDown={create}
             >
               Créer &ldquo;{query.trim()}&rdquo;

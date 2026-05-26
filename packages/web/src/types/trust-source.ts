@@ -2,9 +2,6 @@ export type TrustSource = 'human-direct' | 'llm-confirmed' | 'llm-deviation' | '
 
 export interface UploadHints {
   domain?: string;
-  function_type?: string;
-  audience?: string[];
-  maturity?: string;
   tags?: string[];
   entities?: string[];
 }

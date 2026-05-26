@@ -2,8 +2,8 @@ import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-e
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useEffect, useRef } from 'react';
-import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info, Wand2, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info, Wand2, RotateCcw, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { HarvestCandidate, SuggestedMetadata } from '@/api/types';
@@ -14,6 +14,35 @@ export interface CandidateEdits {
   lang?: string;
   tags?: string[];
   body?: string;
+  entities_json?: string;
+}
+
+const ENTITY_TYPES = ['clients', 'products', 'technologies', 'partners', 'certifications', 'regulations'] as const;
+
+function parseEntities(json: string | null | undefined): Record<string, string[]> {
+  if (!json) return {};
+  try { return JSON.parse(json) as Record<string, string[]>; } catch { return {}; }
+}
+
+function serializeEntities(map: Record<string, string[]>): string {
+  return JSON.stringify(map);
+}
+
+/** Flat {name, type} list from the nested map, filtered to non-empty names */
+function flatEntities(map: Record<string, string[]>): { name: string; type: string }[] {
+  return Object.entries(map).flatMap(([t, names]) =>
+    (Array.isArray(names) ? names : []).filter((n) => n.trim().length > 1).map((n) => ({ name: n, type: t }))
+  );
+}
+
+/** Rebuild the nested map from a flat list */
+function buildMap(flat: { name: string; type: string }[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const { name, type } of flat) {
+    if (!out[type]) out[type] = [];
+    out[type].push(name);
+  }
+  return out;
 }
 
 interface Props {
@@ -26,6 +55,74 @@ interface Props {
   onAccept: () => void;
   onReject: () => void;
   onClose: () => void;
+}
+
+function EntityEditor({
+  entitiesJson,
+  onChange,
+}: {
+  entitiesJson: string | null | undefined;
+  onChange: (json: string) => void;
+}) {
+  const map = parseEntities(entitiesJson);
+  const flat = flatEntities(map);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<string>(ENTITY_TYPES[0]);
+
+  const remove = (idx: number) => {
+    const updated = flat.filter((_, i) => i !== idx);
+    onChange(serializeEntities(buildMap(updated)));
+  };
+
+  const add = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const updated = [...flat, { name, type: newType }];
+    onChange(serializeEntities(buildMap(updated)));
+    setNewName('');
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">Entités détectées</p>
+      <div className="flex flex-wrap gap-1 min-h-[1.5rem]">
+        {flat.length === 0
+          ? <span className="text-xs text-muted-foreground">Aucune entité détectée</span>
+          : flat.map((e, i) => (
+            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300">
+              {e.name}
+              <span className="opacity-60">({e.type})</span>
+              <button type="button" onClick={() => remove(i)} className="ml-0.5 hover:text-red-500">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+      </div>
+      <div className="flex gap-1">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+          placeholder="Nom de l'entité"
+          className="flex-1 min-w-0 px-2 py-1 border rounded text-xs bg-background"
+        />
+        <select
+          value={newType}
+          onChange={(e) => setNewType(e.target.value)}
+          className="px-2 py-1 border rounded text-xs bg-background"
+        >
+          {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button
+          type="button"
+          onClick={add}
+          className="px-2 py-1 border rounded text-xs hover:bg-muted"
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function CandidateDetailSheet({
@@ -73,9 +170,21 @@ export function CandidateDetailSheet({
       <SheetContent side="right" className="w-[480px] sm:max-w-lg overflow-y-auto flex flex-col gap-4">
         <SheetHeader>
           <SheetTitle>{candidate.title}</SheetTitle>
-          <Badge className={cn('text-xs w-fit', confidenceColor)}>
-            {Math.round(candidate.confidence * 100)}%
-          </Badge>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className={cn('text-xs', confidenceColor)}>
+              {Math.round(candidate.confidence * 100)}%
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              Confiance LLM sur la classification —{' '}
+              {candidate.confidence >= 0.95
+                ? 'très élevée (métadonnées sans ambiguïté)'
+                : candidate.confidence >= 0.80
+                  ? 'élevée (légère incertitude sur un champ)'
+                  : candidate.confidence >= 0.65
+                    ? 'modérée (vérifier type / domaine)'
+                    : 'faible (métadonnées à revoir)'}
+            </span>
+          </div>
         </SheetHeader>
 
         <FragmentMetaEditor
@@ -100,15 +209,31 @@ export function CandidateDetailSheet({
           }
         />
 
-        {candidate.duplicate_of && (
-          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-3 w-3" />
-            <span>
-              {t('harvest', 'duplicateWarning')} (
-              {Math.round((candidate.duplicate_score ?? 0) * 100)}%)
-            </span>
-          </div>
-        )}
+        {/* Entities — editable */}
+        <EntityEditor
+          entitiesJson={edits.entities_json ?? candidate.entities_json}
+          onChange={(json) => onEditsChange({ ...edits, entities_json: json })}
+        />
+
+        {candidate.duplicate_of && (() => {
+          const score = candidate.duplicate_score ?? 0;
+          const pct = Math.round(score * 100);
+          const level = score >= 0.95 ? 'exact' : score >= 0.80 ? 'high' : 'moderate';
+          const config = {
+            exact:    { label: 'Doublon',      detail: `Doublon quasi-exact de ${candidate.duplicate_of} (${pct}%)`,                       className: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30',    icon: <XCircle className="h-3.5 w-3.5 shrink-0" /> },
+            high:     { label: 'Mise à jour ?', detail: `Forte similarité avec ${candidate.duplicate_of} (${pct}%) — possible mise à jour`, className: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30', icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> },
+            moderate: { label: 'Proche de',    detail: `Similarité modérée avec ${candidate.duplicate_of} (${pct}%)`,                      className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30', icon: <Info className="h-3.5 w-3.5 shrink-0" /> },
+          }[level];
+          return (
+            <div className={cn('flex items-start gap-2 text-xs rounded px-2 py-1.5', config.className)}>
+              {config.icon}
+              <div>
+                <span className="font-medium">{config.label}</span>
+                <span className="ml-1 opacity-80">— {config.detail}</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {candidate.quality_signals && candidate.quality_signals.length > 0 && (
           <div className="space-y-1">

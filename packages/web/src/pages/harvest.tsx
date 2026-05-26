@@ -319,9 +319,21 @@ export default function HarvestPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-6">
-        <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
-        <CollectionSelector />
+      <div className="space-y-1">
+        <div className="flex items-center gap-6">
+          <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
+          <CollectionSelector />
+        </div>
+        {job?.files && job.files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {job.files.map((f) => (
+              <span key={f} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1">
+                <FileText className="h-3 w-3 shrink-0" />
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {stats && (

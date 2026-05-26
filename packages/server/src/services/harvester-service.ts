@@ -46,6 +46,8 @@ export interface HarvestCandidate {
   duplicate_score: number | null;
   status: string;
   fragment_id: string | null;
+  trust_sources_json: string | null;
+  entities_json: string | null;
   quality_signals: CoherenceFlag[];
   judge_result: JudgeResult | null;
 }
@@ -60,6 +62,7 @@ export interface ValidationInput {
     type?: string;
     lang?: string;
     tags?: string[];
+    entities_json?: string;
   }>;
   merged: Array<{ candidate: string; into: string }>;
   rejected: string[];
@@ -164,6 +167,8 @@ export class HarvesterService {
         duplicate_score: c.duplicate_score,
         status: c.status,
         fragment_id: c.fragment_id,
+        trust_sources_json: c.trust_sources_json ?? null,
+        entities_json: c.entities_json ?? null,
         quality_signals: c.quality_signals ? (JSON.parse(c.quality_signals) as CoherenceFlag[]) : [],
         judge_result: c.judge_result ? (JSON.parse(c.judge_result) as JudgeResult) : null,
       })),

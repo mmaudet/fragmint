@@ -1,6 +1,6 @@
 // packages/server/src/services/harvester-validation.ts
 // Validation and bulk-accept logic for the harvester — extracted from harvester-service.ts
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, count } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   harvestCandidates,
@@ -54,6 +54,8 @@ export async function validate(
         parent_id: null,
         generation: 0,
         origin: 'harvested',
+        origin_source: candidate.origin_source,
+        origin_page: candidate.origin_page ?? null,
         valid_from: null,
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
@@ -105,6 +107,8 @@ export async function validate(
         parent_id: null,
         generation: 0,
         origin: 'harvested',
+        origin_source: candidate.origin_source,
+        origin_page: candidate.origin_page ?? null,
         valid_from: null,
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
@@ -126,7 +130,7 @@ export async function validate(
         .set({ status: 'accepted', fragment_id: result.id })
         .where(eq(harvestCandidates.id, mod.id)),
       upsertTags(db, tags),
-      linkFragmentEntities(db, result.id, candidate.entities_json),
+      linkFragmentEntities(db, result.id, mod.entities_json ?? candidate.entities_json),
     ]);
 
     committed++;
@@ -150,6 +154,19 @@ export async function validate(
       .where(eq(harvestCandidates.id, candidateId));
 
     rejected++;
+  }
+
+  // Mark job as fully validated if no pending candidates remain
+  const [{ remaining }] = await db
+    .select({ remaining: count() })
+    .from(harvestCandidates)
+    .where(and(eq(harvestCandidates.job_id, jobId), eq(harvestCandidates.status, 'pending')));
+
+  if (remaining === 0) {
+    await db
+      .update(harvestJobs)
+      .set({ validated_at: new Date().toISOString() })
+      .where(eq(harvestJobs.id, jobId));
   }
 
   return { committed, merged, rejected };
@@ -232,7 +249,7 @@ export async function linkFragmentEntities(
     const found = await db
       .select({ id: entities.id })
       .from(entities)
-      .where(eq(entities.normalizedName, normalized))
+      .where(and(eq(entities.normalizedName, normalized), eq(entities.validated, 1)))
       .limit(1);
     if (found.length > 0) {
       await db

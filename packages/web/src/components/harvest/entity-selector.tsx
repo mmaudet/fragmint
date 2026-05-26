@@ -39,15 +39,17 @@ export function EntitySelector({ values, onChange }: Props) {
         ))}
       </div>
       <div className="flex gap-2">
-        <AutocompleteSelect
-          kind="entity"
-          value={pending}
-          onChange={setPending}
-          placeholder="Search or type a new entity..."
-          valueField="label"
-          allowCreate
-          onConfirm={(v) => add(v)}
-        />
+        <div className="flex-1">
+          <AutocompleteSelect
+            kind="entity"
+            value={pending}
+            onChange={setPending}
+            placeholder="Search or type a new entity..."
+            valueField="label"
+            allowCreate
+            onConfirm={(v) => add(v)}
+          />
+        </div>
         <Button type="button" size="sm" variant="outline" onClick={() => add()}>
           <Plus className="h-3.5 w-3.5" />
         </Button>

@@ -88,6 +88,8 @@ export const createFragmentSchema = z.object({
   maturity: z.string().nullable().default(null),
   harvest_confidence: z.number().min(0).max(1).nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
+  origin_source: z.string().nullable().default(null),
+  origin_page: z.number().nullable().default(null),
   access: z
     .object({
       read: z.array(z.string()),
