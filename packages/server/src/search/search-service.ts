@@ -204,6 +204,65 @@ export class SearchService {
     return { indexed };
   }
 
+  /**
+   * Vector-only search via Milvus. Returns null when Milvus is disabled or unavailable.
+   * Used for duplicate detection — must NOT fall back to SQLite (SQLite LIKE scores
+   * are constant ~0.65 and would produce false near-duplicates).
+   */
+  async searchVector(
+    query: string,
+    filters?: SearchFilters,
+    limit = 1,
+  ): Promise<SearchResult[] | null> {
+    if (!this.milvusClient) return null;
+    try {
+      const vector = await this.embeddingClient.embed(
+        this.prefixes.query + truncateForEmbedding(query, this.maxTokens),
+      );
+      const milvusFilters: MilvusFilters = {
+        type: filters?.type,
+        domain: filters?.domain,
+        lang: filters?.lang,
+        quality_min: filters?.quality_min,
+        function_type: filters?.function_type,
+        audience: filters?.audience,
+        maturity: filters?.maturity,
+      };
+      const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit);
+      if (milvusResults.length === 0) return [];
+
+      const ids = milvusResults.map((r) => r.id);
+      const rows = await this.db
+        .select()
+        .from(fragments)
+        .where(and(inArray(fragments.id, ids), ne(fragments.quality, 'deprecated')));
+
+      const rowMap = new Map(rows.map((r) => [r.id, r]));
+      return milvusResults
+        .map((mr) => {
+          const row = rowMap.get(mr.id);
+          if (!row) return null;
+          return {
+            id: row.id,
+            score: mr.score, // raw cosine similarity — no re-ranking for duplicate detection
+            title: row.title,
+            body_excerpt: row.body_excerpt,
+            type: row.type,
+            domain: row.domain,
+            lang: row.lang,
+            quality: row.quality,
+            author: row.author,
+            uses: row.uses,
+            updated_at: row.updated_at,
+          };
+        })
+        .filter((r): r is SearchResult => r !== null);
+    } catch (err) {
+      console.warn('[searchVector] Milvus unavailable:', (err as Error).message?.slice(0, 80));
+      return null;
+    }
+  }
+
   async search(
     query: string,
     filters?: SearchFilters,

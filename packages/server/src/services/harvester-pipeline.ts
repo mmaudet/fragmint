@@ -184,40 +184,41 @@ export async function runPipeline(
           }
           console.log(`[dup-detect]   exact-match result: MISS`);
 
-          // 2. Near match via Milvus cosine — only if Milvus available
-          // Filter by domain/type/lang so a Twake-drive block never matches a Twake-mail fragment.
-          // Cap score at 1.0: re-ranking boosts (freshness + usage) can push cosine above 1.0.
+          // 2. Near match via Milvus vector similarity — searchVector() returns null if Milvus
+          //    is disabled or unavailable, never falls back to SQLite (SQLite LIKE scores are
+          //    a constant ~0.65 and would produce false near-duplicates).
+          //    Filter by domain/type/lang to prevent cross-domain false matches.
           const milvusFilters = { domain: [block.domain], type: [block.type], lang: block.lang };
           console.log(`[dup-detect]   near-match Milvus call with filters=${JSON.stringify(milvusFilters)}`);
-          try {
-            const results = await searchService.search(block.body, milvusFilters, 1);
-            if (results.length === 0) {
-              console.log(`[dup-detect]   near-match score: no match (0 results)`);
-              console.log(`[dup-detect]   final verdict: OK (no Milvus results)`);
-              return null;
-            }
-            const raw = results[0].score;
-            const nearMatchScore = Math.min(raw, 1.0);
-            const pct = Math.round(nearMatchScore * 100);
-            console.log(`[dup-detect]   near-match score: ${nearMatchScore.toFixed(4)} (${pct}%) — fragment id=${results[0].id} raw=${raw.toFixed(4)}`);
-            if (nearMatchScore > 0.70) {
-              const reason =
-                nearMatchScore >= 0.95 ? 'quasi-exact duplicate'
-                : nearMatchScore >= 0.80 ? 'strong similarity — possible update'
-                : 'moderate similarity';
-              const verdict =
-                nearMatchScore >= 0.95 ? 'DOUBLON'
-                : nearMatchScore >= 0.80 ? 'MISE-A-JOUR?'
-                : 'PROCHE';
-              console.log(`[dup-detect]   final verdict: ${verdict} (${reason}, score=${pct}%)`);
-              return { id: results[0].id, score: nearMatchScore };
-            }
-            console.log(`[dup-detect]   final verdict: OK (score ${pct}% below 70% threshold)`);
-          } catch (err) {
-            const msg = (err as Error).message?.slice(0, 100) ?? 'unknown error';
-            console.log(`[dup-detect]   near-match score: no match (Milvus unavailable: ${msg})`);
-            console.log(`[dup-detect]   final verdict: OK (Milvus skipped)`);
+          const vectorResults = await searchService.searchVector(block.body, milvusFilters, 1);
+          if (vectorResults === null) {
+            console.log(`[dup-detect]   near-match score: no match (Milvus disabled)`);
+            console.log(`[dup-detect]   final verdict: OK (Milvus unavailable — exact-hash only)`);
+            return null;
           }
+          if (vectorResults.length === 0) {
+            console.log(`[dup-detect]   near-match score: no match (0 Milvus results)`);
+            console.log(`[dup-detect]   final verdict: OK (no Milvus results)`);
+            return null;
+          }
+          // Cap at 1.0: re-ranking boosts on some paths can push cosine above 1.0
+          const raw = vectorResults[0].score;
+          const nearMatchScore = Math.min(raw, 1.0);
+          const pct = Math.round(nearMatchScore * 100);
+          console.log(`[dup-detect]   near-match score: ${nearMatchScore.toFixed(4)} (${pct}%) — fragment id=${vectorResults[0].id} raw=${raw.toFixed(4)}`);
+          if (nearMatchScore > 0.70) {
+            const reason =
+              nearMatchScore >= 0.95 ? 'quasi-exact duplicate'
+              : nearMatchScore >= 0.80 ? 'strong similarity — possible update'
+              : 'moderate similarity';
+            const verdict =
+              nearMatchScore >= 0.95 ? 'DOUBLON'
+              : nearMatchScore >= 0.80 ? 'MISE-A-JOUR?'
+              : 'PROCHE';
+            console.log(`[dup-detect]   final verdict: ${verdict} (${reason}, score=${pct}%)`);
+            return { id: vectorResults[0].id, score: nearMatchScore };
+          }
+          console.log(`[dup-detect]   final verdict: OK (score ${pct}% below 70% threshold)`);
           return null;
         }),
       );
