@@ -124,7 +124,7 @@ export default function AdminCollectionsPage() {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Collections</h1>
@@ -146,57 +146,59 @@ export default function AdminCollectionsPage() {
           <p className="text-sm">Aucune collection.</p>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Slug</TableHead>
-              <TableHead>Nom</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Accès</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="w-20" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {collections.map((col) => {
-              const Icon = TYPE_ICONS[col.type] ?? Globe;
-              return (
-                <TableRow key={col.slug}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{col.slug}</TableCell>
-                  <TableCell className="font-medium">{col.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs gap-1">
-                      <Icon className="h-3 w-3" />
-                      {TYPE_LABELS[col.type] ?? col.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {col.read_only ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                        <Lock className="h-3 w-3" /> Lecture seule
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Lecture/écriture</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                    {col.description ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(col)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(col)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-40">Slug</TableHead>
+                <TableHead>Nom</TableHead>
+                <TableHead className="w-32">Type</TableHead>
+                <TableHead className="w-36">Accès</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="w-20" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {collections.map((col) => {
+                const Icon = TYPE_ICONS[col.type] ?? Globe;
+                return (
+                  <TableRow key={col.slug}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{col.slug}</TableCell>
+                    <TableCell className="font-medium">{col.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Icon className="h-3 w-3" />
+                        {TYPE_LABELS[col.type] ?? col.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {col.read_only ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                          <Lock className="h-3 w-3" /> Lecture seule
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Lecture/écriture</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                      {col.description ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(col)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(col)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Create / Edit dialog */}

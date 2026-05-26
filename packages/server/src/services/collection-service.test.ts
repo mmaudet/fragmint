@@ -14,7 +14,7 @@ describe('CollectionService', () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'fragmint-col-'));
     db = createDb(':memory:');
-    service = new CollectionService(db, { collections_path: dir });
+    service = new CollectionService(db, { store_path: dir });
   });
 
   afterEach(() => {

@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
 import { collections, collectionMemberships, fragments, toMilvusPartition } from '../db/schema.js';
-import { GitRepository } from '../git/git-repository.js';
 
 const SLUG_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{2,}$/;
 
@@ -24,7 +23,7 @@ export type CollectionWithRole = Collection & { role: string };
 export class CollectionService {
   constructor(
     private db: FragmintDb,
-    private config: { collections_path: string },
+    private config: { store_path: string },
   ) {}
 
   async create(
@@ -58,7 +57,9 @@ export class CollectionService {
 
     const id = `col-${randomUUID()}`;
     const now = new Date().toISOString();
-    const gitPath = join(this.config.collections_path, params.slug);
+    // All collections share the root git repo; fragments live at fragments/<slug>/
+    const gitPath = this.config.store_path;
+    const fragmentsDir = join(this.config.store_path, 'fragments', params.slug);
     const milvusPartition = toMilvusPartition(params.slug);
 
     // Insert into DB
@@ -76,10 +77,8 @@ export class CollectionService {
       created_by: createdBy,
     });
 
-    // Create directory and init git repo
-    mkdirSync(gitPath, { recursive: true });
-    const git = new GitRepository(gitPath);
-    await git.init();
+    // Create fragments/<slug>/ directory in the shared vault (no separate git init)
+    mkdirSync(fragmentsDir, { recursive: true });
 
     // If personal, add owner as member
     if (params.type === 'personal' && params.ownerId) {
