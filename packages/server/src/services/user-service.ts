@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword } from '../auth/hash.js';
 export class UserService {
   constructor(private db: FragmintDb) {}
 
-  async create(login: string, password: string, displayName: string, role: string) {
+  async create(login: string, password: string, displayName: string, role: string, active = 1) {
     const id = uuidv4();
     const password_hash = await hashPassword(password);
     const now = new Date().toISOString();
@@ -19,10 +19,11 @@ export class UserService {
       display_name: displayName,
       role,
       password_hash,
+      active,
       created_at: now,
     });
 
-    return { id, login, display_name: displayName, role, created_at: now };
+    return { id, login, display_name: displayName, role, active, created_at: now };
   }
 
   async authenticate(login: string, password: string) {
