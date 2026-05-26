@@ -184,20 +184,20 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
         }`
       : '';
 
-    const prompt = `You are a document analysis assistant for Linagora, a French open-source software company.
+    const prompt = `You are a document analysis assistant.
 Extract reusable content blocks from the document and classify each one using structured metadata.
 
 # Extraction rules
 - body: EXACT verbatim text from the document. Do NOT translate, paraphrase, or summarize.
-- title: short English label (3-8 words) describing the block content.
+- title: short label (3-8 words) in the SAME language as the body. Do NOT write an English title for French content.
 - lang: ISO 639-1 code of the body language (fr, en, ...)
 
 # Classification rules
 
-## domain — the Linagora product or area this block is about. MUST be one of:
+## domain — the subject area or product this block is about. MUST be one of:
   ${domainList}
-  Use "other" for client requirements, SLA specs, procurement content, or anything not clearly tied to one product.
-  If the content clearly belongs to a Linagora product NOT in the list, add it to new_proposals.domains with "NEW:" prefix.
+  Use "other" for content not clearly tied to one specific domain.
+  If the content belongs to a domain NOT in the list, add it to new_proposals.domains with "NEW:" prefix.
 
 ## function_type — the rhetorical function of this block. MUST be one of:
   ${functionList}

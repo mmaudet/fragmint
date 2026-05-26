@@ -24,9 +24,10 @@ export interface JudgeResult {
   suggested_metadata?: SuggestedMetadata;
 }
 
-// Run on all non-duplicate fragments — suggestions are valuable even for clean content
-export function shouldRunJudge(_signals: CoherenceFlag[], hasDuplicate: boolean): boolean {
-  return !hasDuplicate;
+// Run only on fragments with warnings or errors — clean fragments don't need a second LLM pass
+export function shouldRunJudge(signals: CoherenceFlag[], hasDuplicate: boolean): boolean {
+  if (hasDuplicate) return false;
+  return signals.some((s) => s.level === 'warning' || s.level === 'error');
 }
 
 export async function runQualityJudge(
@@ -55,7 +56,7 @@ Types: ${taxonomy.types.join(', ')}
 Tags (validated): ${taxonomy.tags.slice(0, 40).join(', ')}${taxonomy.tags.length > 40 ? '...' : ''}`
     : '';
 
-  const prompt = `You are evaluating the quality of a content fragment extracted from a Linagora commercial document.
+  const prompt = `You are evaluating the quality of a content fragment extracted from a document.
 
 # Fragment to evaluate
 Title: ${block.title}
@@ -73,7 +74,7 @@ ${taxonomySection}
 Evaluate along 3 dimensions. For each: verdict "pass" | "partial" | "fail" + 1-sentence reason.
 
 ## Dimension 1: Reusability
-Can this fragment be inserted as-is in another proposal without requiring external context?
+Can this fragment be inserted as-is in another document without requiring external context?
 PASS: stands alone, no "as mentioned above", no dangling pronouns
 FAIL: starts with "Furthermore/Moreover", refers to "previous section", undefined entities
 
