@@ -6,13 +6,19 @@ import { fragmentTypes, fragmentDomains, fragmentTags } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
 
 const createTypeSchema = z.object({
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
   label: z.string().min(1).optional(),
   description: z.string().optional(),
 });
 
 const createTagSchema = z.object({
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/),
   label: z.string().min(1).optional(),
   category: z.string().optional(),
 });
@@ -40,9 +46,15 @@ export function taxonomyRoutes(
       const now = new Date().toISOString();
       const existing = await db.select().from(fragmentTypes).where(eq(fragmentTypes.slug, slug));
       if (existing.length > 0)
-        return reply.status(409).send({ data: null, meta: null, error: `Type '${slug}' already exists` });
-      await db.insert(fragmentTypes).values({ slug, label: label ?? slug, description: description ?? null, created_at: now });
-      return reply.status(201).send({ data: { slug, label: label ?? slug }, meta: null, error: null });
+        return reply
+          .status(409)
+          .send({ data: null, meta: null, error: `Type '${slug}' already exists` });
+      await db
+        .insert(fragmentTypes)
+        .values({ slug, label: label ?? slug, description: description ?? null, created_at: now });
+      return reply
+        .status(201)
+        .send({ data: { slug, label: label ?? slug }, meta: null, error: null });
     },
   );
 
@@ -53,7 +65,9 @@ export function taxonomyRoutes(
       const { slug } = request.params as { slug: string };
       const existing = await db.select().from(fragmentTypes).where(eq(fragmentTypes.slug, slug));
       if (existing.length === 0)
-        return reply.status(404).send({ data: null, meta: null, error: `Type '${slug}' not found` });
+        return reply
+          .status(404)
+          .send({ data: null, meta: null, error: `Type '${slug}' not found` });
       await db.delete(fragmentTypes).where(eq(fragmentTypes.slug, slug));
       return reply.status(204).send();
     },
@@ -75,11 +89,20 @@ export function taxonomyRoutes(
         return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
       const { slug, label, description } = parsed.data;
       const now = new Date().toISOString();
-      const existing = await db.select().from(fragmentDomains).where(eq(fragmentDomains.slug, slug));
+      const existing = await db
+        .select()
+        .from(fragmentDomains)
+        .where(eq(fragmentDomains.slug, slug));
       if (existing.length > 0)
-        return reply.status(409).send({ data: null, meta: null, error: `Domain '${slug}' already exists` });
-      await db.insert(fragmentDomains).values({ slug, label: label ?? slug, description: description ?? null, created_at: now });
-      return reply.status(201).send({ data: { slug, label: label ?? slug }, meta: null, error: null });
+        return reply
+          .status(409)
+          .send({ data: null, meta: null, error: `Domain '${slug}' already exists` });
+      await db
+        .insert(fragmentDomains)
+        .values({ slug, label: label ?? slug, description: description ?? null, created_at: now });
+      return reply
+        .status(201)
+        .send({ data: { slug, label: label ?? slug }, meta: null, error: null });
     },
   );
 
@@ -88,9 +111,14 @@ export function taxonomyRoutes(
     { preHandler: [authenticate, requireRole('admin')] },
     async (request, reply) => {
       const { slug } = request.params as { slug: string };
-      const existing = await db.select().from(fragmentDomains).where(eq(fragmentDomains.slug, slug));
+      const existing = await db
+        .select()
+        .from(fragmentDomains)
+        .where(eq(fragmentDomains.slug, slug));
       if (existing.length === 0)
-        return reply.status(404).send({ data: null, meta: null, error: `Domain '${slug}' not found` });
+        return reply
+          .status(404)
+          .send({ data: null, meta: null, error: `Domain '${slug}' not found` });
       await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, slug));
       return reply.status(204).send();
     },
@@ -114,9 +142,15 @@ export function taxonomyRoutes(
       const now = new Date().toISOString();
       const existing = await db.select().from(fragmentTags).where(eq(fragmentTags.slug, slug));
       if (existing.length > 0)
-        return reply.status(409).send({ data: null, meta: null, error: `Tag '${slug}' already exists` });
-      await db.insert(fragmentTags).values({ slug, label: label ?? slug, category: category ?? null, created_at: now });
-      return reply.status(201).send({ data: { slug, label: label ?? slug }, meta: null, error: null });
+        return reply
+          .status(409)
+          .send({ data: null, meta: null, error: `Tag '${slug}' already exists` });
+      await db
+        .insert(fragmentTags)
+        .values({ slug, label: label ?? slug, category: category ?? null, created_at: now });
+      return reply
+        .status(201)
+        .send({ data: { slug, label: label ?? slug }, meta: null, error: null });
     },
   );
 

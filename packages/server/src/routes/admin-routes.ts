@@ -134,7 +134,14 @@ export function adminRoutes(
       }
     }
     return {
-      data: { status: 'ok', mode, milvus, embedding, retrieval_mode: getCurrentMode(), last_run: new Date().toISOString() },
+      data: {
+        status: 'ok',
+        mode,
+        milvus,
+        embedding,
+        retrieval_mode: getCurrentMode(),
+        last_run: new Date().toISOString(),
+      },
       meta: null,
       error: null,
     };

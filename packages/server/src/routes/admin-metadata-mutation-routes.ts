@@ -111,13 +111,20 @@ export function adminMetadataMutationRoutes(
               : await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, String(item.id)));
           } else {
             if (action === 'approve') {
-              const [ent] = await db.select({ name: entities.name, canonicalName: entities.canonicalName }).from(entities).where(eq(entities.id, Number(item.id))).limit(1);
+              const [ent] = await db
+                .select({ name: entities.name, canonicalName: entities.canonicalName })
+                .from(entities)
+                .where(eq(entities.id, Number(item.id)))
+                .limit(1);
               await db
                 .update(entities)
                 .set({
                   validated: 1,
                   status: 'active',
-                  ...(ent && { name: stripNew(ent.name), canonicalName: stripNew(ent.canonicalName ?? ent.name) }),
+                  ...(ent && {
+                    name: stripNew(ent.name),
+                    canonicalName: stripNew(ent.canonicalName ?? ent.name),
+                  }),
                 })
                 .where(eq(entities.id, Number(item.id)));
             } else {

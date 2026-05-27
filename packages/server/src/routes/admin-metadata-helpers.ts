@@ -1,6 +1,12 @@
 import { eq, and, like, count } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, fragmentTags, fragmentDomains, entities, fragmentEntities } from '../db/schema.js';
+import {
+  fragments,
+  fragmentTags,
+  fragmentDomains,
+  entities,
+  fragmentEntities,
+} from '../db/schema.js';
 
 export function normalizeForComparison(text: string): string {
   return text

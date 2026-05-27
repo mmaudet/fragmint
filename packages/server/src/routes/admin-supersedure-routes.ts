@@ -130,7 +130,11 @@ export function adminSupersedureRoutes(
 
       db.transaction((tx) => {
         tx.update(fragments)
-          .set({ quality: 'deprecated', superseded_by: proposal.newFragmentId, updated_at: now } as any)
+          .set({
+            quality: 'deprecated',
+            superseded_by: proposal.newFragmentId,
+            updated_at: now,
+          } as any)
           .where(eq(fragments.id, proposal.oldFragmentId))
           .run();
         tx.update(fragments)
@@ -222,12 +226,19 @@ export function adminSupersedureRoutes(
     { preHandler: [authenticate, requireRole('admin')] },
     async (request, reply) => {
       if (!llmClient) {
-        return reply.status(503).send({ data: null, meta: null, error: 'LLM client not available' });
+        return reply
+          .status(503)
+          .send({ data: null, meta: null, error: 'LLM client not available' });
       }
       const body = (request.body ?? {}) as { fragment_ids?: unknown };
       const rawIds = body.fragment_ids;
-      if (rawIds !== undefined && (!Array.isArray(rawIds) || rawIds.some((x) => typeof x !== 'string'))) {
-        return reply.status(400).send({ data: null, meta: null, error: 'fragment_ids must be a string array' });
+      if (
+        rawIds !== undefined &&
+        (!Array.isArray(rawIds) || rawIds.some((x) => typeof x !== 'string'))
+      ) {
+        return reply
+          .status(400)
+          .send({ data: null, meta: null, error: 'fragment_ids must be a string array' });
       }
       let fragmentIds: string[] = rawIds ?? [];
 
@@ -264,7 +275,11 @@ export function adminSupersedureRoutes(
       }
 
       return {
-        data: { triggered: done, fragment_ids: fragmentIds, errors: errors.length > 0 ? errors : undefined },
+        data: {
+          triggered: done,
+          fragment_ids: fragmentIds,
+          errors: errors.length > 0 ? errors : undefined,
+        },
         meta: null,
         error: null,
       };

@@ -110,7 +110,11 @@ describe('Plan routes', () => {
       }),
     });
     // 201 created OR 500/400 if user already exists from another test run — best-effort.
-    if (bobCreate.statusCode !== 201 && bobCreate.statusCode !== 500 && bobCreate.statusCode !== 400) {
+    if (
+      bobCreate.statusCode !== 201 &&
+      bobCreate.statusCode !== 500 &&
+      bobCreate.statusCode !== 400
+    ) {
       throw new Error(`Unexpected status creating bob: ${bobCreate.statusCode} ${bobCreate.body}`);
     }
 
@@ -126,8 +130,14 @@ describe('Plan routes', () => {
         role: 'contributor',
       }),
     });
-    if (carolCreate.statusCode !== 201 && carolCreate.statusCode !== 500 && carolCreate.statusCode !== 400) {
-      throw new Error(`Unexpected status creating carol: ${carolCreate.statusCode} ${carolCreate.body}`);
+    if (
+      carolCreate.statusCode !== 201 &&
+      carolCreate.statusCode !== 500 &&
+      carolCreate.statusCode !== 400
+    ) {
+      throw new Error(
+        `Unexpected status creating carol: ${carolCreate.statusCode} ${carolCreate.body}`,
+      );
     }
 
     // Log bob in.
