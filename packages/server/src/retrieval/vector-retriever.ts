@@ -16,7 +16,7 @@ export class VectorRetriever implements FragmentRetriever {
         lang: filters.lang,
         tags: filters.tags,
         collectionSlug: collectionSlug ?? undefined,
-        quality_min: 'reviewed',
+        quality_min: 'approved',
       },
       limit,
     );
