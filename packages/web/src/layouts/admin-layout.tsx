@@ -27,6 +27,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { useSupersedureStats } from '@/api/hooks/use-supersedure-proposals';
 import { useMetadataPendingCount } from '@/api/hooks/use-metadata-proposals';
 import { useInactiveUsersCount } from '@/api/hooks/use-users';
+import { useFragmentPendingCount } from '@/api/hooks/use-fragment-pending-count';
 
 const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
 
@@ -44,6 +45,7 @@ export default function AdminLayout() {
   const { data: supersedureStats } = useSupersedureStats();
   const { data: metadataPending } = useMetadataPendingCount();
   const inactiveUsers = useInactiveUsersCount();
+  const fragmentPending = useFragmentPendingCount();
   if ((ROLE_LEVEL[user?.role ?? 'reader'] ?? 0) < ROLE_LEVEL['admin']) {
     return <Navigate to="/home" replace />;
   }
@@ -76,6 +78,11 @@ export default function AdminLayout() {
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="flex-1">{label}</span>
+              {to === '/admin/fragments' && fragmentPending > 0 && (
+                <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                  {fragmentPending}
+                </span>
+              )}
               {to === '/admin/supersedure' &&
                 supersedureStats &&
                 supersedureStats.pending > 0 && (
