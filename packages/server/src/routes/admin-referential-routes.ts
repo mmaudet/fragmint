@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq, like, desc, asc, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { and, eq, like, desc, asc, sql, inArray } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentDomains,
   fragmentTags,
+  fragmentTagLinks,
   entities,
   fragments,
   fragmentEntities,
@@ -26,7 +28,6 @@ import {
   resolveId,
   getFragmentsForItem,
   getCandidatesForItem,
-  renameTagInJson,
 } from './admin-referential-helpers.js';
 
 export function adminReferentialRoutes(
@@ -56,23 +57,30 @@ export function adminReferentialRoutes(
       .from(fragmentDomains).where(eq(fragmentDomains.status, 'active'))
       .orderBy(desc(fragmentDomains.usageCount));
 
-    const cells: { domain: string; entity: string; count: number }[] = [];
-    for (const domain of domains) {
-      for (const entity of topEntities) {
-        const rows = await db
-          .select({ count: sql<number>`count(distinct ${fragments.id})` })
+    const entityIds = topEntities.map((e) => e.id);
+    const domainSlugs = domains.map((d) => d.slug);
+    const entityById = new Map(topEntities.map((e) => [e.id, e.name]));
+
+    const rawCells = entityIds.length === 0 || domainSlugs.length === 0
+      ? []
+      : await db
+          .select({
+            domain: fragments.domain,
+            entity_id: fragmentEntities.entity_id,
+            count: sql<number>`count(distinct ${fragments.id})`,
+          })
           .from(fragments)
           .innerJoin(fragmentEntities, eq(fragmentEntities.fragment_id, fragments.id))
           .where(and(
-            eq(fragments.domain, domain.slug),
-            eq(fragmentEntities.entity_id, entity.id),
+            inArray(fragments.domain, domainSlugs),
+            inArray(fragmentEntities.entity_id, entityIds),
             eq(fragments.quality, 'approved'),
-          ));
-        if (rows[0].count > 0) {
-          cells.push({ domain: domain.slug, entity: entity.name, count: rows[0].count });
-        }
-      }
-    }
+          ))
+          .groupBy(fragments.domain, fragmentEntities.entity_id);
+
+    const cells = rawCells
+      .filter((r) => r.count > 0 && r.domain !== null)
+      .map((r) => ({ domain: r.domain as string, entity: entityById.get(r.entity_id) ?? String(r.entity_id), count: r.count }));
 
     return { data: { domains: domains.map((d) => d.slug), entities: topEntities, cells, generated_at: new Date().toISOString() }, meta: null, error: null };
   });
@@ -122,11 +130,38 @@ export function adminReferentialRoutes(
         orderClause = order === 'asc' ? asc((table as any).created_at ?? (table as any).createdAt) : desc((table as any).created_at ?? (table as any).createdAt);
         break;
       default:
-        orderClause = order === 'asc' ? asc((table as any).usageCount) : desc((table as any).usageCount);
+        if (refType === 'tag') {
+          orderClause = order === 'asc'
+            ? asc(sql`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`)
+            : desc(sql`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`);
+        } else {
+          orderClause = order === 'asc' ? asc((table as any).usageCount) : desc((table as any).usageCount);
+        }
     }
 
-    const items = await db.select().from(table).where(and(...conditions)).orderBy(orderClause)
-      .limit(parseInt(limit, 10)).offset(parseInt(offset, 10));
+    let items: any[];
+    if (refType === 'tag') {
+      items = await db
+        .select({
+          slug: fragmentTags.slug,
+          label: fragmentTags.label,
+          category: fragmentTags.category,
+          created_at: fragmentTags.created_at,
+          validated: fragmentTags.validated,
+          proposedBy: fragmentTags.proposedBy,
+          trustSource: fragmentTags.trustSource,
+          status: fragmentTags.status,
+          usageCount: sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`,
+        })
+        .from(fragmentTags)
+        .where(and(...conditions))
+        .orderBy(orderClause)
+        .limit(parseInt(limit, 10))
+        .offset(parseInt(offset, 10));
+    } else {
+      items = await db.select().from(table).where(and(...conditions)).orderBy(orderClause)
+        .limit(parseInt(limit, 10)).offset(parseInt(offset, 10));
+    }
     const formatted = items.map((item) => formatItem(item, refType));
     const roleMap = await batchUserInfo(db, formatted.map((i) => i.proposedBy).filter(Boolean));
 
@@ -136,10 +171,11 @@ export function adminReferentialRoutes(
       proposedByDisplay: roleMap[item.proposedBy]?.displayName ?? item.proposedBy ?? null,
     }));
 
-    const hasPending = formattedWithUsers.some((i) => i.status === 'pending');
+    // Load caches for flag computation — needed for both pending and active items.
     let cachedValidatedTags: Array<{ slug: string; label: string }> | undefined;
     let cachedValidatedEntities: Array<{ type: string; normalizedName: string; canonicalName: string }> | undefined;
-    if (hasPending) {
+    const needsFlags = formattedWithUsers.some((i) => i.status === 'pending' || i.status === 'active');
+    if (needsFlags) {
       if (refType === 'tag') {
         cachedValidatedTags = await db.select({ slug: fragmentTags.slug, label: fragmentTags.label })
           .from(fragmentTags).where(eq(fragmentTags.validated, 1));
@@ -152,19 +188,16 @@ export function adminReferentialRoutes(
 
     const itemsWithMeta = await Promise.all(
       formattedWithUsers.map(async (item) => {
-        if (item.status !== 'pending') return { ...item, flags: [], preview: '' };
+        // Archived/rejected items don't need flag computation.
+        if (item.status === 'archived' || item.status === 'rejected') return { ...item, flags: [], preview: '' };
         if (refType === 'tag') {
-          const [flags, preview] = await Promise.all([
-            computeFlagsForTag(db, { slug: String(item.id), usageCount: item.usageCount, label: item.label }, cachedValidatedTags),
-            getPreviewForTag(db, String(item.id)),
-          ]);
+          const flags = await computeFlagsForTag(db, { slug: String(item.id), usageCount: item.usageCount, label: item.label }, cachedValidatedTags);
+          const preview = item.status === 'pending' ? await getPreviewForTag(db, String(item.id)) : '';
           return { ...item, flags, preview };
         }
         if (refType === 'entity') {
-          const [flags, preview] = await Promise.all([
-            computeFlagsForEntity(db, { id: Number(item.id), type: item.category ?? '', name: item.label, normalizedName: (item.label ?? '').toLowerCase().trim() }, cachedValidatedEntities),
-            getPreviewForEntity(db, Number(item.id)),
-          ]);
+          const flags = await computeFlagsForEntity(db, { id: Number(item.id), type: item.category ?? '', name: item.label, normalizedName: (item.label ?? '').toLowerCase().trim() }, cachedValidatedEntities);
+          const preview = item.status === 'pending' ? await getPreviewForEntity(db, Number(item.id)) : '';
           return { ...item, flags, preview };
         }
         return { ...item, flags: [], preview: '' };
@@ -184,8 +217,15 @@ export function adminReferentialRoutes(
       if (row.trust_source in byTrust) byTrust[row.trust_source] += row.count;
     }
 
+    // Count matching items with active filters (search, status, trust, category).
+    const filteredCountRaw = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(refType === 'tag' ? fragmentTags : table)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+    const filteredTotal = filteredCountRaw[0]?.count ?? 0;
+
     return {
-      data: { items: itemsWithMeta, stats: { total, byStatus, byTrust } },
+      data: { items: itemsWithMeta, stats: { total, byStatus, byTrust, filteredTotal } },
       meta: null,
       error: null,
     };
@@ -286,37 +326,45 @@ export function adminReferentialRoutes(
     const affectedIds = linkedFragments.map((f) => f.id);
     const now = new Date().toISOString();
 
-    db.transaction((tx) => {
-      if (refType === 'entity') {
-        tx.update(entities).set({ canonicalName: new_value, normalizedName: new_value.toLowerCase().trim(), trustSource: 'human-direct' })
-          .where(eq(entities.id, lookupValue as number)).run();
-      } else {
-        tx.update(table).set({ slug: new_value, label: new_label ?? new_value, trustSource: 'human-direct' })
-          .where(eq((table as any).slug, oldValue)).run();
-      }
+    try {
+      db.transaction((tx) => {
+        if (refType === 'entity') {
+          tx.update(entities).set({ canonicalName: new_value, normalizedName: new_value.toLowerCase().trim(), trustSource: 'human-direct' })
+            .where(eq(entities.id, lookupValue as number)).run();
+        } else {
+          tx.update(table).set({ slug: new_value, label: new_label ?? new_value, trustSource: 'human-direct' })
+            .where(eq((table as any).slug, oldValue)).run();
+        }
 
-      if (refType === 'domain') {
-        tx.update(fragments).set({ domain: new_value }).where(eq(fragments.domain, oldValue)).run();
-        tx.update(harvestCandidates).set({ domain: new_value }).where(eq(harvestCandidates.domain, oldValue)).run();
-      } else if (refType === 'type') {
-        tx.update(fragments).set({ type: new_value }).where(eq(fragments.type, oldValue)).run();
-        tx.update(harvestCandidates).set({ type: new_value }).where(eq(harvestCandidates.type, oldValue)).run();
-      }
+        if (refType === 'domain') {
+          tx.update(fragments).set({ domain: new_value }).where(eq(fragments.domain, oldValue)).run();
+          tx.update(harvestCandidates).set({ domain: new_value }).where(eq(harvestCandidates.domain, oldValue)).run();
+        } else if (refType === 'type') {
+          tx.update(fragments).set({ type: new_value }).where(eq(fragments.type, oldValue)).run();
+          tx.update(harvestCandidates).set({ type: new_value }).where(eq(harvestCandidates.type, oldValue)).run();
+        }
 
-      tx.insert(referentialRenames).values({
-        table_name: TABLE_NAME_MAP[refType],
-        old_value: oldValue,
-        new_value,
-        affected_fragments: linkedFragments.length,
-        renamed_by: userLogin,
-        renamed_at: now,
-        recalculation_job_id: null,
-      }).run();
-    });
+        // Atomically repoint tag links AND update JSON tags column when renaming a tag slug
+        if (refType === 'tag') {
+          tx.run(sql`INSERT OR IGNORE INTO fragment_tag_links (fragment_id, tag_slug) SELECT fragment_id, ${new_value} FROM fragment_tag_links WHERE tag_slug = ${oldValue}`);
+          tx.delete(fragmentTagLinks).where(eq(fragmentTagLinks.tag_slug, oldValue)).run();
+          // Update the JSON tags array in fragments and harvest_candidates synchronously
+          tx.run(sql`UPDATE fragments SET tags = replace(tags, '"' || ${oldValue} || '"', '"' || ${new_value} || '"') WHERE tags LIKE '%"' || ${oldValue} || '"%'`);
+          tx.run(sql`UPDATE harvest_candidates SET tags = replace(tags, '"' || ${oldValue} || '"', '"' || ${new_value} || '"') WHERE tags LIKE '%"' || ${oldValue} || '"%'`);
+        }
 
-    // For tags: JSON update outside transaction (requires async)
-    if (refType === 'tag') {
-      await renameTagInJson(db, oldValue, new_value);
+        tx.insert(referentialRenames).values({
+          table_name: TABLE_NAME_MAP[refType],
+          old_value: oldValue,
+          new_value,
+          affected_fragments: linkedFragments.length,
+          renamed_by: userLogin,
+          renamed_at: now,
+          recalculation_job_id: null,
+        }).run();
+      });
+    } catch (err: any) {
+      return reply.status(409).send({ data: null, meta: null, error: `Rename failed: ${err?.message ?? 'conflict'}` });
     }
 
     await db.insert(auditLog).values({
@@ -406,6 +454,28 @@ export function adminReferentialRoutes(
       entity_id: String(lookupValue),
       diff_summary: `Restored from ${rows[0].status} to active`,
     } as any);
+
+    return { data: { ok: true }, meta: null, error: null };
+  });
+
+  // PATCH /v1/admin/referential/:type/:id/category — update category for tags and entity type
+  app.patch('/v1/admin/referential/:type/:id/category', auth, async (request, reply) => {
+    const { type, id } = request.params as { type: string; id: string };
+    if (!VALID_TYPES.includes(type as ReferentialType)) {
+      return reply.status(400).send({ data: null, meta: null, error: 'Invalid type' });
+    }
+    const refType = type as ReferentialType;
+    const parsed = z.object({ category: z.string().min(1).nullable() }).safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+    const { category } = parsed.data;
+
+    if (refType === 'entity') {
+      await db.update(entities).set({ type: category ?? '' }).where(eq(entities.id, Number(id)));
+    } else if (refType === 'tag') {
+      await db.update(fragmentTags).set({ category: category ?? null } as any).where(eq(fragmentTags.slug, id));
+    } else {
+      return reply.status(400).send({ data: null, meta: null, error: 'Category update only supported for tag and entity types' });
+    }
 
     return { data: { ok: true }, meta: null, error: null };
   });
