@@ -21,7 +21,7 @@ function isStepUnlocked(stepIdx: number, status: PlanStatus): boolean {
     case 0:
       return true;
     case 1:
-      return status !== 'draft';
+      return status === 'plan_validated' || status === 'fragments_validated' || status === 'completed';
     case 2:
     case 3:
       return status === 'fragments_validated' || status === 'completed';
@@ -32,6 +32,8 @@ function isStepUnlocked(stepIdx: number, status: PlanStatus): boolean {
 
 function defaultStepFromStatus(status: PlanStatus | undefined): number {
   switch (status) {
+    case 'plan_generated':
+      return 0;
     case 'plan_validated':
       return 1;
     case 'fragments_validated':

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const PLAN_STATUSES = [
   'draft',
+  'plan_generated',
   'plan_validated',
   'fragments_validated',
   'completed',

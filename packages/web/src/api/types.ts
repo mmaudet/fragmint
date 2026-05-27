@@ -186,7 +186,7 @@ export interface CollectionWithRole {
   tags?: string[];
 }
 
-export type PlanStatus = 'draft' | 'plan_validated' | 'fragments_validated' | 'completed';
+export type PlanStatus = 'draft' | 'plan_generated' | 'plan_validated' | 'fragments_validated' | 'completed';
 
 export interface PlanFilters {
   domain?: string[];
