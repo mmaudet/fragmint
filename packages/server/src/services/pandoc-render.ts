@@ -10,8 +10,10 @@ export async function renderMarkdownToDocx(
   markdown: string,
   referenceDocPath?: string,
 ): Promise<Buffer> {
-  if (referenceDocPath && !existsSync(referenceDocPath)) {
-    throw new Error(`Pandoc reference-doc not found: ${referenceDocPath}`);
+  let effectiveRef = referenceDocPath;
+  if (effectiveRef && !existsSync(effectiveRef)) {
+    console.warn(`[pandoc] Reference doc not found, exporting without style: ${effectiveRef}`);
+    effectiveRef = undefined;
   }
 
   const id = randomUUID();
@@ -20,7 +22,7 @@ export async function renderMarkdownToDocx(
   writeFileSync(mdPath, markdown, 'utf-8');
 
   const args = ['-f', 'markdown', '-t', 'docx', '-o', docxPath];
-  if (referenceDocPath) args.push(`--reference-doc=${referenceDocPath}`);
+  if (effectiveRef) args.push(`--reference-doc=${effectiveRef}`);
   args.push(mdPath);
 
   try {

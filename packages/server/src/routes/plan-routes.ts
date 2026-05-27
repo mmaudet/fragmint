@@ -205,30 +205,36 @@ export function planRoutes(
     const plan = await requireOwnership(request, reply, id);
     if (!plan) return;
 
-    if (parsed.data.format === 'md') {
-      const { content, filename } = await planService.exportMarkdown(id);
+    try {
+      if (parsed.data.format === 'md') {
+        const { content, filename } = await planService.exportMarkdown(id);
+        return reply
+          .type('text/markdown; charset=utf-8')
+          .header('Content-Disposition', `attachment; filename="${filename}"`)
+          .send(content);
+      }
+
+      const styleId = parsed.data.style_template_id ?? plan.state.export_style_template_id;
+      let stylePath: string | undefined;
+      if (styleId) {
+        const tpl = await templateService.getById(styleId);
+        if (!tpl) {
+          return reply.status(400).send({ data: null, meta: null, error: 'Style template not found' });
+        }
+        if (tpl.kind !== 'style_reference') {
+          return reply.status(400).send({ data: null, meta: null, error: 'Template is not a style reference' });
+        }
+        stylePath = join(storePath, tpl.template_path);
+      }
+      const { content, filename } = await planService.exportDocx(id, { styleTemplatePath: stylePath });
       return reply
-        .type('text/markdown; charset=utf-8')
+        .type('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .send(content);
+    } catch (err: any) {
+      const msg = err?.message ?? 'Export failed';
+      app.log.error({ err }, `Plan export error: ${msg}`);
+      return reply.status(400).send({ data: null, meta: null, error: msg });
     }
-
-    const styleId = parsed.data.style_template_id ?? plan.state.export_style_template_id;
-    let stylePath: string | undefined;
-    if (styleId) {
-      const tpl = await templateService.getById(styleId);
-      if (!tpl) {
-        return reply.status(400).send({ data: null, meta: null, error: 'Style template not found' });
-      }
-      if (tpl.kind !== 'style_reference') {
-        return reply.status(400).send({ data: null, meta: null, error: 'Template is not a style reference' });
-      }
-      stylePath = join(storePath, tpl.template_path);
-    }
-    const { content, filename } = await planService.exportDocx(id, { styleTemplatePath: stylePath });
-    return reply
-      .type('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-      .header('Content-Disposition', `attachment; filename="${filename}"`)
-      .send(content);
   });
 }
