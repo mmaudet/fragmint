@@ -170,8 +170,9 @@ export async function runPipeline(
       );
       console.log(`[harvest:${jobId}] LLM total: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-      const blocks: CombinedBlock[] = deduplicateBlocks(chunkResults.flat());
-      console.log(`[harvest:${jobId}] ${blocks.length} block(s) after dedup`);
+      const deduped = deduplicateBlocks(chunkResults.flat());
+      const blocks: CombinedBlock[] = deduped.filter((b) => !isSeparatorBlock(b.body));
+      console.log(`[harvest:${jobId}] ${blocks.length} block(s) after dedup+separator-filter`);
 
       // Apply hint overrides: domain forced on all fragments (document-level metadata)
       // Tags and entities are fragment-level — LLM applies tags where coherent,
@@ -461,6 +462,14 @@ export function deduplicateBlocks<T extends { body: string }>(blocks: T[]): T[] 
     seen.add(key);
     return true;
   });
+}
+
+/** Returns true if the block body is purely decorative (separator lines, horizontal rules, etc.)
+ *  and carries no semantic content worth indexing. */
+export function isSeparatorBlock(body: string): boolean {
+  const stripped = body.replace(/\s+/g, '');
+  if (stripped.length === 0) return false;
+  return /^[-=_*#~|.•·]+$/.test(stripped);
 }
 
 export function detectLanguage(text: string): 'fr' | 'en' {
