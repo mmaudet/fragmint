@@ -141,21 +141,21 @@ export async function insertNewProposals(
 
     for (const rawTag of proposals.tags ?? []) {
       const slug = rawTag.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
+      // onConflictDoNothing: if the tag already exists in any state (pending, active, rejected…)
+      // we never overwrite it — the LLM re-discovering a known tag is not a reason to change it.
       await db
         .insert(fragmentTags)
         .values({
           slug,
           label: slug,
           category: 'proposed',
+          status: tagAutoValidated ? 'active' : 'pending',
           validated: tagAutoValidated,
           proposedBy: 'llm-auto',
           trustSource: tagTrust,
           created_at: now,
         })
-        .onConflictDoUpdate({
-          target: fragmentTags.slug,
-          set: { validated: tagAutoValidated, trustSource: tagTrust },
-        });
+        .onConflictDoNothing();
     }
 
     const domainTrust = blockTrustSources?.domain ?? 'llm-inferred';
@@ -169,15 +169,13 @@ export async function insertNewProposals(
           slug,
           label: slug,
           description: 'LLM-proposed',
+          status: domainAutoValidated ? 'active' : 'pending',
           validated: domainAutoValidated,
           proposedBy: 'llm-auto',
           trustSource: domainTrust,
           created_at: now,
         })
-        .onConflictDoUpdate({
-          target: fragmentDomains.slug,
-          set: { validated: domainAutoValidated, trustSource: domainTrust },
-        });
+        .onConflictDoNothing();
     }
 
     const entityOverallTrust = overallTrustSource(blockTrustSources ?? {});

@@ -5,7 +5,7 @@ import type { FragmintDb } from '../db/connection.js';
 import { harvestJobs, harvestCandidates } from '../db/schema.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
-import type { FragmentService } from './fragment-service.js';
+import type { FragmentBulkService } from './fragment-bulk-service.js';
 import type { UploadHints } from '../schema/trust-source.js';
 import type { CoherenceFlag } from './quality-signals.js';
 import type { JudgeResult } from './quality-judge.js';
@@ -73,7 +73,7 @@ export class HarvesterService {
     private db: FragmintDb,
     private llmClient: LlmClient,
     private searchService: SearchService,
-    private fragmentService: FragmentService,
+    private fragmentService: FragmentBulkService,
     private storePath: string,
   ) {}
 

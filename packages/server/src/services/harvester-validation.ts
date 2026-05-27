@@ -10,6 +10,7 @@ import {
   fragmentEntities,
 } from '../db/schema.js';
 import type { FragmentService } from './fragment-service.js';
+import type { FragmentBulkService } from './fragment-bulk-service.js';
 import type { ValidationInput } from './harvester-service.js';
 
 export async function validate(
@@ -174,7 +175,7 @@ export async function validate(
 
 export async function bulkAccept(
   db: FragmintDb,
-  fragmentService: FragmentService,
+  fragmentService: FragmentBulkService,
   candidates: (typeof harvestCandidates.$inferSelect)[],
   userId: string,
 ): Promise<number> {
@@ -218,16 +219,18 @@ export async function bulkAccept(
   return created.length;
 }
 
+function normalizeTagSlug(raw: string): string {
+  return raw.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-').trim();
+}
+
 export function tagsFromCandidate(
   candidate: { tags: string | null; new_proposals: string | null },
   overrideTags?: string[],
 ): string[] {
-  const known: string[] = overrideTags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
+  const rawKnown: string[] = overrideTags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
   const proposals = candidate.new_proposals ? (JSON.parse(candidate.new_proposals) as Record<string, unknown>) : {};
-  const proposed: string[] = ((proposals.tags as string[] | undefined) ?? []).map((t) =>
-    t.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-'),
-  );
-  const merged = [...new Set([...known, ...proposed])].filter(Boolean);
+  const rawProposed: string[] = (proposals.tags as string[] | undefined) ?? [];
+  const merged = [...new Set([...rawKnown, ...rawProposed].map(normalizeTagSlug))].filter(Boolean);
   return merged;
 }
 
@@ -262,10 +265,15 @@ export async function linkFragmentEntities(
 
 export async function upsertTags(db: FragmintDb, tags: string[]): Promise<void> {
   if (tags.length === 0) return;
+  // Safety net: normalize slugs before inserting (strip NEW: prefix, lowercase, spaces→dashes)
+  const normalized = [...new Set(
+    tags.map((t) => t.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-').trim()).filter(Boolean),
+  )];
+  if (normalized.length === 0) return;
   const now = new Date().toISOString();
   await db
     .insert(fragmentTags)
-    .values(tags.map((slug) => ({
+    .values(normalized.map((slug) => ({
       slug,
       label: slug,
       usageCount: 1,
