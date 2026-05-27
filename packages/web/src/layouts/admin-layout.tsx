@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Navigate, Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -46,6 +47,15 @@ export default function AdminLayout() {
   const { data: metadataPending } = useMetadataPendingCount();
   const inactiveUsers = useInactiveUsersCount();
   const fragmentPending = useFragmentPendingCount();
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const prev = link?.href ?? '';
+    if (link) link.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ef4444'/%3E%3Crect x='9' y='9' width='14' height='3' rx='1.5' fill='white'/%3E%3Crect x='9' y='14.5' width='9' height='3' rx='1.5' fill='white'/%3E%3Crect x='9' y='20' width='11' height='3' rx='1.5' fill='white'/%3E%3C/svg%3E";
+    return () => {
+      if (link) link.href = prev;
+    };
+  }, []);
+
   if ((ROLE_LEVEL[user?.role ?? 'reader'] ?? 0) < ROLE_LEVEL['admin']) {
     return <Navigate to="/home" replace />;
   }

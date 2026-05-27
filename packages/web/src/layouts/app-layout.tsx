@@ -170,8 +170,8 @@ export default function AppLayout() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2"
                     >
-                      <Shield className="h-4 w-4" />
-                      Administration
+                      <Shield className="h-4 w-4 text-red-500" />
+                      <span className="text-red-500">Administration</span>
                       <SquareArrowOutUpRight className="h-3 w-3 ml-auto opacity-50" />
                     </NavLink>
                   </DropdownMenuItem>
