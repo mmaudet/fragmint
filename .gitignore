@@ -15,6 +15,7 @@ example-vault/.git/
 example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
+docs/superpowers/
 # Ignore all Claude Code configuration (local tooling, not project code)
 .claude/
 *.~lock.*
