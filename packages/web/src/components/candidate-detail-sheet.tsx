@@ -3,7 +3,18 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useEffect, useRef, useState } from 'react';
-import { Check, X, AlertTriangle, Save, CheckCircle2, XCircle, Info, Wand2, RotateCcw, Plus } from 'lucide-react';
+import {
+  Check,
+  X,
+  AlertTriangle,
+  Save,
+  CheckCircle2,
+  XCircle,
+  Info,
+  Wand2,
+  RotateCcw,
+  Plus,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { HarvestCandidate, SuggestedMetadata } from '@/api/types';
@@ -17,11 +28,22 @@ export interface CandidateEdits {
   entities_json?: string;
 }
 
-const ENTITY_TYPES = ['clients', 'products', 'technologies', 'partners', 'certifications', 'regulations'] as const;
+const ENTITY_TYPES = [
+  'clients',
+  'products',
+  'technologies',
+  'partners',
+  'certifications',
+  'regulations',
+] as const;
 
 function parseEntities(json: string | null | undefined): Record<string, string[]> {
   if (!json) return {};
-  try { return JSON.parse(json) as Record<string, string[]>; } catch { return {}; }
+  try {
+    return JSON.parse(json) as Record<string, string[]>;
+  } catch {
+    return {};
+  }
 }
 
 function serializeEntities(map: Record<string, string[]>): string {
@@ -31,7 +53,9 @@ function serializeEntities(map: Record<string, string[]>): string {
 /** Flat {name, type} list from the nested map, filtered to non-empty names */
 function flatEntities(map: Record<string, string[]>): { name: string; type: string }[] {
   return Object.entries(map).flatMap(([t, names]) =>
-    (Array.isArray(names) ? names : []).filter((n) => n.trim().length > 1).map((n) => ({ name: n, type: t }))
+    (Array.isArray(names) ? names : [])
+      .filter((n) => n.trim().length > 1)
+      .map((n) => ({ name: n, type: t })),
   );
 }
 
@@ -51,6 +75,7 @@ interface Props {
   decision?: 'accepted' | 'rejected';
   domains: string[];
   types: string[];
+  availableTags?: string[];
   onEditsChange: (edits: CandidateEdits) => void;
   onAccept: () => void;
   onReject: () => void;
@@ -86,17 +111,22 @@ function EntityEditor({
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground">Entités détectées</p>
       <div className="flex flex-wrap gap-1 min-h-[1.5rem]">
-        {flat.length === 0
-          ? <span className="text-xs text-muted-foreground">Aucune entité détectée</span>
-          : flat.map((e, i) => (
-            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300">
+        {flat.length === 0 ? (
+          <span className="text-xs text-muted-foreground">Aucune entité détectée</span>
+        ) : (
+          flat.map((e, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
+            >
               {e.name}
               <span className="opacity-60">({e.type})</span>
               <button type="button" onClick={() => remove(i)} className="ml-0.5 hover:text-red-500">
                 <X className="h-2.5 w-2.5" />
               </button>
             </span>
-          ))}
+          ))
+        )}
       </div>
       <div className="flex gap-1">
         <input
@@ -111,7 +141,11 @@ function EntityEditor({
           onChange={(e) => setNewType(e.target.value)}
           className="px-2 py-1 border rounded text-xs bg-background"
         >
-          {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {ENTITY_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
         </select>
         <button
           type="button"
@@ -131,6 +165,7 @@ export function CandidateDetailSheet({
   decision,
   domains,
   types,
+  availableTags,
   onEditsChange,
   onAccept,
   onReject,
@@ -150,7 +185,7 @@ export function CandidateDetailSheet({
       ...(s.domain && { domain: s.domain }),
       ...(s.tags && { tags: s.tags }),
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate?.id]);
 
   if (!candidate) return null;
@@ -167,7 +202,10 @@ export function CandidateDetailSheet({
 
   return (
     <Sheet open={!!candidate} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-[480px] sm:max-w-lg overflow-y-auto flex flex-col gap-4">
+      <SheetContent
+        side="right"
+        className="w-[480px] sm:max-w-lg overflow-y-auto flex flex-col gap-4"
+      >
         <SheetHeader>
           <SheetTitle>{candidate.title}</SheetTitle>
           <div className="flex items-center gap-2 flex-wrap">
@@ -178,7 +216,7 @@ export function CandidateDetailSheet({
               Confiance LLM sur la classification —{' '}
               {candidate.confidence >= 0.95
                 ? 'très élevée (métadonnées sans ambiguïté)'
-                : candidate.confidence >= 0.80
+                : candidate.confidence >= 0.8
                   ? 'élevée (légère incertitude sur un champ)'
                   : candidate.confidence >= 0.65
                     ? 'modérée (vérifier type / domaine)'
@@ -197,6 +235,7 @@ export function CandidateDetailSheet({
           }}
           types={types}
           domains={domains}
+          availableTags={availableTags}
           onChange={(m: MetaEdits) =>
             onEditsChange({
               ...edits,
@@ -215,37 +254,67 @@ export function CandidateDetailSheet({
           onChange={(json) => onEditsChange({ ...edits, entities_json: json })}
         />
 
-        {candidate.duplicate_of && (() => {
-          const score = candidate.duplicate_score ?? 0;
-          const pct = Math.round(score * 100);
-          const level = score >= 0.95 ? 'exact' : score >= 0.80 ? 'high' : 'moderate';
-          const config = {
-            exact:    { label: 'Doublon',      detail: `Doublon quasi-exact de ${candidate.duplicate_of} (${pct}%)`,                       className: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30',    icon: <XCircle className="h-3.5 w-3.5 shrink-0" /> },
-            high:     { label: 'Mise à jour ?', detail: `Forte similarité avec ${candidate.duplicate_of} (${pct}%) — possible mise à jour`, className: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30', icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> },
-            moderate: { label: 'Proche de',    detail: `Similarité modérée avec ${candidate.duplicate_of} (${pct}%)`,                      className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30', icon: <Info className="h-3.5 w-3.5 shrink-0" /> },
-          }[level];
-          return (
-            <div className={cn('flex items-start gap-2 text-xs rounded px-2 py-1.5', config.className)}>
-              {config.icon}
-              <div>
-                <span className="font-medium">{config.label}</span>
-                <span className="ml-1 opacity-80">— {config.detail}</span>
+        {candidate.duplicate_of &&
+          (() => {
+            const score = candidate.duplicate_score ?? 0;
+            const pct = Math.round(score * 100);
+            const level = score >= 0.95 ? 'exact' : score >= 0.8 ? 'high' : 'moderate';
+            const config = {
+              exact: {
+                label: 'Doublon',
+                detail: `Doublon quasi-exact de ${candidate.duplicate_of} (${pct}%)`,
+                className: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30',
+                icon: <XCircle className="h-3.5 w-3.5 shrink-0" />,
+              },
+              high: {
+                label: 'Mise à jour ?',
+                detail: `Forte similarité avec ${candidate.duplicate_of} (${pct}%) — possible mise à jour`,
+                className:
+                  'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30',
+                icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" />,
+              },
+              moderate: {
+                label: 'Proche de',
+                detail: `Similarité modérée avec ${candidate.duplicate_of} (${pct}%)`,
+                className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30',
+                icon: <Info className="h-3.5 w-3.5 shrink-0" />,
+              },
+            }[level];
+            return (
+              <div
+                className={cn(
+                  'flex items-start gap-2 text-xs rounded px-2 py-1.5',
+                  config.className,
+                )}
+              >
+                {config.icon}
+                <div>
+                  <span className="font-medium">{config.label}</span>
+                  <span className="ml-1 opacity-80">— {config.detail}</span>
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
         {candidate.quality_signals && candidate.quality_signals.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('harvest', 'qualitySignals')}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t('harvest', 'qualitySignals')}
+            </p>
             {candidate.quality_signals.map((s) => (
-              <div key={s.type} className={cn(
-                'flex items-start gap-2 text-xs rounded px-2 py-1',
-                s.level === 'ok' && 'text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-950/30',
-                s.level === 'warning' && 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30',
-                s.level === 'error' && 'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/30',
-                s.level === 'info' && 'text-muted-foreground bg-muted/40',
-              )}>
+              <div
+                key={s.type}
+                className={cn(
+                  'flex items-start gap-2 text-xs rounded px-2 py-1',
+                  s.level === 'ok' &&
+                    'text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-950/30',
+                  s.level === 'warning' &&
+                    'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/30',
+                  s.level === 'error' &&
+                    'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/30',
+                  s.level === 'info' && 'text-muted-foreground bg-muted/40',
+                )}
+              >
                 {s.level === 'ok' ? (
                   <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5" />
                 ) : s.level === 'warning' ? (
@@ -266,29 +335,40 @@ export function CandidateDetailSheet({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t('harvest', 'llmJudge')}
             </p>
-            <div className={cn(
-              'text-xs rounded px-3 py-2 font-medium',
-              candidate.judge_result.overall_recommendation === 'accept' && 'bg-green-50 text-green-800 dark:bg-green-950/30',
-              candidate.judge_result.overall_recommendation === 'review' && 'bg-amber-50 text-amber-800 dark:bg-amber-950/30',
-              candidate.judge_result.overall_recommendation === 'reject' && 'bg-red-50 text-red-800 dark:bg-red-950/30',
-            )}>
-              {candidate.judge_result.overall_recommendation.toUpperCase()} — {candidate.judge_result.overall_reason}
+            <div
+              className={cn(
+                'text-xs rounded px-3 py-2 font-medium',
+                candidate.judge_result.overall_recommendation === 'accept' &&
+                  'bg-green-50 text-green-800 dark:bg-green-950/30',
+                candidate.judge_result.overall_recommendation === 'review' &&
+                  'bg-amber-50 text-amber-800 dark:bg-amber-950/30',
+                candidate.judge_result.overall_recommendation === 'reject' &&
+                  'bg-red-50 text-red-800 dark:bg-red-950/30',
+              )}
+            >
+              {candidate.judge_result.overall_recommendation.toUpperCase()} —{' '}
+              {candidate.judge_result.overall_reason}
             </div>
-            {(['reusability', 'semantic_coherence', 'classification_accuracy'] as const).map((dim) => {
-              const v = candidate.judge_result![dim];
-              return (
-                <div key={dim} className="text-xs text-muted-foreground">
-                  <span className="font-medium capitalize">{dim.replace(/_/g, ' ')}</span>
-                  {' '}
-                  <span className={cn(
-                    v.verdict === 'pass' && 'text-green-700',
-                    v.verdict === 'partial' && 'text-amber-700',
-                    v.verdict === 'fail' && 'text-red-700',
-                  )}>[{v.verdict}]</span>
-                  {' '}{v.reason}
-                </div>
-              );
-            })}
+            {(['reusability', 'semantic_coherence', 'classification_accuracy'] as const).map(
+              (dim) => {
+                const v = candidate.judge_result![dim];
+                return (
+                  <div key={dim} className="text-xs text-muted-foreground">
+                    <span className="font-medium capitalize">{dim.replace(/_/g, ' ')}</span>{' '}
+                    <span
+                      className={cn(
+                        v.verdict === 'pass' && 'text-green-700',
+                        v.verdict === 'partial' && 'text-amber-700',
+                        v.verdict === 'fail' && 'text-red-700',
+                      )}
+                    >
+                      [{v.verdict}]
+                    </span>{' '}
+                    {v.reason}
+                  </div>
+                );
+              },
+            )}
 
             {appliedSuggestions && (
               <div className="mt-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2 space-y-1.5">
@@ -318,17 +398,27 @@ export function CandidateDetailSheet({
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {appliedSuggestions.type && (
-                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
+                    >
                       {t('harvest', 'suggestedType')}: {appliedSuggestions.type}
                     </Badge>
                   )}
                   {appliedSuggestions.domain && (
-                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
+                    >
                       {t('harvest', 'suggestedDomain')}: {appliedSuggestions.domain}
                     </Badge>
                   )}
                   {(appliedSuggestions.tags ?? []).map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300">
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
+                    >
                       #{tag}
                     </Badge>
                   ))}

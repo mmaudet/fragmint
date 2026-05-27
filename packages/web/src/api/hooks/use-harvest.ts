@@ -20,13 +20,7 @@ export function useHarvestJob(collectionSlug: string, jobId: string | null) {
 
 export function useStartHarvest(collectionSlug: string) {
   return useMutation({
-    mutationFn: async ({
-      files,
-      uploadHints,
-    }: {
-      files: File[];
-      uploadHints?: UploadHints;
-    }) => {
+    mutationFn: async ({ files, uploadHints }: { files: File[]; uploadHints?: UploadHints }) => {
       const form = new FormData();
       for (const file of files) {
         form.append('files', file);

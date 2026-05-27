@@ -83,20 +83,16 @@ export default function AdminLayout() {
                   {fragmentPending}
                 </span>
               )}
-              {to === '/admin/supersedure' &&
-                supersedureStats &&
-                supersedureStats.pending > 0 && (
-                  <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                    {supersedureStats.pending}
-                  </span>
-                )}
-              {to === '/admin/metadata' &&
-                metadataPending &&
-                metadataPending.total > 0 && (
-                  <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                    {metadataPending.total}
-                  </span>
-                )}
+              {to === '/admin/supersedure' && supersedureStats && supersedureStats.pending > 0 && (
+                <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                  {supersedureStats.pending}
+                </span>
+              )}
+              {to === '/admin/metadata' && metadataPending && metadataPending.total > 0 && (
+                <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                  {metadataPending.total}
+                </span>
+              )}
               {to === '/admin/users' && inactiveUsers > 0 && (
                 <span className="ml-auto bg-red-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
                   {inactiveUsers}

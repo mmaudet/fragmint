@@ -2,11 +2,23 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { useRetrievalMode, useSetRetrievalMode, type RetrievalMode } from '@/api/hooks/use-retrieval-mode';
+import {
+  useRetrievalMode,
+  useSetRetrievalMode,
+  type RetrievalMode,
+} from '@/api/hooks/use-retrieval-mode';
 import { useIndexStatus, useTriggerReindex } from '@/api/hooks/use-index';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Zap, Brain, Layers3, CheckCircle2, RefreshCw, AlertTriangle, Database } from 'lucide-react';
+import {
+  Zap,
+  Brain,
+  Layers3,
+  CheckCircle2,
+  RefreshCw,
+  AlertTriangle,
+  Database,
+} from 'lucide-react';
 
 interface ModeSpec {
   value: RetrievalMode;
@@ -214,8 +226,12 @@ export default function AdminRetrievalPage() {
             className="shrink-0 bg-red-700 hover:bg-red-800 text-white"
           >
             {setMode.isPending
-              ? lang === 'fr' ? 'Enregistrement…' : 'Saving…'
-              : lang === 'fr' ? 'Sauvegarder' : 'Save'}
+              ? lang === 'fr'
+                ? 'Enregistrement…'
+                : 'Saving…'
+              : lang === 'fr'
+                ? 'Sauvegarder'
+                : 'Save'}
           </Button>
         )}
       </div>
@@ -243,8 +259,8 @@ export default function AdminRetrievalPage() {
                   {lang === 'fr' ? 'Milvus connecté' : 'Milvus connected'}
                   <span className="ml-2 font-normal text-emerald-600 dark:text-emerald-500">
                     {lang === 'fr'
-                      ? `— mode actif : ${indexStatus.mode}`
-                      : `— active mode: ${indexStatus.mode}`}
+                      ? `— retrieval : ${indexStatus.retrieval_mode === 'vector-only' ? 'vectoriel' : indexStatus.retrieval_mode === 'hybrid' ? 'hybride' : 'agentique'}`
+                      : `— retrieval: ${indexStatus.retrieval_mode ?? indexStatus.mode}`}
                   </span>
                 </span>
               ) : (
@@ -265,10 +281,16 @@ export default function AdminRetrievalPage() {
               disabled={reindex.isPending}
               className="shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-400"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', reindex.isPending && 'animate-spin')} />
+              <RefreshCw
+                className={cn('h-3.5 w-3.5 mr-1.5', reindex.isPending && 'animate-spin')}
+              />
               {reindex.isPending
-                ? lang === 'fr' ? 'Réindexation…' : 'Reindexing…'
-                : lang === 'fr' ? 'Réindexer les fragments' : 'Reindex fragments'}
+                ? lang === 'fr'
+                  ? 'Réindexation…'
+                  : 'Reindexing…'
+                : lang === 'fr'
+                  ? 'Réindexer les fragments'
+                  : 'Reindex fragments'}
             </Button>
           )}
         </div>
@@ -301,7 +323,12 @@ export default function AdminRetrievalPage() {
                       isSelected ? 'text-red-600' : 'text-muted-foreground',
                     )}
                   />
-                  <span className={cn('font-semibold text-base', isSelected && 'text-red-700 dark:text-red-400')}>
+                  <span
+                    className={cn(
+                      'font-semibold text-base',
+                      isSelected && 'text-red-700 dark:text-red-400',
+                    )}
+                  >
                     {l(mode.label)}
                   </span>
                 </div>
@@ -395,8 +422,12 @@ export default function AdminRetrievalPage() {
               className="bg-red-700 hover:bg-red-800 text-white"
             >
               {setMode.isPending
-                ? lang === 'fr' ? 'Enregistrement…' : 'Saving…'
-                : lang === 'fr' ? 'Sauvegarder' : 'Save'}
+                ? lang === 'fr'
+                  ? 'Enregistrement…'
+                  : 'Saving…'
+                : lang === 'fr'
+                  ? 'Sauvegarder'
+                  : 'Save'}
             </Button>
           </div>
         </div>

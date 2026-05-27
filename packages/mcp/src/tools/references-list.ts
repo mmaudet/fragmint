@@ -30,7 +30,15 @@ export const listEntitiesDefinition: ToolDefinition = {
     properties: {
       type: {
         type: 'string',
-        enum: ['client', 'product', 'technology', 'partner', 'certification', 'regulation', 'metric'],
+        enum: [
+          'client',
+          'product',
+          'technology',
+          'partner',
+          'certification',
+          'regulation',
+          'metric',
+        ],
         description: 'Filter by entity type (optional).',
       },
     },

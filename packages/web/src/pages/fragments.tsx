@@ -75,7 +75,10 @@ export default function FragmentsPage() {
   }, []);
 
   const handleSelectAll = async () => {
-    if (isAllSelected) { setSelectedIds(new Set()); return; }
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
     if (search) {
       setSelectedIds(new Set((data ?? []).map((f) => f.id)));
     } else {
@@ -85,7 +88,10 @@ export default function FragmentsPage() {
       if (lang) params.set('lang', lang);
       if (quality) params.set('quality', quality);
       params.set('limit', '99999');
-      const { data: all } = await apiRequestFull<Fragment[]>('GET', collectionApiUrl(activeCollection, `/fragments?${params}`));
+      const { data: all } = await apiRequestFull<Fragment[]>(
+        'GET',
+        collectionApiUrl(activeCollection, `/fragments?${params}`),
+      );
       setSelectedIds(new Set(all.map((f) => f.id)));
     }
   };
@@ -95,10 +101,17 @@ export default function FragmentsPage() {
     setSelectedIds(new Set());
     setBulkPending(true);
     try {
-      const { job_id } = await apiRequest<{ job_id: string }>('POST', collectionApiUrl(activeCollection, '/fragments/bulk-delete'), { ids });
+      const { job_id } = await apiRequest<{ job_id: string }>(
+        'POST',
+        collectionApiUrl(activeCollection, '/fragments/bulk-delete'),
+        { ids },
+      );
       toast.info(t('validation', 'bulkProcessing'));
       const poll = async (): Promise<void> => {
-        const job = await apiRequest<{ status: string; done: number; error_count: number }>('GET', `/v1/jobs/${job_id}`);
+        const job = await apiRequest<{ status: string; done: number; error_count: number }>(
+          'GET',
+          `/v1/jobs/${job_id}`,
+        );
         if (job.status === 'done' || job.status === 'error') {
           toast.success(`${job.done} ${t('fragments', 'bulkDeleteSuccess')}`);
           queryClient.invalidateQueries({ queryKey: ['fragments'] });
@@ -142,24 +155,63 @@ export default function FragmentsPage() {
 
       {/* Filter row */}
       <div className="flex flex-wrap gap-3">
-        {([
-          { value: type, set: setType, allLabel: t('fragments', 'allTypes'),
-            items: fragmentTypes.map((ft) => ({ value: ft.slug, label: ft.label })) },
-          { value: domain, set: setDomain, allLabel: t('fragments', 'allDomains'),
-            items: domainsData.map((d) => ({ value: d.slug, label: d.label ?? d.slug })) },
-          { value: lang, set: setLang, allLabel: t('fragments', 'allLanguages'),
-            items: LANG_VALUES.map((v) => ({ value: v, label: t('fragments', v === 'fr' ? 'langFr' : 'langEn') })) },
-          { value: quality, set: setQuality, allLabel: t('fragments', 'allQualities'),
-            items: QUALITY_VALUES.map((q) => ({ value: q, label: t('quality', q as 'draft' | 'reviewed' | 'approved') })) },
-        ] as { value: string; set: (v: string) => void; allLabel: string; items: { value: string; label: string }[] }[]).map(({ value: val, set, allLabel, items }) => (
-          <Select key={allLabel} value={val || '__all__'} onValueChange={(v) => { set(v === '__all__' ? '' : v); setOffset(0); setSelectedIds(new Set()); }}>
+        {(
+          [
+            {
+              value: type,
+              set: setType,
+              allLabel: t('fragments', 'allTypes'),
+              items: fragmentTypes.map((ft) => ({ value: ft.slug, label: ft.label })),
+            },
+            {
+              value: domain,
+              set: setDomain,
+              allLabel: t('fragments', 'allDomains'),
+              items: domainsData.map((d) => ({ value: d.slug, label: d.label ?? d.slug })),
+            },
+            {
+              value: lang,
+              set: setLang,
+              allLabel: t('fragments', 'allLanguages'),
+              items: LANG_VALUES.map((v) => ({
+                value: v,
+                label: t('fragments', v === 'fr' ? 'langFr' : 'langEn'),
+              })),
+            },
+            {
+              value: quality,
+              set: setQuality,
+              allLabel: t('fragments', 'allQualities'),
+              items: QUALITY_VALUES.map((q) => ({
+                value: q,
+                label: t('quality', q as 'draft' | 'reviewed' | 'approved'),
+              })),
+            },
+          ] as {
+            value: string;
+            set: (v: string) => void;
+            allLabel: string;
+            items: { value: string; label: string }[];
+          }[]
+        ).map(({ value: val, set, allLabel, items }) => (
+          <Select
+            key={allLabel}
+            value={val || '__all__'}
+            onValueChange={(v) => {
+              set(v === '__all__' ? '' : v);
+              setOffset(0);
+              setSelectedIds(new Set());
+            }}
+          >
             <SelectTrigger className="flex-1 min-w-36 border-slate-300 bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{allLabel}</SelectItem>
               {items.map((item) => (
-                <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -174,7 +226,12 @@ export default function FragmentsPage() {
             {isAllSelected ? t('fragments', 'deselectAll') : t('fragments', 'selectAll')}
           </Button>
           {selectedIds.size > 0 && (
-            <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={bulkPending}>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkPending}
+            >
               <Trash2 className="h-3.5 w-3.5 mr-1" />
               {t('fragments', 'bulkDelete')} ({selectedIds.size})
             </Button>
@@ -198,13 +255,17 @@ export default function FragmentsPage() {
               selected={fragment.id === selectedId}
               onClick={() => setSelectedId(fragment.id)}
               checked={selectedIds.has(fragment.id)}
-              onCheckedChange={canDelete(currentUser) ? () => {
-                setSelectedIds((prev) => {
-                  const next = new Set(prev);
-                  next.has(fragment.id) ? next.delete(fragment.id) : next.add(fragment.id);
-                  return next;
-                });
-              } : undefined}
+              onCheckedChange={
+                canDelete(currentUser)
+                  ? () => {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        next.has(fragment.id) ? next.delete(fragment.id) : next.add(fragment.id);
+                        return next;
+                      });
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -226,7 +287,9 @@ export default function FragmentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {PAGE_SIZE_OPTIONS.map((s) => (
-                    <SelectItem key={s} value={String(s)} className="text-xs">{s}</SelectItem>
+                    <SelectItem key={s} value={String(s)} className="text-xs">
+                      {s}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -243,7 +306,8 @@ export default function FragmentsPage() {
               {t('common', 'previous')}
             </Button>
             <span className="text-sm text-muted-foreground">
-              {t('common', 'page')} {page}{totalPages !== undefined ? ` / ${totalPages}` : ''}
+              {t('common', 'page')} {page}
+              {totalPages !== undefined ? ` / ${totalPages}` : ''}
             </span>
             <Button
               variant="outline"

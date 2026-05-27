@@ -41,11 +41,7 @@ export function SupersedureTab() {
             className="text-xs capitalize"
           >
             {s}
-            {stats && (
-              <span className="ml-1.5 opacity-70">
-                ({stats[s] ?? 0})
-              </span>
-            )}
+            {stats && <span className="ml-1.5 opacity-70">({stats[s] ?? 0})</span>}
           </Button>
         ))}
       </div>

@@ -5,14 +5,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
-import { Check, X, Edit, Combine, ArrowRight, AlertTriangle, Info, Archive, RotateCcw } from 'lucide-react';
+import {
+  Check,
+  X,
+  Edit,
+  Combine,
+  ArrowRight,
+  AlertTriangle,
+  Info,
+  Archive,
+  RotateCcw,
+} from 'lucide-react';
 import { useApproveProposal, useRejectProposal } from '@/api/hooks/use-metadata-proposals';
 import { useI18n } from '@/lib/i18n';
 import { apiRequest } from '@/api/client';
 import { RenameDialog } from './rename-dialog';
 import { MergeDialog } from './merge-dialog';
 import { ConvertToEntityDialog } from './convert-to-entity-dialog';
-import { ReferentialItemSheet, type SheetInitialItem } from '@/components/admin/referential-item-sheet';
+import {
+  ReferentialItemSheet,
+  type SheetInitialItem,
+} from '@/components/admin/referential-item-sheet';
 import type { UnifiedMetadataItem, ProposalKind } from '@/types/admin-metadata';
 import type { TrustSource } from '@/types/trust-source';
 
@@ -31,21 +44,30 @@ const TRUST_CLASSES: Record<TrustSource, string> = {
   'llm-inferred': 'bg-sky-100 text-sky-800',
 };
 
-const TRUST_LABEL_KEYS: Record<TrustSource, 'trustHuman' | 'trustLlmConfirmed' | 'trustLlmInferred' | 'trustLlmDeviation'> = {
+const TRUST_LABEL_KEYS: Record<
+  TrustSource,
+  'trustHuman' | 'trustLlmConfirmed' | 'trustLlmInferred' | 'trustLlmDeviation'
+> = {
   'human-direct': 'trustHuman',
   'llm-confirmed': 'trustLlmConfirmed',
   'llm-inferred': 'trustLlmInferred',
   'llm-deviation': 'trustLlmDeviation',
 };
 
-const TRUST_TOOLTIP_KEYS: Record<TrustSource, 'trustTooltipHuman' | 'trustTooltipConfirmed' | 'trustTooltipInferred' | 'trustTooltipDeviation'> = {
+const TRUST_TOOLTIP_KEYS: Record<
+  TrustSource,
+  'trustTooltipHuman' | 'trustTooltipConfirmed' | 'trustTooltipInferred' | 'trustTooltipDeviation'
+> = {
   'human-direct': 'trustTooltipHuman',
   'llm-confirmed': 'trustTooltipConfirmed',
   'llm-inferred': 'trustTooltipInferred',
   'llm-deviation': 'trustTooltipDeviation',
 };
 
-const ROLE_KEYS: Record<string, 'roleAdmin' | 'roleContributor' | 'roleExpert' | 'roleReader' | 'roleManager'> = {
+const ROLE_KEYS: Record<
+  string,
+  'roleAdmin' | 'roleContributor' | 'roleExpert' | 'roleReader' | 'roleManager'
+> = {
   admin: 'roleAdmin',
   contributor: 'roleContributor',
   expert: 'roleExpert',
@@ -113,19 +135,36 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
   function openSheet() {
     if (Date.now() - lastClosedRef.current < 150) return;
     setSheetOpen(true);
-    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('item', itemKey); return next; }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('item', itemKey);
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   function handleSheetOpenChange(open: boolean) {
     if (!open) {
       lastClosedRef.current = Date.now();
-      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('item'); return next; }, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('item');
+          return next;
+        },
+        { replace: true },
+      );
     }
     setSheetOpen(open);
   }
 
   return (
-    <Card className={`p-4 cursor-pointer hover:bg-accent/30 transition-colors ${isHidden ? 'opacity-60' : ''}`} onClick={openSheet}>
+    <Card
+      className={`p-4 cursor-pointer hover:bg-accent/30 transition-colors ${isHidden ? 'opacity-60' : ''}`}
+      onClick={openSheet}
+    >
       <div className="flex gap-3">
         {isPending && onToggle !== undefined && (
           <div className="mt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -140,17 +179,25 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
           <div className="flex items-start justify-between gap-2 mb-1">
             {/* Left: label + usage + trust source + flags */}
             <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{cleanLabel}</code>
+              <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">
+                {cleanLabel}
+              </code>
               {item.usageCount > 0 && (
                 <Badge variant="secondary">
-                  {item.category && item.category !== 'proposed' && <span className="mr-1">{item.category} ·</span>}
+                  {item.category && item.category !== 'proposed' && (
+                    <span className="mr-1">{item.category} ·</span>
+                  )}
                   {item.usageCount} {item.usageCount === 1 ? 'fragment' : 'fragments'}
                 </Badge>
               )}
               {item.trustSource && (
                 <Tooltip>
-                  <span className={`text-xs px-2 py-0.5 rounded cursor-help ${TRUST_CLASSES[item.trustSource as TrustSource] ?? 'bg-muted text-muted-foreground'}`}>
-                    {TRUST_LABEL_KEYS[item.trustSource as TrustSource] ? t('admin', TRUST_LABEL_KEYS[item.trustSource as TrustSource]) : item.trustSource}
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded cursor-help ${TRUST_CLASSES[item.trustSource as TrustSource] ?? 'bg-muted text-muted-foreground'}`}
+                  >
+                    {TRUST_LABEL_KEYS[item.trustSource as TrustSource]
+                      ? t('admin', TRUST_LABEL_KEYS[item.trustSource as TrustSource])
+                      : item.trustSource}
                   </span>
                   {TRUST_TOOLTIP_KEYS[item.trustSource as TrustSource] && (
                     <TooltipContent side="top" className="max-w-xs">
@@ -160,8 +207,16 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
                 </Tooltip>
               )}
               {item.flags.map((flag, i) => (
-                <Badge key={i} variant={flag.type === 'warning' ? 'destructive' : 'info'} className="text-xs">
-                  {flag.type === 'warning' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <Info className="h-3 w-3 mr-1" />}
+                <Badge
+                  key={i}
+                  variant={flag.type === 'warning' ? 'destructive' : 'info'}
+                  className="text-xs"
+                >
+                  {flag.type === 'warning' ? (
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                  ) : (
+                    <Info className="h-3 w-3 mr-1" />
+                  )}
                   {renderFlagLabel(flag.label, t)}
                 </Badge>
               ))}
@@ -169,16 +224,30 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
             {/* Right: status only */}
             <div className="shrink-0">
               {item.status === 'pending' && (
-                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">En attente</Badge>
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+                >
+                  En attente
+                </Badge>
               )}
               {item.status === 'active' && (
-                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">Actif</Badge>
+                <Badge
+                  variant="outline"
+                  className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200"
+                >
+                  Actif
+                </Badge>
               )}
               {item.status === 'archived' && (
-                <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">{t('admin', 'statusArchived')}</Badge>
+                <Badge variant="secondary" className="bg-gray-100 text-gray-700 text-xs">
+                  {t('admin', 'statusArchived')}
+                </Badge>
               )}
               {item.status === 'rejected' && (
-                <Badge variant="destructive" className="text-xs">{t('admin', 'statusRejected')}</Badge>
+                <Badge variant="destructive" className="text-xs">
+                  {t('admin', 'statusRejected')}
+                </Badge>
               )}
             </div>
           </div>
@@ -186,7 +255,8 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
             {item.proposedBy === 'llm-auto'
               ? t('admin', 'llmAutoLabel')
               : (item.proposedByDisplay ?? item.proposedBy)}
-            {item.proposedByRole && ` (${t('admin', ROLE_KEYS[item.proposedByRole] ?? 'roleReader')})`}
+            {item.proposedByRole &&
+              ` (${t('admin', ROLE_KEYS[item.proposedByRole] ?? 'roleReader')})`}
             {item.createdAt && ` · ${new Date(item.createdAt).toLocaleDateString()}`}
           </p>
           {isPending && item.preview && (
@@ -201,45 +271,83 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
       <div className="flex gap-2 flex-wrap mt-3 ml-0" onClick={(e) => e.stopPropagation()}>
         {isPending && (
           <>
-            <Button size="sm" onClick={() => approve.mutate({ id: item.id, kind }, { onSuccess: onRefresh })} disabled={approve.isPending}>
-              <Check className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'approve')}
+            <Button
+              size="sm"
+              onClick={() => approve.mutate({ id: item.id, kind }, { onSuccess: onRefresh })}
+              disabled={approve.isPending}
+            >
+              <Check className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'approve')}
             </Button>
             {item.flags.some((f) => f.label === 'Possibly entity') && kind === 'tag' && (
               <Button size="sm" variant="outline" onClick={() => setConvertOpen(true)}>
-                <ArrowRight className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'convertToEntity')}
+                <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+                {t('admin', 'convertToEntity')}
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
-              <Edit className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'rename')}
+              <Edit className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'rename')}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
-              <Combine className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'merge')}
+              <Combine className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'merge')}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => reject.mutate({ id: item.id, kind }, { onSuccess: onRefresh })} disabled={reject.isPending} className="text-destructive hover:text-destructive">
-              <X className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'reject')}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => reject.mutate({ id: item.id, kind }, { onSuccess: onRefresh })}
+              disabled={reject.isPending}
+              className="text-destructive hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'reject')}
             </Button>
           </>
         )}
         {item.status === 'active' && (
           <>
             <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
-              <Edit className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'rename')}
+              <Edit className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'rename')}
             </Button>
-            <Button size="sm" variant="outline" onClick={handleArchive} className="text-amber-700 hover:text-amber-700">
-              <Archive className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'archiveItem')}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleArchive}
+              className="text-amber-700 hover:text-amber-700"
+            >
+              <Archive className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'archiveItem')}
             </Button>
           </>
         )}
         {isHidden && (
-          <Button size="sm" variant="outline" onClick={handleRestore} className="text-green-700 hover:text-green-700">
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />{t('admin', 'restoreItem')}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRestore}
+            className="text-green-700 hover:text-green-700"
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            {t('admin', 'restoreItem')}
           </Button>
         )}
       </div>
 
-      {renameOpen && <RenameDialog proposal={proposalForDialogs as any} open onOpenChange={setRenameOpen} />}
-      {mergeOpen && <MergeDialog proposal={proposalForDialogs as any} open onOpenChange={setMergeOpen} />}
-      {convertOpen && <ConvertToEntityDialog proposal={proposalForDialogs as any} open onOpenChange={setConvertOpen} />}
+      {renameOpen && (
+        <RenameDialog proposal={proposalForDialogs as any} open onOpenChange={setRenameOpen} />
+      )}
+      {mergeOpen && (
+        <MergeDialog proposal={proposalForDialogs as any} open onOpenChange={setMergeOpen} />
+      )}
+      {convertOpen && (
+        <ConvertToEntityDialog
+          proposal={proposalForDialogs as any}
+          open
+          onOpenChange={setConvertOpen}
+        />
+      )}
       <ReferentialItemSheet
         type={kind}
         id={item.id}

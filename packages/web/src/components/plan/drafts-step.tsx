@@ -27,7 +27,6 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
   const saveTimer = useRef<number | null>(null);
   const instrTimer = useRef<number | null>(null);
 
-
   useEffect(() => {
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current);
@@ -109,7 +108,8 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                   toast.success(t('planGeneration', 'assembleSuccess'));
                   onAssembled?.();
                 },
-                onError: (e: any) => toast.error(`${t('planGeneration', 'assembleError')} : ${e.message ?? e}`),
+                onError: (e: any) =>
+                  toast.error(`${t('planGeneration', 'assembleError')} : ${e.message ?? e}`),
               })
             }
             disabled={assemble.isPending}
@@ -119,11 +119,15 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          <span className="font-medium">{t('planGeneration', allGenerated ? 'regenerateAllSections' : 'generateAllSections')}</span>
-          {' — '}{t('planGeneration', 'generateAllSectionsHint')}
+          <span className="font-medium">
+            {t('planGeneration', allGenerated ? 'regenerateAllSections' : 'generateAllSections')}
+          </span>
+          {' — '}
+          {t('planGeneration', 'generateAllSectionsHint')}
           {' · '}
           <span className="font-medium">{t('planGeneration', 'assemble')}</span>
-          {' — '}{t('planGeneration', 'assembleHint')}
+          {' — '}
+          {t('planGeneration', 'assembleHint')}
         </p>
       </div>
 
@@ -138,7 +142,9 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                 i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
               )}
             >
-              <span className="truncate">{i + 1}. {s.title}</span>
+              <span className="truncate">
+                {i + 1}. {s.title}
+              </span>
               {s.generated_markdown && <span className="text-primary text-xs">✓</span>}
             </button>
           ))}
@@ -153,7 +159,9 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                 <CardTitle>{active.title}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{active.description}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {active.description}
+                </p>
 
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5">
@@ -162,9 +170,13 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     </span>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="cursor-help"><Info className="h-3 w-3 text-muted-foreground" /></span>
+                        <span className="cursor-help">
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </span>
                       </TooltipTrigger>
-                      <TooltipContent side="right">{t('planGeneration', 'sectionInstructionsTooltip')}</TooltipContent>
+                      <TooltipContent side="right">
+                        {t('planGeneration', 'sectionInstructionsTooltip')}
+                      </TooltipContent>
                     </Tooltip>
                   </div>
                   <Textarea
@@ -176,9 +188,15 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                 </div>
 
                 {active.selected.length === 0 && (
-                  <p className="text-amber-600 text-sm">No fragments approved — output may be weak.</p>
+                  <p className="text-amber-600 text-sm">
+                    No fragments approved — output may be weak.
+                  </p>
                 )}
-                <Button size="sm" onClick={() => generateOne(active.id)} disabled={generate.isPending}>
+                <Button
+                  size="sm"
+                  onClick={() => generateOne(active.id)}
+                  disabled={generate.isPending}
+                >
                   {generate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   {active.generated_markdown
                     ? t('planGeneration', 'regenerate')

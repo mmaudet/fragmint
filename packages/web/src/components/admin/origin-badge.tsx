@@ -1,7 +1,16 @@
 const ORIGIN_CONFIG: Record<string, { label: string; className: string }> = {
-  manual: { label: 'Manuel', className: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-  harvested: { label: 'Harvest', className: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-  generated: { label: 'Généré', className: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+  manual: {
+    label: 'Manuel',
+    className: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  },
+  harvested: {
+    label: 'Harvest',
+    className: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  },
+  generated: {
+    label: 'Généré',
+    className: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+  },
 };
 
 export function OriginBadge({ origin }: { origin: string }) {

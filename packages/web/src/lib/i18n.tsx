@@ -55,20 +55,32 @@ const translations = {
     logout: { fr: 'Déconnexion', en: 'Logout' },
   },
   home: {
-    tagline: { fr: 'Outil de production documentaire assisté par IA', en: 'AI-assisted document production tool' },
+    tagline: {
+      fr: 'Outil de production documentaire assisté par IA',
+      en: 'AI-assisted document production tool',
+    },
     subtitle: {
       fr: "Vos équipes passent des heures à reconstruire propositions, rapports et contrats en copiant des paragraphes d'anciens fichiers. Fragmint centralise vos meilleurs blocs de contenu — arguments, clauses, tarifs — les certifie par validation humaine, et les réassemble pour générer de nouveaux documents.",
-      en: "Your teams spend hours rebuilding proposals, reports and contracts by copying paragraphs from old files. Fragmint centralises your best content blocks — arguments, clauses, pricing — certifies them through human validation, and reassembles them to generate new documents.",
+      en: 'Your teams spend hours rebuilding proposals, reports and contracts by copying paragraphs from old files. Fragmint centralises your best content blocks — arguments, clauses, pricing — certifies them through human validation, and reassembles them to generate new documents.',
     },
     howItWorks: { fr: 'Comment ça marche ?', en: 'How does it work?' },
     step1Title: { fr: 'Ingérer', en: 'Ingest' },
-    step1Desc: { fr: "Importez vos documents existants. Fragmint les découpe automatiquement en blocs réutilisables et les classe par type et domaine.", en: 'Import your existing documents. Fragmint automatically splits them into reusable blocks and classifies them by type and domain.' },
+    step1Desc: {
+      fr: 'Importez vos documents existants. Fragmint les découpe automatiquement en blocs réutilisables et les classe par type et domaine.',
+      en: 'Import your existing documents. Fragmint automatically splits them into reusable blocks and classifies them by type and domain.',
+    },
     step1Cta: { fr: "Aller à l'ingestion", en: 'Go to ingestion' },
     step2Title: { fr: 'Valider', en: 'Validate' },
-    step2Desc: { fr: 'Vérifiez les fragments générés, acceptez ou rejetez chaque candidat. Les fragments approuvés constituent votre bibliothèque certifiée.', en: 'Check generated fragments, accept or reject each candidate. Approved fragments make up your certified library.' },
+    step2Desc: {
+      fr: 'Vérifiez les fragments générés, acceptez ou rejetez chaque candidat. Les fragments approuvés constituent votre bibliothèque certifiée.',
+      en: 'Check generated fragments, accept or reject each candidate. Approved fragments make up your certified library.',
+    },
     step2Cta: { fr: 'Aller à la validation', en: 'Go to validation' },
     step3Title: { fr: 'Générer', en: 'Generate' },
-    step3Desc: { fr: 'Décrivez le document à produire. Fragmint sélectionne les fragments pertinents dans la bibliothèque et rédige le contenu section par section.', en: 'Describe the document to produce. Fragmint selects relevant fragments from the library and drafts content section by section.' },
+    step3Desc: {
+      fr: 'Décrivez le document à produire. Fragmint sélectionne les fragments pertinents dans la bibliothèque et rédige le contenu section par section.',
+      en: 'Describe the document to produce. Fragmint selects relevant fragments from the library and drafts content section by section.',
+    },
     step3Cta: { fr: 'Créer un plan', en: 'Create a plan' },
     statFragments: { fr: 'fragments certifiés', en: 'certified fragments' },
     statApproved: { fr: 'approuvés', en: 'approved' },
@@ -107,7 +119,10 @@ const translations = {
     approveError: { fr: "Erreur lors de l'approbation", en: 'Error during approval' },
     updateSuccess: { fr: 'Fragment mis à jour', en: 'Fragment updated' },
     updateError: { fr: 'Erreur lors de la mise à jour', en: 'Error updating fragment' },
-    permissionDenied: { fr: 'Droits insuffisants pour modifier ce fragment', en: 'Insufficient rights to edit this fragment' },
+    permissionDenied: {
+      fr: 'Droits insuffisants pour modifier ce fragment',
+      en: 'Insufficient rights to edit this fragment',
+    },
     delete: { fr: 'Supprimer', en: 'Delete' },
     confirmDelete: { fr: 'Confirmer ?', en: 'Confirm?' },
     deleteSuccess: { fr: 'Fragment supprimé', en: 'Fragment deleted' },
@@ -174,7 +189,7 @@ const translations = {
       en: 'Fragments ingested by the harvester — review before validation.',
     },
     approveTabDesc: {
-      fr: "Fragments vérifiés — prêts pour approbation finale.",
+      fr: 'Fragments vérifiés — prêts pour approbation finale.',
       en: 'Reviewed fragments — ready for final approval.',
     },
     selectAll: { fr: 'Tout sélectionner', en: 'Select all' },
@@ -189,7 +204,10 @@ const translations = {
       fr: 'Supprimer les fragments sélectionnés définitivement ?',
       en: 'Permanently delete selected fragments?',
     },
-    noOwned: { fr: 'Aucun fragment supprimable dans la sélection', en: 'No deletable fragments in selection' },
+    noOwned: {
+      fr: 'Aucun fragment supprimable dans la sélection',
+      en: 'No deletable fragments in selection',
+    },
     pollTimeout: { fr: 'Erreur : délai dépassé', en: 'Error: timed out' },
     gitHistory: { fr: 'Historique Git', en: 'Git history' },
     read: { fr: 'Lire', en: 'Read' },
@@ -231,7 +249,7 @@ const translations = {
       en: 'Your hints accelerated classification.',
     },
     debriefNextStep: {
-      fr: "Prochaine étape : validez ces fragments, puis un administrateur les approuvera pour les rendre disponibles à la composition.",
+      fr: 'Prochaine étape : validez ces fragments, puis un administrateur les approuvera pour les rendre disponibles à la composition.',
       en: 'Next step: validate these fragments, then an administrator will approve them to make them available for composition.',
     },
     duplicateWarning: { fr: 'doublon probable', en: 'probable duplicate' },
@@ -256,7 +274,10 @@ const translations = {
       en: 'Delete this job and all its candidates?',
     },
     hintsTitle: { fr: 'Indices contextuels', en: 'Context hints' },
-    hintsSubtitle: { fr: 'optionnel — améliore la fiabilité de classification', en: 'optional — improves classification trust' },
+    hintsSubtitle: {
+      fr: 'optionnel — améliore la fiabilité de classification',
+      en: 'optional — improves classification trust',
+    },
     hintsDomainLabel: { fr: 'Domaine', en: 'Domain' },
     hintsDomainDesc: {
       fr: 'Le produit ou périmètre métier concerné par ce document (ex. twake-mail, linshare). Un seul domaine par document.',
@@ -271,7 +292,7 @@ const translations = {
     hintsTagsPlaceholder: { fr: 'Rechercher ou créer un tag...', en: 'Search or create a tag...' },
     hintsEntitiesLabel: { fr: 'Entités mentionnées', en: 'Entities mentioned' },
     hintsEntitiesDesc: {
-      fr: "Noms propres présents dans le document : clients, produits, certifications, réglementations... (ex. IRA, GDPR, Twake Workplace). Aide le LLM à les reconnaître comme entités nommées.",
+      fr: 'Noms propres présents dans le document : clients, produits, certifications, réglementations... (ex. IRA, GDPR, Twake Workplace). Aide le LLM à les reconnaître comme entités nommées.',
       en: 'Proper names in the document: clients, products, certifications, regulations... (e.g. IRA, GDPR, Twake Workplace). Helps the LLM identify named entities.',
     },
   },
@@ -290,24 +311,24 @@ const translations = {
     regenerateAllSections: { fr: 'Régénérer tous les drafts', en: 'Regenerate all section drafts' },
     assemble: { fr: 'Assembler le document', en: 'Assemble document' },
     generateAllSectionsHint: {
-      fr: "Écrit le brouillon de chaque section à partir des fragments sélectionnés.",
+      fr: 'Écrit le brouillon de chaque section à partir des fragments sélectionnés.',
       en: "Writes each section's draft from the selected fragments.",
     },
     assembleHint: {
-      fr: "Concatène tous les drafts en un document Markdown final, prêt à exporter.",
-      en: "Concatenates all drafts into a final Markdown document, ready to export.",
+      fr: 'Concatène tous les drafts en un document Markdown final, prêt à exporter.',
+      en: 'Concatenates all drafts into a final Markdown document, ready to export.',
     },
     assembleSuccess: {
       fr: "Document assemblé — passez à l'étape Assemblage pour exporter.",
-      en: "Document assembled — go to the Assembly step to export.",
+      en: 'Document assembled — go to the Assembly step to export.',
     },
     assembleError: {
-      fr: "Assemblage échoué",
-      en: "Assembly failed",
+      fr: 'Assemblage échoué',
+      en: 'Assembly failed',
     },
     downloadMd: { fr: 'Télécharger .md', en: 'Download .md' },
     downloadDocx: { fr: 'Télécharger .docx', en: 'Download .docx' },
-    assembleFirst: { fr: 'Assemblez d\'abord le document', en: 'Assemble the document first' },
+    assembleFirst: { fr: "Assemblez d'abord le document", en: 'Assemble the document first' },
     styleTemplate: { fr: 'Modèle de style', en: 'Style template' },
     defaultStyling: { fr: '(style par défaut)', en: '(default styling)' },
     uploadStyleTemplate: { fr: 'Importer un nouveau modèle', en: 'Upload new template' },
@@ -356,7 +377,7 @@ const translations = {
       en: 'Describe the document you want to produce and generate a structured plan. Adjust the markdown plan, then click "Validate plan" to move on.',
     },
     step2Help: {
-      fr: "Pour chaque section du plan, choisissez les fragments à utiliser. Cliquez « Approuver » pour valider un candidat proposé, ou utilisez « Ajouter un fragment » pour en sélectionner un depuis la bibliothèque ou en créer un manuellement.",
+      fr: 'Pour chaque section du plan, choisissez les fragments à utiliser. Cliquez « Approuver » pour valider un candidat proposé, ou utilisez « Ajouter un fragment » pour en sélectionner un depuis la bibliothèque ou en créer un manuellement.',
       en: 'For each section, pick the fragments to use. Click "Approve" to validate a suggested candidate, or use "Add a fragment" to pick one from the library or create one manually.',
     },
     step3Help: {
@@ -364,7 +385,7 @@ const translations = {
       en: 'Generate the draft of each section from the selected fragments. Generate all at once or edit each section individually.',
     },
     step4Help: {
-      fr: "Assemblez le document final, choisissez un modèle de style et téléchargez le résultat en .md ou .docx.",
+      fr: 'Assemblez le document final, choisissez un modèle de style et téléchargez le résultat en .md ou .docx.',
       en: 'Assemble the final document, choose a style template, and download it as .md or .docx.',
     },
     helpClose: { fr: 'Masquer cette aide', en: 'Hide this help' },
@@ -389,23 +410,23 @@ const translations = {
     },
     filterDomain: { fr: 'Domaines', en: 'Domains' },
     filterDomainTooltip: {
-      fr: "Sujet du fragment (ex. twake, lincloud, linagora). Séparer par des virgules pour inclure plusieurs domaines.",
-      en: "Fragment subject matter (e.g. twake, lincloud, linagora). Separate with commas to include multiple domains.",
+      fr: 'Sujet du fragment (ex. twake, lincloud, linagora). Séparer par des virgules pour inclure plusieurs domaines.',
+      en: 'Fragment subject matter (e.g. twake, lincloud, linagora). Separate with commas to include multiple domains.',
     },
     filterLang: { fr: 'Langue', en: 'Language' },
     filterLangTooltip: {
-      fr: "Code ISO de la langue (ex. fr, en). Laissez vide pour toutes les langues.",
-      en: "ISO language code (e.g. fr, en). Leave empty for all languages.",
+      fr: 'Code ISO de la langue (ex. fr, en). Laissez vide pour toutes les langues.',
+      en: 'ISO language code (e.g. fr, en). Leave empty for all languages.',
     },
     filterType: { fr: 'Type', en: 'Type' },
     filterTypeTooltip: {
-      fr: "Nature du contenu du fragment (ex. introduction, argument, pricing). Laissez vide pour laisser le système inférer automatiquement le type adapté à chaque section.",
-      en: "Fragment content type (e.g. introduction, argument, pricing). Leave empty to let the system automatically infer the right type per section.",
+      fr: 'Nature du contenu du fragment (ex. introduction, argument, pricing). Laissez vide pour laisser le système inférer automatiquement le type adapté à chaque section.',
+      en: 'Fragment content type (e.g. introduction, argument, pricing). Leave empty to let the system automatically infer the right type per section.',
     },
     filterTags: { fr: 'Tags', en: 'Tags' },
     filterTagsTooltip: {
-      fr: "Mots-clés libres pour affiner la recherche (ex. produit:Twake). Séparer par des virgules.",
-      en: "Free-form keywords to narrow the search (e.g. produit:Twake). Separate with commas.",
+      fr: 'Mots-clés libres pour affiner la recherche (ex. produit:Twake). Séparer par des virgules.',
+      en: 'Free-form keywords to narrow the search (e.g. produit:Twake). Separate with commas.',
     },
     writerOverride: { fr: 'Instructions globales au rédacteur', en: 'Global writer instructions' },
     writerOverrideTooltip: {
@@ -416,7 +437,10 @@ const translations = {
       fr: 'Ex. : Adopte un ton formel et concis. Évite le jargon technique.',
       en: 'E.g.: Use a formal and concise tone. Avoid technical jargon.',
     },
-    sectionInstructions: { fr: 'Instructions spécifiques à cette section', en: 'Section-specific instructions' },
+    sectionInstructions: {
+      fr: 'Instructions spécifiques à cette section',
+      en: 'Section-specific instructions',
+    },
     sectionInstructionsTooltip: {
       fr: 'Optionnel. Si renseigné, remplace les instructions globales uniquement pour cette section.',
       en: 'Optional. If set, overrides the global instructions for this section only.',
@@ -438,13 +462,31 @@ const translations = {
     metadataTitle: { fr: 'Métadonnées', en: 'Metadata' },
     tabValidation: { fr: 'À valider', en: 'To validate' },
     tabReferential: { fr: 'Référentiel', en: 'Referential' },
-    descValidation: { fr: 'Tags, entités et domaines extraits automatiquement ou saisis manuellement. Filtrez par statut pour valider les propositions ou gérer le référentiel.', en: 'Tags, entities and domains extracted automatically or entered manually. Filter by status to review proposals or manage the referential.' },
+    descValidation: {
+      fr: 'Tags, entités et domaines extraits automatiquement ou saisis manuellement. Filtrez par statut pour valider les propositions ou gérer le référentiel.',
+      en: 'Tags, entities and domains extracted automatically or entered manually. Filter by status to review proposals or manage the referential.',
+    },
     // Contextual descriptions per kind
-    descKindTag: { fr: 'Tags du référentiel — créés manuellement ou proposés automatiquement lors de l\'ingestion. Filtrez par « En attente » pour traiter les termes qui attendent votre validation, quelle que soit leur origine. Le filtre Source vous aide à prioriser : les tags LLM inférés méritent un examen plus attentif que les saisies humaines.', en: 'Tags in the referential — created manually or auto-proposed during ingestion. Filter by "Pending" to action terms awaiting your validation, regardless of origin. The Source filter helps you prioritize: LLM-inferred tags deserve closer scrutiny than human entries.' },
-    descKindEntity: { fr: 'Entités nommées du référentiel (clients, produits, technologies, partenaires…). Filtrez par « En attente » pour valider celles qui n\'ont pas encore été examinées. Les entités en saisie humaine comme en LLM peuvent être en attente — le statut, pas la source, détermine ce qui nécessite votre action.', en: 'Named entities in the referential (clients, products, technologies, partners…). Filter by "Pending" to validate those not yet reviewed. Both human and LLM entries can be pending — status, not source, determines what needs your attention.' },
-    descKindDomain: { fr: 'Domaines métier du référentiel (ex : Twake, LinCloud, Linagora, autre…). Filtrez par « En attente » pour approuver les domaines soumis, qu\'ils viennent d\'un contributeur ou du LLM. Le filtre Source permet de distinguer les domaines stables (saisie humaine) des propositions à confirmer (LLM inféré).', en: 'Business domains in the referential (e.g. Twake, LinCloud, Linagora, other…). Filter by "Pending" to approve submitted domains, whether from a contributor or the LLM. The Source filter distinguishes stable entries (human) from proposals to confirm (LLM inferred).' },
-    descKindType: { fr: 'Types de contenu du référentiel, utilisés pour classer les fragments (argument, clause, présentation…). Filtrez par « En attente » pour traiter les types en attente de validation. La source indique l\'origine du terme, mais tout statut « En attente » — humain ou LLM — demande votre action.', en: 'Content types in the referential, used to classify fragments (argument, clause, presentation…). Filter by "Pending" to process types awaiting validation. The source shows where a term came from, but any "Pending" entry — human or LLM — requires your action.' },
-    descReferential: { fr: 'Catalogue officiel des métadonnées validées, utilisées pour la recherche et l\'autocomplétion. Renommer, archiver, explorer les fragments associés.', en: 'Official catalog of validated metadata, used for search and autocompletion. Rename, archive, explore linked fragments.' },
+    descKindTag: {
+      fr: "Tags du référentiel — créés manuellement ou proposés automatiquement lors de l'ingestion. Filtrez par « En attente » pour traiter les termes qui attendent votre validation, quelle que soit leur origine. Le filtre Source vous aide à prioriser : les tags LLM inférés méritent un examen plus attentif que les saisies humaines.",
+      en: 'Tags in the referential — created manually or auto-proposed during ingestion. Filter by "Pending" to action terms awaiting your validation, regardless of origin. The Source filter helps you prioritize: LLM-inferred tags deserve closer scrutiny than human entries.',
+    },
+    descKindEntity: {
+      fr: "Entités nommées du référentiel (clients, produits, technologies, partenaires…). Filtrez par « En attente » pour valider celles qui n'ont pas encore été examinées. Les entités en saisie humaine comme en LLM peuvent être en attente — le statut, pas la source, détermine ce qui nécessite votre action.",
+      en: 'Named entities in the referential (clients, products, technologies, partners…). Filter by "Pending" to validate those not yet reviewed. Both human and LLM entries can be pending — status, not source, determines what needs your attention.',
+    },
+    descKindDomain: {
+      fr: "Domaines métier du référentiel (ex : Twake, LinCloud, Linagora, autre…). Filtrez par « En attente » pour approuver les domaines soumis, qu'ils viennent d'un contributeur ou du LLM. Le filtre Source permet de distinguer les domaines stables (saisie humaine) des propositions à confirmer (LLM inféré).",
+      en: 'Business domains in the referential (e.g. Twake, LinCloud, Linagora, other…). Filter by "Pending" to approve submitted domains, whether from a contributor or the LLM. The Source filter distinguishes stable entries (human) from proposals to confirm (LLM inferred).',
+    },
+    descKindType: {
+      fr: "Types de contenu du référentiel, utilisés pour classer les fragments (argument, clause, présentation…). Filtrez par « En attente » pour traiter les types en attente de validation. La source indique l'origine du terme, mais tout statut « En attente » — humain ou LLM — demande votre action.",
+      en: 'Content types in the referential, used to classify fragments (argument, clause, presentation…). Filter by "Pending" to process types awaiting validation. The source shows where a term came from, but any "Pending" entry — human or LLM — requires your action.',
+    },
+    descReferential: {
+      fr: "Catalogue officiel des métadonnées validées, utilisées pour la recherche et l'autocomplétion. Renommer, archiver, explorer les fragments associés.",
+      en: 'Official catalog of validated metadata, used for search and autocompletion. Rename, archive, explore linked fragments.',
+    },
     // Proposal kinds
     kindTags: { fr: 'Tags', en: 'Tags' },
     kindEntities: { fr: 'Entités', en: 'Entities' },
@@ -461,10 +503,22 @@ const translations = {
     trustLlmConfirmed: { fr: 'LLM confirmé', en: 'LLM confirmed' },
     trustLlmInferred: { fr: 'LLM inféré', en: 'LLM inferred' },
     trustLlmDeviation: { fr: 'LLM déviation', en: 'LLM deviation' },
-    trustTooltipHuman: { fr: 'Saisi manuellement par un contributeur humain, pas généré automatiquement.', en: 'Manually entered by a human contributor, not auto-generated.' },
-    trustTooltipConfirmed: { fr: 'Le modèle d\'IA a proposé ce terme et il correspond déjà à un terme validé dans le référentiel — fiabilité élevée.', en: 'The AI model proposed this term and it already matches a validated term in the referential — high confidence.' },
-    trustTooltipInferred: { fr: 'Proposé automatiquement par le modèle d\'IA à partir du contenu du document. Aucune correspondance préexistante dans le référentiel — à valider.', en: 'Automatically proposed by the AI model from the document content. No pre-existing match in the referential — needs validation.' },
-    trustTooltipDeviation: { fr: 'Le modèle d\'IA a proposé un terme qui s\'écarte des termes validés existants. Possible doublon ou variante — à examiner attentivement.', en: 'The AI model proposed a term that diverges from existing validated terms. Possible duplicate or variant — review carefully.' },
+    trustTooltipHuman: {
+      fr: 'Saisi manuellement par un contributeur humain, pas généré automatiquement.',
+      en: 'Manually entered by a human contributor, not auto-generated.',
+    },
+    trustTooltipConfirmed: {
+      fr: "Le modèle d'IA a proposé ce terme et il correspond déjà à un terme validé dans le référentiel — fiabilité élevée.",
+      en: 'The AI model proposed this term and it already matches a validated term in the referential — high confidence.',
+    },
+    trustTooltipInferred: {
+      fr: "Proposé automatiquement par le modèle d'IA à partir du contenu du document. Aucune correspondance préexistante dans le référentiel — à valider.",
+      en: 'Automatically proposed by the AI model from the document content. No pre-existing match in the referential — needs validation.',
+    },
+    trustTooltipDeviation: {
+      fr: "Le modèle d'IA a proposé un terme qui s'écarte des termes validés existants. Possible doublon ou variante — à examiner attentivement.",
+      en: 'The AI model proposed a term that diverges from existing validated terms. Possible duplicate or variant — review carefully.',
+    },
     // Filters
     filterAll: { fr: 'Tous', en: 'All' },
     filterAllEntities: { fr: 'Tous types', en: 'All types' },
@@ -476,10 +530,22 @@ const translations = {
     filterTrustLlmConfirmed: { fr: 'LLM confirmé', en: 'LLM confirmed' },
     filterTrustLlmDeviation: { fr: 'LLM déviation', en: 'LLM deviation' },
     trustLegendTitle: { fr: 'Sources de confiance', en: 'Trust sources' },
-    trustLegendHuman: { fr: 'Saisi directement par un contributeur humain.', en: 'Entered directly by a human contributor.' },
-    trustLegendInferred: { fr: 'Proposé par le LLM, sans correspondance préexistante dans le référentiel — à examiner.', en: 'Proposed by the LLM, no pre-existing match in the referential — review needed.' },
-    trustLegendConfirmed: { fr: 'Proposé par le LLM et correspond déjà à un terme validé — fiabilité élevée.', en: 'Proposed by the LLM and matches an existing validated term — high confidence.' },
-    trustLegendDeviation: { fr: 'Proposé par le LLM mais s\'écarte des termes validés — possible doublon ou variante, à vérifier.', en: 'Proposed by the LLM but diverges from validated terms — possible duplicate or variant, check carefully.' },
+    trustLegendHuman: {
+      fr: 'Saisi directement par un contributeur humain.',
+      en: 'Entered directly by a human contributor.',
+    },
+    trustLegendInferred: {
+      fr: 'Proposé par le LLM, sans correspondance préexistante dans le référentiel — à examiner.',
+      en: 'Proposed by the LLM, no pre-existing match in the referential — review needed.',
+    },
+    trustLegendConfirmed: {
+      fr: 'Proposé par le LLM et correspond déjà à un terme validé — fiabilité élevée.',
+      en: 'Proposed by the LLM and matches an existing validated term — high confidence.',
+    },
+    trustLegendDeviation: {
+      fr: "Proposé par le LLM mais s'écarte des termes validés — possible doublon ou variante, à vérifier.",
+      en: 'Proposed by the LLM but diverges from validated terms — possible duplicate or variant, check carefully.',
+    },
     // Proposal card actions
     approve: { fr: 'Approuver', en: 'Approve' },
     reject: { fr: 'Rejeter', en: 'Reject' },
@@ -501,11 +567,23 @@ const translations = {
     qualityDraft: { fr: 'Brouillon', en: 'Draft' },
     qualityReviewed: { fr: 'Relu', en: 'Reviewed' },
     qualityApproved: { fr: 'Approuvé', en: 'Approved' },
-    qualityTooltipDraft: { fr: 'Fragment en cours de rédaction, non encore vérifié.', en: 'Fragment being drafted, not yet reviewed.' },
-    qualityTooltipReviewed: { fr: 'Fragment relu et vérifié par un contributeur, mais pas encore approuvé pour usage officiel.', en: 'Fragment reviewed by a contributor but not yet approved for official use.' },
-    qualityTooltipApproved: { fr: 'Fragment validé et approuvé pour être utilisé dans les documents officiels.', en: 'Fragment validated and approved for use in official documents.' },
+    qualityTooltipDraft: {
+      fr: 'Fragment en cours de rédaction, non encore vérifié.',
+      en: 'Fragment being drafted, not yet reviewed.',
+    },
+    qualityTooltipReviewed: {
+      fr: 'Fragment relu et vérifié par un contributeur, mais pas encore approuvé pour usage officiel.',
+      en: 'Fragment reviewed by a contributor but not yet approved for official use.',
+    },
+    qualityTooltipApproved: {
+      fr: 'Fragment validé et approuvé pour être utilisé dans les documents officiels.',
+      en: 'Fragment validated and approved for use in official documents.',
+    },
     llmAutoLabel: { fr: 'Généré automatiquement', en: 'Auto-generated' },
-    llmAutoTooltip: { fr: 'Créé automatiquement par le LLM lors de l\'ingestion du document, sans intervention humaine.', en: 'Automatically created by the LLM during document ingestion, without human intervention.' },
+    llmAutoTooltip: {
+      fr: "Créé automatiquement par le LLM lors de l'ingestion du document, sans intervention humaine.",
+      en: 'Automatically created by the LLM during document ingestion, without human intervention.',
+    },
     // Category labels (for tag categories)
     catConcept: { fr: 'Concept', en: 'Concept' },
     catMode: { fr: 'Mode', en: 'Mode' },
@@ -524,8 +602,14 @@ const translations = {
     viewItem: { fr: 'Voir', en: 'View' },
     archiveConfirmTitle: { fr: 'Archiver cet item ?', en: 'Archive this item?' },
     // Co-occurrence
-    cooccurrenceToggle: { fr: 'Co-occurrences domaine × entités', en: 'Domain × entity co-occurrences' },
-    cooccurrenceTooltip: { fr: 'Quels domaines et quelles entités apparaissent ensemble dans les fragments approuvés. Plus la case est foncée, plus ils sont liés.', en: 'Which domains and entities appear together in approved fragments. Darker cells mean stronger co-occurrence.' },
+    cooccurrenceToggle: {
+      fr: 'Co-occurrences domaine × entités',
+      en: 'Domain × entity co-occurrences',
+    },
+    cooccurrenceTooltip: {
+      fr: 'Quels domaines et quelles entités apparaissent ensemble dans les fragments approuvés. Plus la case est foncée, plus ils sont liés.',
+      en: 'Which domains and entities appear together in approved fragments. Darker cells mean stronger co-occurrence.',
+    },
     cooccurrenceHeader: { fr: 'Domaine \\ Entité', en: 'Domain \\ Entity' },
     // Empty states
     noProposals: { fr: 'Aucune proposition en attente.', en: 'No pending proposals.' },
@@ -537,8 +621,14 @@ const translations = {
     renameImpact: { fr: 'Impact du renommage :', en: 'Rename impact:' },
     renameFragmentsUpdated: { fr: 'fragments mis à jour', en: 'fragments updated' },
     renameCandidates: { fr: 'candidats en attente', en: 'pending candidates' },
-    renameRecalc: { fr: 'Recalcul des signaux en background', en: 'Signal recalculation in background' },
-    renameNoImpact: { fr: 'Aucun fragment impacté, renommage immédiat.', en: 'No fragments impacted, immediate rename.' },
+    renameRecalc: {
+      fr: 'Recalcul des signaux en background',
+      en: 'Signal recalculation in background',
+    },
+    renameNoImpact: {
+      fr: 'Aucun fragment impacté, renommage immédiat.',
+      en: 'No fragments impacted, immediate rename.',
+    },
     renameNetworkError: { fr: 'Erreur réseau', en: 'Network error' },
     renameInProgress: { fr: 'Renommage...', en: 'Renaming...' },
     // Referential stats
@@ -567,7 +657,10 @@ const translations = {
     roleReader: { fr: 'lecteur', en: 'reader' },
     roleManager: { fr: 'manager', en: 'manager' },
     // Merge dialog
-    mergeSearchPlaceholder: { fr: 'Rechercher dans les valeurs validées...', en: 'Search validated values...' },
+    mergeSearchPlaceholder: {
+      fr: 'Rechercher dans les valeurs validées...',
+      en: 'Search validated values...',
+    },
     // Rename proposal dialog
     renameDialogTitle: { fr: 'Renommer', en: 'Rename' },
     renameDialogCurrentLabel: { fr: 'Nom actuel', en: 'Current name' },
@@ -579,7 +672,10 @@ const translations = {
     convertDialogEntityType: { fr: "Type d'entité", en: 'Entity type' },
     convertDialogCanonical: { fr: 'Nom canonique', en: 'Canonical name' },
     convertDialogAliases: { fr: 'Alias (séparés par virgule)', en: 'Aliases (comma-separated)' },
-    convertDialogAliasesPlaceholder: { fr: 'ex : James, Apache James', en: 'e.g. James, Apache James' },
+    convertDialogAliasesPlaceholder: {
+      fr: 'ex : James, Apache James',
+      en: 'e.g. James, Apache James',
+    },
     convertDialogSubmit: { fr: 'Convertir et valider', en: 'Convert & Validate' },
     // Referential item detail
     detailDetails: { fr: 'Détails', en: 'Details' },
@@ -589,7 +685,10 @@ const translations = {
     detailCreatedBy: { fr: 'Créé par', en: 'Created by' },
     detailCreatedAt: { fr: 'Créé le', en: 'Created on' },
     linkedFragments: { fr: 'Fragments utilisant cette valeur', en: 'Fragments using this value' },
-    linkedFragmentsHint: { fr: 'Ces fragments seront affectés par un renommage ou un archivage.', en: 'These fragments will be affected by a rename or archive.' },
+    linkedFragmentsHint: {
+      fr: 'Ces fragments seront affectés par un renommage ou un archivage.',
+      en: 'These fragments will be affected by a rename or archive.',
+    },
     noLinkedFragments: { fr: 'Aucun fragment.', en: 'No fragments.' },
     renameHistory: { fr: 'Historique des renommages', en: 'Rename history' },
     backToReferential: { fr: 'Retour au référentiel', en: 'Back to referential' },
@@ -604,7 +703,10 @@ const translations = {
     viewDiff: { fr: 'Voir le diff', en: 'View diff' },
     newFragment: { fr: 'Nouveau', en: 'New' },
     oldFragment: { fr: 'Remplac\u00e9', en: 'Replaced' },
-    elementsLostWarning: { fr: '\u00c9l\u00e9ments potentiellement perdus', en: 'Potentially lost elements' },
+    elementsLostWarning: {
+      fr: '\u00c9l\u00e9ments potentiellement perdus',
+      en: 'Potentially lost elements',
+    },
     confidence: { fr: 'Confiance LLM', en: 'LLM confidence' },
     similarity: { fr: 'Similarit\u00e9', en: 'Similarity' },
   },

@@ -26,7 +26,10 @@ const TRUST_CLASSES: Record<TrustSource, string> = {
   'llm-inferred': 'bg-sky-100 text-sky-800',
 };
 
-const ROLE_KEYS: Record<string, 'roleAdmin' | 'roleContributor' | 'roleExpert' | 'roleReader' | 'roleManager'> = {
+const ROLE_KEYS: Record<
+  string,
+  'roleAdmin' | 'roleContributor' | 'roleExpert' | 'roleReader' | 'roleManager'
+> = {
   admin: 'roleAdmin',
   contributor: 'roleContributor',
   expert: 'roleExpert',
@@ -51,20 +54,14 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
   return (
     <Card className="p-4">
       <div className="flex gap-3">
-        <div
-          className="mt-1 flex-shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="mt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={selected}
             onCheckedChange={onToggle}
             className="h-5 w-5 border-2 border-muted-foreground data-[state=checked]:border-primary"
           />
         </div>
-        <div
-          className="flex-1 min-w-0 cursor-pointer"
-          onClick={() => setSheetOpen(true)}
-        >
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSheetOpen(true)}>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">
               {proposal.name}
@@ -92,10 +89,11 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mb-2">
-            {t('admin', 'proposedByLabel')}{' '}
-            {proposal.proposed_by_display ?? proposal.proposed_by}
-            {proposal.proposed_by_role && ` (${t('admin', ROLE_KEYS[proposal.proposed_by_role] ?? 'roleReader')})`}
-            {' · '}{new Date(proposal.created_at).toLocaleDateString()}
+            {t('admin', 'proposedByLabel')} {proposal.proposed_by_display ?? proposal.proposed_by}
+            {proposal.proposed_by_role &&
+              ` (${t('admin', ROLE_KEYS[proposal.proposed_by_role] ?? 'roleReader')})`}
+            {' · '}
+            {new Date(proposal.created_at).toLocaleDateString()}
           </p>
           {proposal.preview && (
             <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
@@ -105,10 +103,7 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
           )}
         </div>
       </div>
-      <div
-        className="flex gap-2 flex-wrap mt-3 ml-8"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="flex gap-2 flex-wrap mt-3 ml-8" onClick={(e) => e.stopPropagation()}>
         <Button
           size="sm"
           onClick={() => approve.mutate({ id: proposal.id, kind: proposal.kind })}
@@ -117,13 +112,12 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
           <Check className="h-3.5 w-3.5 mr-1.5" />
           {t('admin', 'approve')}
         </Button>
-        {proposal.flags.some((f) => f.label === 'Possibly entity') &&
-          proposal.kind === 'tag' && (
-            <Button size="sm" variant="outline" onClick={() => setConvertOpen(true)}>
-              <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-              {t('admin', 'convertToEntity')}
-            </Button>
-          )}
+        {proposal.flags.some((f) => f.label === 'Possibly entity') && proposal.kind === 'tag' && (
+          <Button size="sm" variant="outline" onClick={() => setConvertOpen(true)}>
+            <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+            {t('admin', 'convertToEntity')}
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
           <Edit className="h-3.5 w-3.5 mr-1.5" />
           {t('admin', 'rename')}
@@ -148,12 +142,23 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
       {convertOpen && (
         <ConvertToEntityDialog proposal={proposal} open onOpenChange={setConvertOpen} />
       )}
-      <ReferentialItemSheet type={proposal.kind} id={proposal.id} open={sheetOpen} onOpenChange={setSheetOpen} />
+      <ReferentialItemSheet
+        type={proposal.kind}
+        id={proposal.id}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
     </Card>
   );
 }
 
-function TrustSourceBadge({ source, t }: { source?: TrustSource; t: (s: 'admin', k: any) => string }) {
+function TrustSourceBadge({
+  source,
+  t,
+}: {
+  source?: TrustSource;
+  t: (s: 'admin', k: any) => string;
+}) {
   if (!source) return null;
 
   const labelMap: Record<TrustSource, string> = {
@@ -164,7 +169,9 @@ function TrustSourceBadge({ source, t }: { source?: TrustSource; t: (s: 'admin',
   };
 
   return (
-    <span className={`text-xs px-2 py-0.5 rounded ${TRUST_CLASSES[source] ?? 'bg-muted text-muted-foreground'}`}>
+    <span
+      className={`text-xs px-2 py-0.5 rounded ${TRUST_CLASSES[source] ?? 'bg-muted text-muted-foreground'}`}
+    >
       {labelMap[source] ?? source}
     </span>
   );

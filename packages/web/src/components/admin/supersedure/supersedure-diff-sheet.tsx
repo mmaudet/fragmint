@@ -1,13 +1,7 @@
 import { AlertTriangle, Check, ExternalLink, GitMerge, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { useI18n } from '@/lib/i18n';
 import {
   useConfirmProposal,
@@ -28,11 +22,13 @@ function wordDiff(a: string, b: string): DiffPart[] {
   const tokA = a.split(/(\s+)/);
   const tokB = b.split(/(\s+)/);
   const result: DiffPart[] = [];
-  let i = 0, j = 0;
+  let i = 0,
+    j = 0;
   while (i < tokA.length || j < tokB.length) {
     if (i < tokA.length && j < tokB.length && tokA[i] === tokB[j]) {
       result.push({ value: tokA[i] });
-      i++; j++;
+      i++;
+      j++;
     } else if (j < tokB.length && (i >= tokA.length || tokB[j] !== tokA[i])) {
       result.push({ value: tokB[j], added: true });
       j++;
@@ -54,20 +50,14 @@ function InlineDiff({ oldText, newText }: { oldText: string; newText: string }) 
     <div className="grid grid-cols-2 divide-x text-xs font-mono">
       <div className="p-3 leading-relaxed whitespace-pre-wrap">
         {oldParts.map((part, i) => (
-          <span
-            key={i}
-            className={part.removed ? 'bg-red-100 text-red-800 rounded px-0.5' : ''}
-          >
+          <span key={i} className={part.removed ? 'bg-red-100 text-red-800 rounded px-0.5' : ''}>
             {part.value}
           </span>
         ))}
       </div>
       <div className="p-3 leading-relaxed whitespace-pre-wrap">
         {newParts.map((part, i) => (
-          <span
-            key={i}
-            className={part.added ? 'bg-green-100 text-green-800 rounded px-0.5' : ''}
-          >
+          <span key={i} className={part.added ? 'bg-green-100 text-green-800 rounded px-0.5' : ''}>
             {part.value}
           </span>
         ))}

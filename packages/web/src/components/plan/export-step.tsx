@@ -44,7 +44,8 @@ export function ExportStep({ plan }: { plan: Plan }) {
   }, []);
 
   async function handleReassemble() {
-    if (plan.state.draft_dirty && !confirm('This will overwrite your manual edits. Continue?')) return;
+    if (plan.state.draft_dirty && !confirm('This will overwrite your manual edits. Continue?'))
+      return;
     try {
       const out = await assemble.mutateAsync();
       setDraft(out.state.draft_markdown ?? '');
@@ -83,19 +84,28 @@ export function ExportStep({ plan }: { plan: Plan }) {
           <div className="flex items-center gap-2">
             <Select
               value={styleId || '__none__'}
-              onValueChange={(v) => update.mutate({ export_style_template_id: v === '__none__' ? null : v })}
+              onValueChange={(v) =>
+                update.mutate({ export_style_template_id: v === '__none__' ? null : v })
+              }
             >
               <SelectTrigger className="w-56">
                 <SelectValue placeholder={t('planGeneration', 'styleTemplate')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">
-                  {defaultName
-                    ? <span>{defaultName} <span className="text-xs text-muted-foreground ml-1">(par défaut)</span></span>
-                    : t('planGeneration', 'defaultStyling')}
+                  {defaultName ? (
+                    <span>
+                      {defaultName}{' '}
+                      <span className="text-xs text-muted-foreground ml-1">(par défaut)</span>
+                    </span>
+                  ) : (
+                    t('planGeneration', 'defaultStyling')
+                  )}
                 </SelectItem>
                 {(styleTemplates.data?.templates ?? []).map((tpl) => (
-                  <SelectItem key={tpl.id} value={tpl.id}>{tpl.name}</SelectItem>
+                  <SelectItem key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -104,14 +114,29 @@ export function ExportStep({ plan }: { plan: Plan }) {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => handleExport('md')} disabled={!hasDraft} title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}>{t('planGeneration', 'downloadMd')}</Button>
-            <Button onClick={() => handleExport('docx')} disabled={!hasDraft} title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}>{t('planGeneration', 'downloadDocx')}</Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport('md')}
+              disabled={!hasDraft}
+              title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}
+            >
+              {t('planGeneration', 'downloadMd')}
+            </Button>
+            <Button
+              onClick={() => handleExport('docx')}
+              disabled={!hasDraft}
+              title={!hasDraft ? t('planGeneration', 'assembleFirst') : undefined}
+            >
+              {t('planGeneration', 'downloadDocx')}
+            </Button>
           </div>
         </div>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Final markdown</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Final markdown</CardTitle>
+        </CardHeader>
         <CardContent>
           <Textarea
             rows={32}

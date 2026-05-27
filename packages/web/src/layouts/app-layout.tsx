@@ -30,14 +30,18 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useRetrievalMode, useSetRetrievalMode, type RetrievalMode } from '@/api/hooks/use-retrieval-mode';
+import {
+  useRetrievalMode,
+  useSetRetrievalMode,
+  type RetrievalMode,
+} from '@/api/hooks/use-retrieval-mode';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const RETRIEVAL_LABELS: Record<RetrievalMode, string> = {
   'vector-only': 'Vectoriel',
   'agentic-only': 'Agentique',
-  'hybrid': 'Hybride',
+  hybrid: 'Hybride',
 };
 
 export default function AppLayout() {
@@ -52,9 +56,7 @@ export default function AppLayout() {
     if (cols) setCollections(cols);
   }, [cols, setCollections]);
 
-  const topNavItems = [
-    { to: '/home', label: t('nav', 'home'), icon: Home },
-  ];
+  const topNavItems = [{ to: '/home', label: t('nav', 'home'), icon: Home }];
 
   const role = user?.role ?? 'reader';
   const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 2, admin: 3 };
@@ -63,7 +65,9 @@ export default function AppLayout() {
   const navItems = [
     { to: '/fragments', label: t('nav', 'library'), icon: BookOpen },
     { to: '/harvest', label: t('nav', 'harvest'), icon: Upload },
-    ...(hasRole('contributor') ? [{ to: '/validation', label: t('nav', 'validation'), icon: CheckCircle }] : []),
+    ...(hasRole('contributor')
+      ? [{ to: '/validation', label: t('nav', 'validation'), icon: CheckCircle }]
+      : []),
     { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
 
@@ -72,7 +76,10 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className="w-56 bg-slate-900 text-slate-300 flex flex-col">
         <div className="p-4 pb-3">
-          <NavLink to="/home" className="text-lg font-bold text-white hover:text-slate-200 transition-colors">
+          <NavLink
+            to="/home"
+            className="text-lg font-bold text-white hover:text-slate-200 transition-colors"
+          >
             ⬡ Fragmint
           </NavLink>
         </div>
@@ -157,7 +164,12 @@ export default function AppLayout() {
               {hasRole('admin') && (
                 <>
                   <DropdownMenuItem asChild>
-                    <NavLink to="/admin" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                    <NavLink
+                      to="/admin"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2"
+                    >
                       <Shield className="h-4 w-4" />
                       Administration
                       <SquareArrowOutUpRight className="h-3 w-3 ml-auto opacity-50" />
@@ -179,8 +191,7 @@ export default function AppLayout() {
                         onValueChange={(v) => {
                           const mode = v as RetrievalMode;
                           setMode.mutate(mode, {
-                            onSuccess: () =>
-                              toast.success(`Mode ${RETRIEVAL_LABELS[mode]} activé`),
+                            onSuccess: () => toast.success(`Mode ${RETRIEVAL_LABELS[mode]} activé`),
                             onError: () => toast.error('Erreur lors du changement de mode'),
                           });
                         }}

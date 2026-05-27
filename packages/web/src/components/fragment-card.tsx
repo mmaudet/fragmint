@@ -13,7 +13,13 @@ interface FragmentCardProps {
   onCheckedChange?: (checked: boolean) => void;
 }
 
-export function FragmentCard({ fragment, onClick, selected, checked, onCheckedChange }: FragmentCardProps) {
+export function FragmentCard({
+  fragment,
+  onClick,
+  selected,
+  checked,
+  onCheckedChange,
+}: FragmentCardProps) {
   return (
     <Card
       className={cn(
@@ -33,13 +39,27 @@ export function FragmentCard({ fragment, onClick, selected, checked, onCheckedCh
               className="mt-0.5 shrink-0 data-[state=checked]:bg-slate-500 data-[state=checked]:border-slate-500 border-slate-400"
             />
           )}
-          <h3 className="font-semibold text-sm truncate flex-1">{fragment.title || 'Sans titre'}</h3>
+          <h3 className="font-semibold text-sm truncate flex-1">
+            {fragment.title || 'Sans titre'}
+          </h3>
           <QualityBadge quality={fragment.quality} />
         </div>
         <div className="flex gap-1.5 mt-2">
-          <Badge variant="outline" className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">{fragment.type}</Badge>
-          <Badge variant="outline" className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">{fragment.domain}</Badge>
-          <Badge variant="outline" className="text-xs">{fragment.lang}</Badge>
+          <Badge
+            variant="outline"
+            className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+          >
+            {fragment.type}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+          >
+            {fragment.domain}
+          </Badge>
+          <Badge variant="outline" className="text-xs">
+            {fragment.lang}
+          </Badge>
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
           {fragment.body_excerpt || '—'}

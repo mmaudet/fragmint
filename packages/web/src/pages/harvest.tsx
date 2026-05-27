@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { CollectionSelector } from '@/components/collection-selector';
 import { useStartHarvest, useHarvestJob, useValidateCandidates } from '@/api/hooks/use-harvest';
-import { useDomains, useTypes } from '@/api/hooks/use-taxonomy';
+import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
 import { CandidateCard } from '@/components/candidate-card';
 import { CandidateDetailSheet } from '@/components/candidate-detail-sheet';
 import type { CandidateEdits } from '@/components/candidate-detail-sheet';
@@ -15,7 +15,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText, FileSearch, Sparkles, Tags, ShieldCheck } from 'lucide-react';
+import {
+  Upload,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  FileText,
+  FileSearch,
+  Sparkles,
+  Tags,
+  ShieldCheck,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
 
@@ -26,7 +37,13 @@ const PIPELINE_STEPS = [
   { key: 'judge', icon: ShieldCheck, labelKey: 'stepJudge' as const },
 ];
 
-function HarvestProcessingView({ files, t }: { files: string[]; t: ReturnType<typeof useI18n>['t'] }) {
+function HarvestProcessingView({
+  files,
+  t,
+}: {
+  files: string[];
+  t: ReturnType<typeof useI18n>['t'];
+}) {
   const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
@@ -53,12 +70,15 @@ function HarvestProcessingView({ files, t }: { files: string[]; t: ReturnType<ty
           const isDone = i < activeStep;
           const isActive = i === activeStep;
           return (
-            <div key={step.key} className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-500',
-              isDone && 'text-muted-foreground',
-              isActive && 'bg-muted font-medium text-foreground',
-              !isDone && !isActive && 'text-muted-foreground/40',
-            )}>
+            <div
+              key={step.key}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-500',
+                isDone && 'text-muted-foreground',
+                isActive && 'bg-muted font-medium text-foreground',
+                !isDone && !isActive && 'text-muted-foreground/40',
+              )}
+            >
               {isDone ? (
                 <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
               ) : isActive ? (
@@ -75,7 +95,10 @@ function HarvestProcessingView({ files, t }: { files: string[]; t: ReturnType<ty
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {files.map((f) => (
-            <div key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1">
+            <div
+              key={f}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1"
+            >
               <FileText className="h-3 w-3" />
               {f}
             </div>
@@ -98,11 +121,19 @@ export default function HarvestPage() {
   const [dragOver, setDragOver] = useState(false);
   const [decisions, _setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>(() => {
     if (!urlJobId) return {};
-    try { return JSON.parse(sessionStorage.getItem(`harvest-decisions-${urlJobId}`) ?? '{}'); } catch { return {}; }
+    try {
+      return JSON.parse(sessionStorage.getItem(`harvest-decisions-${urlJobId}`) ?? '{}');
+    } catch {
+      return {};
+    }
   });
   const [modifications, _setModifications] = useState<Record<string, CandidateEdits>>(() => {
     if (!urlJobId) return {};
-    try { return JSON.parse(sessionStorage.getItem(`harvest-mods-${urlJobId}`) ?? '{}'); } catch { return {}; }
+    try {
+      return JSON.parse(sessionStorage.getItem(`harvest-mods-${urlJobId}`) ?? '{}');
+    } catch {
+      return {};
+    }
   });
   const [selectedCandidate, setSelectedCandidate] = useState<HarvestCandidate | null>(null);
   const [candidatePage, setCandidatePage] = useState(0);
@@ -115,7 +146,13 @@ export default function HarvestPage() {
     else setSearchParams({}, { replace: true });
   };
 
-  const setDecisions = (updater: Record<string, 'accepted' | 'rejected'> | ((prev: Record<string, 'accepted' | 'rejected'>) => Record<string, 'accepted' | 'rejected'>)) => {
+  const setDecisions = (
+    updater:
+      | Record<string, 'accepted' | 'rejected'>
+      | ((
+          prev: Record<string, 'accepted' | 'rejected'>,
+        ) => Record<string, 'accepted' | 'rejected'>),
+  ) => {
     _setDecisions((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (jobId) sessionStorage.setItem(`harvest-decisions-${jobId}`, JSON.stringify(next));
@@ -123,7 +160,11 @@ export default function HarvestPage() {
     });
   };
 
-  const setModifications = (updater: Record<string, CandidateEdits> | ((prev: Record<string, CandidateEdits>) => Record<string, CandidateEdits>)) => {
+  const setModifications = (
+    updater:
+      | Record<string, CandidateEdits>
+      | ((prev: Record<string, CandidateEdits>) => Record<string, CandidateEdits>),
+  ) => {
     _setModifications((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (jobId) sessionStorage.setItem(`harvest-mods-${jobId}`, JSON.stringify(next));
@@ -152,8 +193,10 @@ export default function HarvestPage() {
 
   const { data: domainsData } = useDomains();
   const { data: typesData } = useTypes();
+  const { data: tagsData } = useTags();
   const domains = (domainsData ?? []).map((d) => d.slug);
   const types = (typesData ?? []).map((t) => t.slug);
+  const availableTags = (tagsData ?? []).map((t) => t.slug);
 
   const handleFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles).filter((f) => f.name.endsWith('.docx'));
@@ -247,9 +290,14 @@ export default function HarvestPage() {
         <div
           className={cn(
             'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors',
-            dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50',
+            dragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-muted-foreground/25 hover:border-primary/50',
           )}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
@@ -273,7 +321,9 @@ export default function HarvestPage() {
               <div key={i} className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <span>{f.name}</span>
-                <Badge variant="outline" className="text-xs">{(f.size / 1024).toFixed(0)} KB</Badge>
+                <Badge variant="outline" className="text-xs">
+                  {(f.size / 1024).toFixed(0)} KB
+                </Badge>
               </div>
             ))}
           </div>
@@ -281,11 +331,21 @@ export default function HarvestPage() {
 
         <UploadHintsForm hints={uploadHints} onChange={setUploadHints} />
 
-        <Button onClick={handleAnalyze} disabled={files.length === 0 || startHarvest.isPending} className="w-full">
+        <Button
+          onClick={handleAnalyze}
+          disabled={files.length === 0 || startHarvest.isPending}
+          className="w-full"
+        >
           {startHarvest.isPending ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('harvest', 'analyzing')}</>
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              {t('harvest', 'analyzing')}
+            </>
           ) : (
-            <><Upload className="h-4 w-4 mr-2" />{t('harvest', 'analyze')}</>
+            <>
+              <Upload className="h-4 w-4 mr-2" />
+              {t('harvest', 'analyze')}
+            </>
           )}
         </Button>
       </div>
@@ -295,7 +355,12 @@ export default function HarvestPage() {
   // ─── Phase 2: Candidate Review ───
 
   if (jobLoading || job?.status === 'processing') {
-    return <HarvestProcessingView files={job?.files ?? files.map((f) => f.name)} t={t as ReturnType<typeof useI18n>['t']} />;
+    return (
+      <HarvestProcessingView
+        files={job?.files ?? files.map((f) => f.name)}
+        t={t as ReturnType<typeof useI18n>['t']}
+      />
+    );
   }
 
   if (job?.status === 'error') {
@@ -304,9 +369,17 @@ export default function HarvestPage() {
         <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
         <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-5 w-5" />
-          <span>{t('harvest', 'error')}: {job.error}</span>
+          <span>
+            {t('harvest', 'error')}: {job.error}
+          </span>
         </div>
-        <Button variant="outline" onClick={() => { setJobId(null); setFiles([]); }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setJobId(null);
+            setFiles([]);
+          }}
+        >
           {t('harvest', 'uploadTitle')}
         </Button>
       </div>
@@ -327,7 +400,10 @@ export default function HarvestPage() {
         {job?.files && job.files.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {job.files.map((f) => (
-              <span key={f} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1">
+              <span
+                key={f}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1"
+              >
                 <FileText className="h-3 w-3 shrink-0" />
                 {f}
               </span>
@@ -358,19 +434,23 @@ export default function HarvestPage() {
       {candidates.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={acceptAll}>
-            <CheckCircle className="h-4 w-4 mr-1" />{t('harvest', 'acceptAll')}
+            <CheckCircle className="h-4 w-4 mr-1" />
+            {t('harvest', 'acceptAll')}
           </Button>
           <Button variant="outline" size="sm" onClick={rejectAll}>
-            <XCircle className="h-4 w-4 mr-1" />{t('harvest', 'rejectAll')}
+            <XCircle className="h-4 w-4 mr-1" />
+            {t('harvest', 'rejectAll')}
           </Button>
           <Button
             size="sm"
             onClick={handleCommit}
             disabled={acceptedCount === 0 || validateMutation.isPending}
           >
-            {validateMutation.isPending
-              ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              : <CheckCircle className="h-4 w-4 mr-1" />}
+            {validateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <CheckCircle className="h-4 w-4 mr-1" />
+            )}
             {t('harvest', 'commit')} ({acceptedCount})
           </Button>
         </div>
@@ -378,7 +458,10 @@ export default function HarvestPage() {
 
       {(() => {
         const pageCount = Math.ceil(candidates.length / candidatePageSize);
-        const paginated = candidates.slice(candidatePage * candidatePageSize, (candidatePage + 1) * candidatePageSize);
+        const paginated = candidates.slice(
+          candidatePage * candidatePageSize,
+          (candidatePage + 1) * candidatePageSize,
+        );
         return (
           <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -400,18 +483,37 @@ export default function HarvestPage() {
                   <select
                     className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                     value={candidatePageSize}
-                    onChange={(e) => { setCandidatePageSize(Number(e.target.value)); setCandidatePage(0); }}
+                    onChange={(e) => {
+                      setCandidatePageSize(Number(e.target.value));
+                      setCandidatePage(0);
+                    }}
                   >
-                    {[24, 48, 96].map((s) => <option key={s} value={s}>{s}</option>)}
+                    {[24, 48, 96].map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
                   </select>
                   <span>{t('common', 'perPage')}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button variant="outline" size="sm" disabled={candidatePage === 0} onClick={() => setCandidatePage((p) => p - 1)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={candidatePage === 0}
+                    onClick={() => setCandidatePage((p) => p - 1)}
+                  >
                     {t('common', 'previous')}
                   </Button>
-                  <span className="text-sm text-muted-foreground">Page {candidatePage + 1} / {pageCount}</span>
-                  <Button variant="outline" size="sm" disabled={candidatePage >= pageCount - 1} onClick={() => setCandidatePage((p) => p + 1)}>
+                  <span className="text-sm text-muted-foreground">
+                    Page {candidatePage + 1} / {pageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={candidatePage >= pageCount - 1}
+                    onClick={() => setCandidatePage((p) => p + 1)}
+                  >
                     {t('common', 'next')}
                   </Button>
                 </div>
@@ -427,8 +529,10 @@ export default function HarvestPage() {
         decision={selectedCandidate ? resolvedDecisions[selectedCandidate.id] : undefined}
         domains={domains}
         types={types}
+        availableTags={availableTags}
         onEditsChange={(edits) => {
-          if (selectedCandidate) setModifications((prev) => ({ ...prev, [selectedCandidate.id]: edits }));
+          if (selectedCandidate)
+            setModifications((prev) => ({ ...prev, [selectedCandidate.id]: edits }));
         }}
         onAccept={() => selectedCandidate && setDecision(selectedCandidate.id, 'accepted')}
         onReject={() => selectedCandidate && setDecision(selectedCandidate.id, 'rejected')}

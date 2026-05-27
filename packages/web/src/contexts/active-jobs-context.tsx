@@ -1,7 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { JobNotification } from '@/components/admin/job-notification';
 
-interface ActiveJob { id: string; label: string }
+interface ActiveJob {
+  id: string;
+  label: string;
+}
 
 interface ActiveJobsContextValue {
   addJob: (job: ActiveJob) => void;
@@ -20,7 +23,12 @@ export function ActiveJobsProvider({ children }: { children: ReactNode }) {
     <ActiveJobsContext.Provider value={{ addJob, removeJob }}>
       {children}
       {jobs.map((job) => (
-        <JobNotification key={job.id} jobId={job.id} label={job.label} onComplete={() => removeJob(job.id)} />
+        <JobNotification
+          key={job.id}
+          jobId={job.id}
+          label={job.label}
+          onComplete={() => removeJob(job.id)}
+        />
       ))}
     </ActiveJobsContext.Provider>
   );

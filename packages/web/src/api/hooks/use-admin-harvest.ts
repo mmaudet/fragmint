@@ -4,7 +4,11 @@ import type { HarvestCandidate } from '@/api/types';
 
 function parseJson<T>(value: unknown, fallback: T): T {
   if (typeof value === 'string') {
-    try { return JSON.parse(value); } catch { return fallback; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
   }
   return (value as T) ?? fallback;
 }
@@ -18,11 +22,13 @@ function normalizeCandidate(c: any): HarvestCandidate {
   };
 }
 
-export function usePendingCandidates(params: {
-  job_id?: string;
-  trust_level?: 'high' | 'mixed' | 'low';
-  limit?: number;
-} = {}) {
+export function usePendingCandidates(
+  params: {
+    job_id?: string;
+    trust_level?: 'high' | 'mixed' | 'low';
+    limit?: number;
+  } = {},
+) {
   const qs = new URLSearchParams(
     Object.entries(params)
       .filter(([, v]) => v !== undefined)
@@ -30,7 +36,10 @@ export function usePendingCandidates(params: {
   ).toString();
   return useQuery<HarvestCandidate[]>({
     queryKey: ['admin', 'harvest', 'candidates', params],
-    queryFn: () => apiRequest<any[]>('GET', `/v1/admin/harvest/candidates?${qs}`).then((rows) => rows.map(normalizeCandidate)),
+    queryFn: () =>
+      apiRequest<any[]>('GET', `/v1/admin/harvest/candidates?${qs}`).then((rows) =>
+        rows.map(normalizeCandidate),
+      ),
   });
 }
 

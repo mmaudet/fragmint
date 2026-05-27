@@ -25,7 +25,13 @@ interface Props {
   countsByType?: Record<EntityType, number>;
 }
 
-export function ProposalsList({ kind, selectedIds, onToggle, onAvailableIds, countsByType }: Props) {
+export function ProposalsList({
+  kind,
+  selectedIds,
+  onToggle,
+  onAvailableIds,
+  countsByType,
+}: Props) {
   const [search, setSearch] = useState('');
   const [authorFilter, setAuthorFilter] = useState('');
   const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
@@ -44,7 +50,9 @@ export function ProposalsList({ kind, selectedIds, onToggle, onAvailableIds, cou
   const allProposals = data?.proposals ?? [];
 
   const uniqueAuthors = useMemo(() => {
-    const names = new Set(allProposals.map((p) => p.proposed_by_display ?? p.proposed_by).filter(Boolean));
+    const names = new Set(
+      allProposals.map((p) => p.proposed_by_display ?? p.proposed_by).filter(Boolean),
+    );
     return [...names] as string[];
   }, [allProposals]);
 

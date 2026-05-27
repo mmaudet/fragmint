@@ -7,7 +7,7 @@ import {
   useUpdateFragment,
   useDeleteFragment,
 } from '@/api/hooks/use-fragments';
-import { useDomains, useTypes } from '@/api/hooks/use-taxonomy';
+import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { useCurrentUser, canDelete } from '@/api/hooks/use-current-user';
@@ -58,8 +58,10 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
   const { data: currentUser } = useCurrentUser();
   const { data: domainsData } = useDomains();
   const { data: typesData } = useTypes();
+  const { data: tagsData } = useTags();
   const domains = (domainsData ?? []).map((d) => d.slug);
   const types = (typesData ?? []).map((t) => t.slug);
+  const availableTags = (tagsData ?? []).map((t) => t.slug);
 
   const [editType, setEditType] = useState('');
   const [editDomain, setEditDomain] = useState('');
@@ -252,6 +254,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 }}
                 types={types}
                 domains={domains}
+                availableTags={availableTags}
                 onChange={(m: MetaEdits) => {
                   setEditType(m.type);
                   setEditDomain(m.domain);

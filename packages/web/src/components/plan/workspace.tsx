@@ -136,9 +136,13 @@ export function Workspace({ planId }: { planId: string }) {
                 {t('planGeneration', 'writerOverride')}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="cursor-help"><Info className="h-3 w-3" /></span>
+                    <span className="cursor-help">
+                      <Info className="h-3 w-3" />
+                    </span>
                   </TooltipTrigger>
-                  <TooltipContent side="right">{t('planGeneration', 'writerOverrideTooltip')}</TooltipContent>
+                  <TooltipContent side="right">
+                    {t('planGeneration', 'writerOverrideTooltip')}
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <Textarea

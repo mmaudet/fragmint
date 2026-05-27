@@ -44,7 +44,10 @@ export function AdminMetadataTab() {
         {kinds.map(({ key, label, count }) => (
           <button
             key={key}
-            onClick={() => { setActiveKind(key); setSelectedIds(new Set()); }}
+            onClick={() => {
+              setActiveKind(key);
+              setSelectedIds(new Set());
+            }}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${
               activeKind === key
                 ? 'border-primary text-foreground font-medium'
@@ -62,9 +65,7 @@ export function AdminMetadataTab() {
           size="sm"
           disabled={availableIds.length === 0}
           onClick={() =>
-            isAllSelected
-              ? setSelectedIds(new Set())
-              : setSelectedIds(new Set(availableIds))
+            isAllSelected ? setSelectedIds(new Set()) : setSelectedIds(new Set(availableIds))
           }
         >
           {isAllSelected ? t('admin', 'deselectAll') : t('admin', 'selectAll')}

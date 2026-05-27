@@ -69,52 +69,71 @@ export default function App() {
         <I18nProvider>
           <TooltipProvider>
             <ActiveJobsProvider>
-            <CollectionProvider>
-              <BrowserRouter basename="/ui">
-                <ErrorBoundary>
-                <Routes>
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/" element={<Navigate to="/home" replace />} />
-                  <Route
-                    element={
-                      <ProtectedRoute>
-                        <AppLayout />
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route path="/home" element={<HomePage />} />
-                    <Route path="/fragments" element={<FragmentsPage />} />
-                    <Route path="/inventory" element={<InventoryPage />} />
-                    <Route path="/compose" element={<ComposePage />} />
-                    <Route path="/validation" element={<ValidationPage />} />
-                    <Route path="/harvest" element={<HarvestPage />} />
-                    <Route path="/harvest/:jobId/debrief" element={<HarvestDebriefPage />} />
-                    <Route path="/plan-generation" element={<PlanGenerationPage />} />
-                  </Route>
-                  <Route
-                    path="/admin"
-                    element={
-                      <ProtectedRoute>
-                        <AdminLayout />
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route index element={<AdminHomePage />} />
-                    <Route path="fragments" element={<AdminFragmentsPage />} />
-                    <Route path="metadata" element={<AdminMetadataPage />} />
-                    <Route path="relations" element={<AdminPlaceholderPage title="Relations" description="Fragment relationship graph — coming soon" />} />
-                    <Route path="supersedure" element={<AdminSupersedurePage />} />
-                    <Route path="contradictions" element={<AdminPlaceholderPage title="Contradictions" description="Detected contradictions between fragments — coming soon" />} />
-                    <Route path="users" element={<AdminUsersPage />} />
-                    <Route path="collections" element={<AdminCollectionsPage />} />
-                    <Route path="retrieval" element={<AdminRetrievalPage />} />
-                    <Route path="referential/:type/:id" element={<ReferentialItemDetailPage />} />
-                  </Route>
-                </Routes>
-              </ErrorBoundary>
-              </BrowserRouter>
-              <Toaster />
-            </CollectionProvider>
+              <CollectionProvider>
+                <BrowserRouter basename="/ui">
+                  <ErrorBoundary>
+                    <Routes>
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/" element={<Navigate to="/home" replace />} />
+                      <Route
+                        element={
+                          <ProtectedRoute>
+                            <AppLayout />
+                          </ProtectedRoute>
+                        }
+                      >
+                        <Route path="/home" element={<HomePage />} />
+                        <Route path="/fragments" element={<FragmentsPage />} />
+                        <Route path="/inventory" element={<InventoryPage />} />
+                        <Route path="/compose" element={<ComposePage />} />
+                        <Route path="/validation" element={<ValidationPage />} />
+                        <Route path="/harvest" element={<HarvestPage />} />
+                        <Route path="/harvest/:jobId/debrief" element={<HarvestDebriefPage />} />
+                        <Route path="/plan-generation" element={<PlanGenerationPage />} />
+                      </Route>
+                      <Route
+                        path="/admin"
+                        element={
+                          <ProtectedRoute>
+                            <AdminLayout />
+                          </ProtectedRoute>
+                        }
+                      >
+                        <Route index element={<AdminHomePage />} />
+                        <Route path="fragments" element={<AdminFragmentsPage />} />
+                        <Route path="metadata" element={<AdminMetadataPage />} />
+                        <Route
+                          path="relations"
+                          element={
+                            <AdminPlaceholderPage
+                              title="Relations"
+                              description="Fragment relationship graph — coming soon"
+                            />
+                          }
+                        />
+                        <Route path="supersedure" element={<AdminSupersedurePage />} />
+                        <Route
+                          path="contradictions"
+                          element={
+                            <AdminPlaceholderPage
+                              title="Contradictions"
+                              description="Detected contradictions between fragments — coming soon"
+                            />
+                          }
+                        />
+                        <Route path="users" element={<AdminUsersPage />} />
+                        <Route path="collections" element={<AdminCollectionsPage />} />
+                        <Route path="retrieval" element={<AdminRetrievalPage />} />
+                        <Route
+                          path="referential/:type/:id"
+                          element={<ReferentialItemDetailPage />}
+                        />
+                      </Route>
+                    </Routes>
+                  </ErrorBoundary>
+                </BrowserRouter>
+                <Toaster />
+              </CollectionProvider>
             </ActiveJobsProvider>
           </TooltipProvider>
         </I18nProvider>

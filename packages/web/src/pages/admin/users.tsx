@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users, ShieldCheck, ShieldOff, UserCheck, UserX } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  ShieldCheck,
+  ShieldOff,
+  UserCheck,
+  UserX,
+} from 'lucide-react';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api/hooks/use-users';
 import type { AdminUser } from '@/api/types';
 import type { UpdateUserInput, CreateUserInput } from '@/api/hooks/use-users';
@@ -64,7 +73,11 @@ const EMPTY_CREATE: CreateFormState = {
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  });
 }
 
 export default function AdminUsersPage() {
@@ -77,7 +90,11 @@ export default function AdminUsersPage() {
   const [createForm, setCreateForm] = useState<CreateFormState>(EMPTY_CREATE);
 
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
-  const [editForm, setEditForm] = useState<EditFormState>({ display_name: '', role: 'reader', active: true });
+  const [editForm, setEditForm] = useState<EditFormState>({
+    display_name: '',
+    role: 'reader',
+    active: true,
+  });
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
 
   const activeCount = users.filter((u) => u.active === 1).length;
@@ -149,19 +166,27 @@ export default function AdminUsersPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Utilisateurs</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Gestion des comptes et des rôles.
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Gestion des comptes et des rôles.</p>
           {users.length > 0 && (
             <div className="flex gap-3 mt-2">
-              <span className="text-xs text-emerald-600 font-medium">{activeCount} actif{activeCount > 1 ? 's' : ''}</span>
+              <span className="text-xs text-emerald-600 font-medium">
+                {activeCount} actif{activeCount > 1 ? 's' : ''}
+              </span>
               {inactiveCount > 0 && (
-                <span className="text-xs text-amber-600 font-medium">{inactiveCount} inactif{inactiveCount > 1 ? 's' : ''} — en attente d'activation</span>
+                <span className="text-xs text-amber-600 font-medium">
+                  {inactiveCount} inactif{inactiveCount > 1 ? 's' : ''} — en attente d'activation
+                </span>
               )}
             </div>
           )}
         </div>
-        <Button size="sm" onClick={() => { setCreateForm(EMPTY_CREATE); setCreateOpen(true); }}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setCreateForm(EMPTY_CREATE);
+            setCreateOpen(true);
+          }}
+        >
           <Plus className="h-4 w-4 mr-1" />
           Créer un utilisateur
         </Button>
@@ -191,7 +216,9 @@ export default function AdminUsersPage() {
             <TableBody>
               {users.map((u) => (
                 <TableRow key={u.id} className={u.active === 0 ? 'opacity-60' : undefined}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{u.login}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {u.login}
+                  </TableCell>
                   <TableCell className="font-medium">{u.display_name}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-xs ${ROLE_COLORS[u.role] ?? ''}`}>
@@ -209,8 +236,12 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{formatDate(u.created_at)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{formatDate(u.last_login)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatDate(u.created_at)}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatDate(u.last_login)}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-end">
                       <Button
@@ -221,9 +252,18 @@ export default function AdminUsersPage() {
                         onClick={() => handleToggleActive(u)}
                         disabled={updateMutation.isPending}
                       >
-                        {u.active === 1 ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                        {u.active === 1 ? (
+                          <UserX className="h-3.5 w-3.5" />
+                        ) : (
+                          <UserCheck className="h-3.5 w-3.5" />
+                        )}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(u)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openEdit(u)}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
@@ -280,10 +320,19 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="new-role">Rôle</Label>
-              <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger id="new-role"><SelectValue /></SelectTrigger>
+              <Select
+                value={createForm.role}
+                onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v }))}
+              >
+                <SelectTrigger id="new-role">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -297,15 +346,24 @@ export default function AdminUsersPage() {
               />
               <Label htmlFor="new-active" className="font-normal cursor-pointer">
                 Compte actif immédiatement
-                {!createForm.active && <span className="ml-1.5 text-xs text-amber-600">(en attente d'activation)</span>}
+                {!createForm.active && (
+                  <span className="ml-1.5 text-xs text-amber-600">(en attente d'activation)</span>
+                )}
               </Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Annuler
+            </Button>
             <Button
               onClick={handleCreate}
-              disabled={createMutation.isPending || !createForm.login.trim() || !createForm.password || !createForm.display_name.trim()}
+              disabled={
+                createMutation.isPending ||
+                !createForm.login.trim() ||
+                !createForm.password ||
+                !createForm.display_name.trim()
+              }
             >
               Créer
             </Button>
@@ -334,10 +392,19 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">Rôle</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger id="role"><SelectValue /></SelectTrigger>
+              <Select
+                value={editForm.role}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}
+              >
+                <SelectTrigger id="role">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -349,11 +416,15 @@ export default function AdminUsersPage() {
                 onChange={(e) => setEditForm((f) => ({ ...f, active: e.target.checked }))}
                 className="h-4 w-4"
               />
-              <Label htmlFor="active" className="font-normal cursor-pointer">Compte actif</Label>
+              <Label htmlFor="active" className="font-normal cursor-pointer">
+                Compte actif
+              </Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>
+              Annuler
+            </Button>
             <Button
               onClick={handleEditSubmit}
               disabled={updateMutation.isPending || !editForm.display_name.trim()}
@@ -371,11 +442,18 @@ export default function AdminUsersPage() {
             <DialogTitle>Supprimer l'utilisateur ?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Le compte <span className="font-mono font-medium">{deleteTarget?.login}</span> sera définitivement supprimé.
+            Le compte <span className="font-mono font-medium">{deleteTarget?.login}</span> sera
+            définitivement supprimé.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Annuler</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
               Supprimer
             </Button>
           </DialogFooter>

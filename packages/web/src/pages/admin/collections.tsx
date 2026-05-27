@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Lock, Globe, Users, Layers } from 'lucide-react';
-import { useCollections, useCreateCollection, useUpdateCollection, useDeleteCollection } from '@/api/hooks/use-collections';
+import {
+  useCollections,
+  useCreateCollection,
+  useUpdateCollection,
+  useDeleteCollection,
+} from '@/api/hooks/use-collections';
 import type { CollectionWithRole } from '@/api/types';
 import type { CreateCollectionInput, UpdateCollectionInput } from '@/api/hooks/use-collections';
 import { Button } from '@/components/ui/button';
@@ -51,7 +56,13 @@ interface FormState {
   read_only: boolean;
 }
 
-const EMPTY_FORM: FormState = { slug: '', name: '', type: 'team', description: '', read_only: false };
+const EMPTY_FORM: FormState = {
+  slug: '',
+  name: '',
+  type: 'team',
+  description: '',
+  read_only: false,
+};
 
 export default function AdminCollectionsPage() {
   const { data: collections = [], isLoading } = useCollections();
@@ -163,7 +174,9 @@ export default function AdminCollectionsPage() {
                 const Icon = TYPE_ICONS[col.type] ?? Globe;
                 return (
                   <TableRow key={col.slug}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{col.slug}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {col.slug}
+                    </TableCell>
                     <TableCell className="font-medium">{col.name}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs gap-1">
@@ -185,10 +198,20 @@ export default function AdminCollectionsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(col)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openEdit(col)}
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(col)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(col)}
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -205,7 +228,9 @@ export default function AdminCollectionsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editTarget ? 'Modifier la collection' : 'Nouvelle collection'}</DialogTitle>
+            <DialogTitle>
+              {editTarget ? 'Modifier la collection' : 'Nouvelle collection'}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {!editTarget && (
@@ -217,7 +242,9 @@ export default function AdminCollectionsPage() {
                   value={form.slug}
                   onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
                 />
-                <p className="text-xs text-muted-foreground">Identifiant unique, non modifiable après création.</p>
+                <p className="text-xs text-muted-foreground">
+                  Identifiant unique, non modifiable après création.
+                </p>
               </div>
             )}
             <div className="space-y-1.5">
@@ -265,13 +292,20 @@ export default function AdminCollectionsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, read_only: e.target.checked }))}
                   className="h-4 w-4"
                 />
-                <Label htmlFor="read_only" className="font-normal cursor-pointer">Lecture seule</Label>
+                <Label htmlFor="read_only" className="font-normal cursor-pointer">
+                  Lecture seule
+                </Label>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSubmit} disabled={isPending || !form.name.trim() || (!editTarget && !form.slug.trim())}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isPending || !form.name.trim() || (!editTarget && !form.slug.trim())}
+            >
               {editTarget ? 'Enregistrer' : 'Créer'}
             </Button>
           </DialogFooter>
@@ -285,12 +319,18 @@ export default function AdminCollectionsPage() {
             <DialogTitle>Supprimer la collection ?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            La collection <span className="font-mono font-medium">{deleteTarget?.slug}</span> sera supprimée.
-            Les fragments qu'elle contient ne seront pas supprimés.
+            La collection <span className="font-mono font-medium">{deleteTarget?.slug}</span> sera
+            supprimée. Les fragments qu'elle contient ne seront pas supprimés.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Annuler</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
               Supprimer
             </Button>
           </DialogFooter>

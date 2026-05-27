@@ -31,7 +31,13 @@ interface Props {
   onActionComplete: () => void;
 }
 
-export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpenDetail, onActionComplete }: Props) {
+export function AdminFragmentCard({
+  fragment,
+  isSelected,
+  onToggleSelect,
+  onOpenDetail,
+  onActionComplete,
+}: Props) {
   const [pendingAction, setPendingAction] = useState<'archive' | 'delete' | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +80,9 @@ export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpen
   };
 
   const updatedDate = new Date(fragment.updated_at).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: 'short', year: 'numeric',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
   });
 
   return (
@@ -103,7 +111,9 @@ export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpen
           </div>
 
           {fragment.body_excerpt && (
-            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{fragment.body_excerpt}</p>
+            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+              {fragment.body_excerpt}
+            </p>
           )}
 
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -130,7 +140,8 @@ export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpen
       <div className="flex gap-2 flex-wrap mt-3 ml-7" onClick={(e) => e.stopPropagation()}>
         {fragment.quality === 'reviewed' && (
           <Button size="sm" onClick={handleApprove} disabled={loading}>
-            <Check className="h-3.5 w-3.5 mr-1.5" />Approuver
+            <Check className="h-3.5 w-3.5 mr-1.5" />
+            Approuver
           </Button>
         )}
         {fragment.quality !== 'deprecated' && (
@@ -141,7 +152,8 @@ export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpen
             disabled={loading}
             className="text-amber-700 hover:text-amber-700"
           >
-            <Archive className="h-3.5 w-3.5 mr-1.5" />Archiver
+            <Archive className="h-3.5 w-3.5 mr-1.5" />
+            Archiver
           </Button>
         )}
         <Button
@@ -151,7 +163,8 @@ export function AdminFragmentCard({ fragment, isSelected, onToggleSelect, onOpen
           disabled={loading}
           className="text-destructive hover:text-destructive"
         >
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" />Supprimer
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+          Supprimer
         </Button>
       </div>
 

@@ -70,11 +70,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                         >
                           {t('planGeneration', 'confirmDelete')}
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setConfirmingId(null)}
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>
                           {t('planGeneration', 'cancel')}
                         </Button>
                       </div>

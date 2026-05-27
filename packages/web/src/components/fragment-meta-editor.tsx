@@ -100,9 +100,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
     availableTags && tagInput.length > 0
       ? availableTags
           .filter(
-            (t) =>
-              t.toLowerCase().includes(tagInput.toLowerCase()) &&
-              !edits.tags.includes(t),
+            (t) => t.toLowerCase().includes(tagInput.toLowerCase()) && !edits.tags.includes(t),
           )
           .slice(0, 8)
       : [];
@@ -181,7 +179,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
                 e.preventDefault();
                 const target =
                   filteredSuggestions.length > 0 && showSuggestions
-                    ? filteredSuggestions[activeSuggestion] ?? tagInput
+                    ? (filteredSuggestions[activeSuggestion] ?? tagInput)
                     : tagInput;
                 addTag(target);
               } else if (e.key === 'Escape') {
@@ -210,7 +208,8 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
           {similarTag && (
             <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
               <AlertTriangle className="h-3 w-3 shrink-0" />
-              Tag similaire existant&nbsp;: <code className="font-mono">{similarTag}</code> — doublon possible ?
+              Tag similaire existant&nbsp;: <code className="font-mono">{similarTag}</code> —
+              doublon possible ?
             </p>
           )}
           {showSuggestions && filteredSuggestions.length > 0 && (

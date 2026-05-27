@@ -7,7 +7,13 @@ import { useCollection } from '@/lib/collection-context';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ChipSelect } from '@/components/chip-select';
 import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
@@ -74,9 +80,15 @@ export function SpecStep({ plan }: { plan: Plan }) {
     <div className="space-y-4 p-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle>{t('planGeneration', 'specPrompt')}</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{t('planGeneration', 'specPrompt')}</CardTitle>
+          </CardHeader>
           <CardContent>
-            <Textarea rows={12} value={specPrompt} onChange={(e) => setSpecPrompt(e.target.value)} />
+            <Textarea
+              rows={12}
+              value={specPrompt}
+              onChange={(e) => setSpecPrompt(e.target.value)}
+            />
           </CardContent>
         </Card>
 
@@ -89,7 +101,14 @@ export function SpecStep({ plan }: { plan: Plan }) {
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterDomain')}
-                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterDomainTooltip')}</TooltipContent></Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">
+                      <Info className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('planGeneration', 'filterDomainTooltip')}</TooltipContent>
+                </Tooltip>
               </div>
               <ChipSelect
                 value={domain}
@@ -101,7 +120,14 @@ export function SpecStep({ plan }: { plan: Plan }) {
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterLang')}
-                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterLangTooltip')}</TooltipContent></Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">
+                      <Info className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('planGeneration', 'filterLangTooltip')}</TooltipContent>
+                </Tooltip>
               </div>
               <Select value={lang} onValueChange={setLang}>
                 <SelectTrigger>
@@ -117,7 +143,14 @@ export function SpecStep({ plan }: { plan: Plan }) {
             <div className="col-span-2 space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                 {t('planGeneration', 'filterTags')}
-                <Tooltip><TooltipTrigger asChild><span className="cursor-help"><Info className="h-3 w-3" /></span></TooltipTrigger><TooltipContent>{t('planGeneration', 'filterTagsTooltip')}</TooltipContent></Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">
+                      <Info className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('planGeneration', 'filterTagsTooltip')}</TooltipContent>
+                </Tooltip>
               </div>
               <ChipSelect
                 value={tags}
@@ -131,7 +164,9 @@ export function SpecStep({ plan }: { plan: Plan }) {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>{t('planGeneration', 'refinementInstructions')}</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>{t('planGeneration', 'refinementInstructions')}</CardTitle>
+        </CardHeader>
         <CardContent>
           <Textarea
             rows={4}
@@ -141,13 +176,17 @@ export function SpecStep({ plan }: { plan: Plan }) {
           />
           <Button className="mt-3" onClick={handleGenerate} disabled={generate.isPending}>
             {generate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {plan.state.plan_markdown ? t('planGeneration', 'regeneratePlan') : t('planGeneration', 'generatePlan')}
+            {plan.state.plan_markdown
+              ? t('planGeneration', 'regeneratePlan')
+              : t('planGeneration', 'generatePlan')}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Plan (markdown)</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Plan (markdown)</CardTitle>
+        </CardHeader>
         <CardContent>
           <Textarea
             rows={20}

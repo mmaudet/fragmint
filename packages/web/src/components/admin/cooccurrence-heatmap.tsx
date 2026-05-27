@@ -15,7 +15,8 @@ export function CooccurrenceHeatmap() {
     },
   });
 
-  if (isLoading) return <div className="text-muted-foreground text-sm">Calcul de la matrice...</div>;
+  if (isLoading)
+    return <div className="text-muted-foreground text-sm">Calcul de la matrice...</div>;
   if (!data || !data.cells || data.cells.length === 0) {
     return <div className="text-muted-foreground text-sm">Pas de co-occurrence à afficher.</div>;
   }
@@ -28,14 +29,22 @@ export function CooccurrenceHeatmap() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="px-3 py-1.5 border rounded-md text-sm bg-background"
+        >
           <option value="">Toutes catégories</option>
           <option value="client">Clients</option>
           <option value="product">Produits</option>
           <option value="technology">Technologies</option>
           <option value="partner">Partenaires</option>
         </select>
-        <select value={topN} onChange={(e) => setTopN(parseInt(e.target.value, 10))} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+        <select
+          value={topN}
+          onChange={(e) => setTopN(parseInt(e.target.value, 10))}
+          className="px-3 py-1.5 border rounded-md text-sm bg-background"
+        >
           <option value="10">Top 10 entités</option>
           <option value="20">Top 20 entités</option>
           <option value="30">Top 30 entités</option>
@@ -46,9 +55,15 @@ export function CooccurrenceHeatmap() {
         <table className="w-full text-xs">
           <thead className="bg-muted/50">
             <tr>
-              <th className="px-3 py-2 text-left font-medium sticky left-0 bg-muted/50 z-10 whitespace-nowrap">Domain \ Entity</th>
+              <th className="px-3 py-2 text-left font-medium sticky left-0 bg-muted/50 z-10 whitespace-nowrap">
+                Domain \ Entity
+              </th>
               {entities.map((e: any) => (
-                <th key={e.id} className="px-2 py-2 text-left font-medium whitespace-nowrap" title={`${e.name} (${e.category})`}>
+                <th
+                  key={e.id}
+                  className="px-2 py-2 text-left font-medium whitespace-nowrap"
+                  title={`${e.name} (${e.category})`}
+                >
                   {e.name.length > 12 ? e.name.slice(0, 10) + '…' : e.name}
                 </th>
               ))}
@@ -57,7 +72,9 @@ export function CooccurrenceHeatmap() {
           <tbody>
             {domains.map((domain: string) => (
               <tr key={domain} className="border-t">
-                <td className="px-3 py-2 font-medium sticky left-0 bg-background whitespace-nowrap">{domain}</td>
+                <td className="px-3 py-2 font-medium sticky left-0 bg-background whitespace-nowrap">
+                  {domain}
+                </td>
                 {entities.map((e: any) => {
                   const count = cellMap.get(`${domain}::${e.name}`) ?? 0;
                   const intensity = count > 0 ? Math.max(0.1, count / maxCount) : 0;
@@ -66,7 +83,8 @@ export function CooccurrenceHeatmap() {
                       key={e.id}
                       className="px-2 py-2 text-center"
                       style={{
-                        backgroundColor: count > 0 ? `rgba(59,130,246,${intensity})` : 'transparent',
+                        backgroundColor:
+                          count > 0 ? `rgba(59,130,246,${intensity})` : 'transparent',
                         color: intensity > 0.6 ? 'white' : 'inherit',
                       }}
                     >
@@ -80,7 +98,8 @@ export function CooccurrenceHeatmap() {
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Fragments "approved" mentionnant à la fois le domain (lignes) et l'entité (colonnes). Plus la couleur est foncée, plus la co-occurrence est forte.
+        Fragments "approved" mentionnant à la fois le domain (lignes) et l'entité (colonnes). Plus
+        la couleur est foncée, plus la co-occurrence est forte.
       </p>
     </div>
   );

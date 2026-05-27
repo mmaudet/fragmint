@@ -73,9 +73,18 @@ export function ChipSelect({ value, onChange, suggestions, placeholder }: ChipSe
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((v) => (
-          <span key={v} className="flex items-center gap-1 bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-xs">
+          <span
+            key={v}
+            className="flex items-center gap-1 bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-xs"
+          >
             {v}
-            <button type="button" onClick={(e) => { e.stopPropagation(); remove(v); }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(v);
+              }}
+            >
               <X className="h-3 w-3" />
             </button>
           </span>
@@ -83,7 +92,11 @@ export function ChipSelect({ value, onChange, suggestions, placeholder }: ChipSe
         <input
           ref={inputRef}
           value={input}
-          onChange={(e) => { setInput(e.target.value); setOpen(true); setActiveIndex(-1); }}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setOpen(true);
+            setActiveIndex(-1);
+          }}
           onKeyDown={onKeyDown}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -97,8 +110,14 @@ export function ChipSelect({ value, onChange, suggestions, placeholder }: ChipSe
             <button
               key={s}
               type="button"
-              className={cn('w-full text-left px-3 py-1.5 text-sm hover:bg-accent', i === activeIndex && 'bg-accent')}
-              onMouseDown={(e) => { e.preventDefault(); add(s); }}
+              className={cn(
+                'w-full text-left px-3 py-1.5 text-sm hover:bg-accent',
+                i === activeIndex && 'bg-accent',
+              )}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                add(s);
+              }}
               onMouseEnter={() => setActiveIndex(i)}
             >
               {s}

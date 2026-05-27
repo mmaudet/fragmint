@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { useAddFragmentToSection } from '@/api/hooks/use-plans';
 import { useSearchFragments } from '@/api/hooks/use-fragments';
 import { useCollection } from '@/lib/collection-context';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';

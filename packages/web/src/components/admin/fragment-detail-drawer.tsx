@@ -1,7 +1,8 @@
 // packages/web/src/components/admin/fragment-detail-drawer.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { X, CheckCircle2, Archive, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { StatusBadge } from './status-badge';
 import { OriginBadge } from './origin-badge';
 import { apiRequest } from '@/api/client';
@@ -67,7 +68,7 @@ function EntityPicker({ onAdd }: { onAdd: (entity: FragmentEntity) => void }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const select = (item: typeof data[number]) => {
+  const select = (item: (typeof data)[number]) => {
     onAdd({ id: parseInt(item.slug, 10), canonicalName: item.label, type: item.type ?? '' });
     setQuery('');
     setOpen(false);
@@ -77,7 +78,10 @@ function EntityPicker({ onAdd }: { onAdd: (entity: FragmentEntity) => void }) {
     <div ref={ref} className="relative">
       <input
         value={query}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
         onFocus={() => setOpen(true)}
         placeholder="Rechercher une entité validée…"
         className="w-full px-2 py-1 border rounded text-sm bg-background"
@@ -104,11 +108,16 @@ function EntityPicker({ onAdd }: { onAdd: (entity: FragmentEntity) => void }) {
 export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ domain: '', type: '', lang: '', tags: '' });
+  const [form, setForm] = useState({ domain: '', type: '', lang: '', tags: '', body: '' });
   const [editEntities, setEditEntities] = useState<FragmentEntity[]>([]);
   const [open, setOpen] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const { data: frag, isLoading, isError } = useQuery({
+  const {
+    data: frag,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['fragment-detail', fragmentId],
     queryFn: () => apiRequest<FragmentDetail>('GET', `/v1/fragments/${fragmentId}`),
   });
@@ -120,14 +129,16 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
         type: frag.type,
         lang: frag.lang,
         tags: (frag.tags ?? []).join(', '),
+        body: frag.body ?? frag.body_excerpt ?? '',
       });
     }
   }, [frag]);
 
   useEffect(() => {
     setEditing(false);
-    setForm({ domain: '', type: '', lang: '', tags: '' });
+    setForm({ domain: '', type: '', lang: '', tags: '', body: '' });
     setEditEntities([]);
+    setConfirmDelete(false);
   }, [fragmentId]);
 
   const startEditing = () => {
@@ -149,13 +160,17 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const tags = form.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      const tags = form.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
       await Promise.all([
         apiRequest('PUT', `/v1/fragments/${fragmentId}`, {
           domain: form.domain,
           type: form.type,
           lang: form.lang,
           tags,
+          body: form.body || undefined,
         }),
         apiRequest('PUT', `/v1/fragments/${fragmentId}/entities`, {
           entity_ids: editEntities.map((e) => e.id),
@@ -167,8 +182,50 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
       setEditEntities([]);
       queryClient.invalidateQueries({ queryKey: ['fragment-detail', fragmentId] });
       onUpdate();
+      toast.success('Fragment mis à jour');
     },
-    onError: (e: any) => alert(`Erreur : ${e.message}`),
+    onError: (e: any) => toast.error(`Erreur : ${e.message}`),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () => apiRequest('POST', `/v1/fragments/${fragmentId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fragment-detail', fragmentId] });
+      onUpdate();
+      toast.success('Fragment approuvé');
+    },
+    onError: (e: any) => toast.error(`Erreur : ${e.message}`),
+  });
+
+  const handleApprove = async () => {
+    if (editing) {
+      try {
+        await updateMutation.mutateAsync();
+      } catch {
+        return; // updateMutation.onError already shows a toast
+      }
+    }
+    approveMutation.mutate();
+  };
+
+  const deprecateMutation = useMutation({
+    mutationFn: () => apiRequest('POST', `/v1/fragments/${fragmentId}/deprecate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fragment-detail', fragmentId] });
+      onUpdate();
+      toast.success('Fragment archivé');
+    },
+    onError: (e: any) => toast.error(`Erreur : ${e.message}`),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest('DELETE', `/v1/fragments/${fragmentId}`),
+    onSuccess: () => {
+      handleOpenChange(false);
+      onUpdate();
+      toast.success('Fragment supprimé');
+    },
+    onError: (e: any) => toast.error(`Erreur : ${e.message}`),
   });
 
   function handleOpenChange(o: boolean) {
@@ -182,12 +239,12 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
-        className="w-full max-w-[640px] sm:max-w-[640px] gap-0 p-0 flex flex-col overflow-y-auto"
+        className="w-full max-w-[640px] sm:max-w-[640px] gap-0 p-0 flex flex-col"
       >
         <SheetTitle className="sr-only">Détail du fragment</SheetTitle>
 
         {/* Header */}
-        <div className="sticky top-0 bg-background border-b px-5 py-3 flex items-center justify-between z-10">
+        <div className="shrink-0 bg-background border-b px-5 py-3 flex items-center justify-between z-10">
           <SheetClose asChild>
             <button className="text-sm hover:underline text-muted-foreground">← Fermer</button>
           </SheetClose>
@@ -195,12 +252,18 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
             <div className="flex items-center gap-2">
               <StatusBadge quality={frag.quality} />
               {!editing ? (
-                <button onClick={startEditing} className="px-3 py-1 text-sm border rounded hover:bg-muted">
+                <button
+                  onClick={startEditing}
+                  className="px-3 py-1 text-sm border rounded hover:bg-muted"
+                >
                   Éditer
                 </button>
               ) : (
                 <>
-                  <button onClick={cancelEditing} className="px-3 py-1 text-sm border rounded hover:bg-muted">
+                  <button
+                    onClick={cancelEditing}
+                    className="px-3 py-1 text-sm border rounded hover:bg-muted"
+                  >
                     Annuler
                   </button>
                   <button
@@ -217,7 +280,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {isLoading && <p className="text-muted-foreground text-sm">Chargement…</p>}
           {isError && <p className="text-sm text-destructive">Erreur de chargement du fragment.</p>}
 
@@ -232,28 +295,43 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Domaine</label>
                   {editing ? (
-                    <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background" />
-                  ) : <code className="text-sm">{frag.domain}</code>}
+                    <input
+                      value={form.domain}
+                      onChange={(e) => setForm({ ...form, domain: e.target.value })}
+                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background"
+                    />
+                  ) : (
+                    <code className="text-sm">{frag.domain}</code>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Type</label>
                   {editing ? (
-                    <input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background" />
-                  ) : <code className="text-sm">{frag.type}</code>}
+                    <input
+                      value={form.type}
+                      onChange={(e) => setForm({ ...form, type: e.target.value })}
+                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background"
+                    />
+                  ) : (
+                    <code className="text-sm">{frag.type}</code>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Langue</label>
                   {editing ? (
-                    <select value={form.lang} onChange={(e) => setForm({ ...form, lang: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm bg-background">
+                    <select
+                      value={form.lang}
+                      onChange={(e) => setForm({ ...form, lang: e.target.value })}
+                      className="w-full px-2 py-1 border rounded text-sm bg-background"
+                    >
                       <option value="fr">fr</option>
                       <option value="en">en</option>
                       <option value="es">es</option>
                       <option value="pt">pt</option>
                     </select>
-                  ) : <span className="text-sm">{frag.lang}</span>}
+                  ) : (
+                    <span className="text-sm">{frag.lang}</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Utilisations</label>
@@ -271,18 +349,26 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Tags</label>
                 {editing ? (
-                  <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  <input
+                    value={form.tags}
+                    onChange={(e) => setForm({ ...form, tags: e.target.value })}
                     placeholder="tag1, tag2, tag3"
-                    className="w-full px-2 py-1 border rounded text-sm bg-background" />
+                    className="w-full px-2 py-1 border rounded text-sm bg-background"
+                  />
                 ) : (
                   <div className="flex flex-wrap gap-1">
-                    {(frag.tags ?? []).length === 0
-                      ? <span className="text-xs text-muted-foreground">Aucun tag</span>
-                      : (frag.tags ?? []).map((t) => (
-                          <span key={t} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded dark:bg-blue-900/30 dark:text-blue-300">
-                            #{t}
-                          </span>
-                        ))}
+                    {(frag.tags ?? []).length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Aucun tag</span>
+                    ) : (
+                      (frag.tags ?? []).map((t) => (
+                        <span
+                          key={t}
+                          className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded dark:bg-blue-900/30 dark:text-blue-300"
+                        >
+                          #{t}
+                        </span>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -293,31 +379,47 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 {editing ? (
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1 min-h-[1.5rem]">
-                      {editEntities.length === 0
-                        ? <span className="text-xs text-muted-foreground">Aucune entité</span>
-                        : editEntities.map((e) => (
-                            <span key={e.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300">
-                              {e.canonicalName}
-                              {e.type && <span className="opacity-60">({e.type})</span>}
-                              <button type="button" onClick={() => removeEntity(e.id)} className="ml-0.5 hover:text-red-500">
-                                <X className="h-2.5 w-2.5" />
-                              </button>
-                            </span>
-                          ))}
+                      {editEntities.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Aucune entité</span>
+                      ) : (
+                        editEntities.map((e) => (
+                          <span
+                            key={e.id}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
+                          >
+                            {e.canonicalName}
+                            {e.type && <span className="opacity-60">({e.type})</span>}
+                            <button
+                              type="button"
+                              onClick={() => removeEntity(e.id)}
+                              className="ml-0.5 hover:text-red-500"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                        ))
+                      )}
                     </div>
                     <EntityPicker onAdd={addEntity} />
-                    <p className="text-xs text-muted-foreground">Seules les entités validées dans le référentiel sont proposées.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Seules les entités validées dans le référentiel sont proposées.
+                    </p>
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1">
-                    {(frag.entities ?? []).length === 0
-                      ? <span className="text-xs text-muted-foreground">Aucune entité</span>
-                      : frag.entities.map((e) => (
-                          <span key={e.id} className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300">
-                            {e.canonicalName}
-                            {e.type && <span className="ml-1 opacity-60">({e.type})</span>}
-                          </span>
-                        ))}
+                    {(frag.entities ?? []).length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Aucune entité</span>
+                    ) : (
+                      frag.entities.map((e) => (
+                        <span
+                          key={e.id}
+                          className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
+                        >
+                          {e.canonicalName}
+                          {e.type && <span className="ml-1 opacity-60">({e.type})</span>}
+                        </span>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -331,7 +433,9 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 {frag.origin_source && (
                   <div>
                     <label className="block text-xs text-muted-foreground mb-1">Source</label>
-                    <span className="text-xs truncate block" title={frag.origin_source}>{frag.origin_source}</span>
+                    <span className="text-xs truncate block" title={frag.origin_source}>
+                      {frag.origin_source}
+                    </span>
                     {frag.origin_page != null && (
                       <span className="text-xs text-muted-foreground">p.{frag.origin_page}</span>
                     )}
@@ -339,7 +443,9 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 )}
                 {frag.harvest_confidence != null && (
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Confiance LLM</label>
+                    <label className="block text-xs text-muted-foreground mb-1">
+                      Confiance LLM
+                    </label>
                     <span className="text-sm">{Math.round(frag.harvest_confidence * 100)}%</span>
                   </div>
                 )}
@@ -350,14 +456,20 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 <div className="border-t pt-4 space-y-2">
                   {frag.superseded_by && (
                     <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Remplacé par</label>
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{frag.superseded_by}</code>
+                      <label className="block text-xs text-muted-foreground mb-1">
+                        Remplacé par
+                      </label>
+                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                        {frag.superseded_by}
+                      </code>
                     </div>
                   )}
                   {frag.supersedes && (
                     <div>
                       <label className="block text-xs text-muted-foreground mb-1">Remplace</label>
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{frag.supersedes}</code>
+                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                        {frag.supersedes}
+                      </code>
                     </div>
                   )}
                 </div>
@@ -365,33 +477,106 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
 
               {/* Body */}
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">
-                  Contenu <span className="text-muted-foreground/60">(lecture seule)</span>
-                </label>
-                <pre className="text-xs whitespace-pre-wrap font-sans bg-muted/40 rounded p-3 max-h-80 overflow-y-auto border">
-                  {frag.body ?? frag.body_excerpt ?? '(vide)'}
-                </pre>
+                <label className="block text-xs text-muted-foreground mb-1">Contenu</label>
+                {editing ? (
+                  <textarea
+                    value={form.body}
+                    onChange={(e) => setForm({ ...form, body: e.target.value })}
+                    rows={12}
+                    className="w-full px-2 py-1.5 border rounded text-xs font-sans bg-background resize-y"
+                  />
+                ) : (
+                  <pre className="text-xs whitespace-pre-wrap font-sans bg-muted/40 rounded p-3 max-h-80 overflow-y-auto border">
+                    {frag.body ?? frag.body_excerpt ?? '(vide)'}
+                  </pre>
+                )}
               </div>
 
               {/* System info */}
               <div className="border-t pt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div className="col-span-2"><strong>ID</strong> : <code className="text-xs">{frag.id}</code></div>
-                <div><strong>Auteur</strong> : {frag.author}</div>
+                <div className="col-span-2">
+                  <strong>ID</strong> : <code className="text-xs">{frag.id}</code>
+                </div>
+                <div>
+                  <strong>Auteur</strong> : {frag.author}
+                </div>
                 {frag.frontmatter?.reviewed_by && (
-                  <div><strong>Reviewé par</strong> : {String(frag.frontmatter.reviewed_by)}</div>
+                  <div>
+                    <strong>Reviewé par</strong> : {String(frag.frontmatter.reviewed_by)}
+                  </div>
                 )}
                 {frag.frontmatter?.approved_by && (
-                  <div><strong>Approuvé par</strong> : {String(frag.frontmatter.approved_by)}</div>
+                  <div>
+                    <strong>Approuvé par</strong> : {String(frag.frontmatter.approved_by)}
+                  </div>
                 )}
-                <div><strong>Créé</strong> : {new Date(frag.created_at).toLocaleString('fr-FR')}</div>
-                <div><strong>Modifié</strong> : {new Date(frag.updated_at).toLocaleString('fr-FR')}</div>
+                <div>
+                  <strong>Créé</strong> : {new Date(frag.created_at).toLocaleString('fr-FR')}
+                </div>
+                <div>
+                  <strong>Modifié</strong> : {new Date(frag.updated_at).toLocaleString('fr-FR')}
+                </div>
                 {frag.git_hash && (
-                  <div className="col-span-2"><strong>Commit</strong> : <code className="text-xs">{frag.git_hash}</code></div>
+                  <div className="col-span-2">
+                    <strong>Commit</strong> : <code className="text-xs">{frag.git_hash}</code>
+                  </div>
                 )}
               </div>
             </>
           )}
         </div>
+
+        {/* Actions footer — sticky at bottom */}
+        {frag && frag.quality !== 'deprecated' && (
+          <div className="shrink-0 border-t px-5 py-3 flex flex-wrap gap-2 bg-background">
+            {frag.quality === 'reviewed' && (
+              <button
+                onClick={handleApprove}
+                disabled={approveMutation.isPending || updateMutation.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {approveMutation.isPending ? '…' : 'Approuver'}
+              </button>
+            )}
+            <button
+              onClick={() => deprecateMutation.mutate()}
+              disabled={deprecateMutation.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded hover:bg-muted disabled:opacity-50"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {deprecateMutation.isPending ? '…' : 'Archiver'}
+            </button>
+            <div className="ml-auto">
+              {confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Confirmer ?</span>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-2 py-1 text-xs border rounded hover:bg-muted"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={deleteMutation.isPending}
+                    className="px-2 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending ? '…' : 'Supprimer'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-destructive text-destructive rounded hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Supprimer
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

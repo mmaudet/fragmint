@@ -1,7 +1,11 @@
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
-import { useRetrievalMode, useSetRetrievalMode, type RetrievalMode } from '@/api/hooks/use-retrieval-mode';
+import {
+  useRetrievalMode,
+  useSetRetrievalMode,
+  type RetrievalMode,
+} from '@/api/hooks/use-retrieval-mode';
 
 const MODES: {
   value: RetrievalMode;
@@ -63,9 +67,7 @@ export function RetrievalModeToggle() {
                 )}
               >
                 {m.label}
-                {m.value === 'hybrid' && !isActive && (
-                  <span className="ml-0.5 opacity-60">⭐</span>
-                )}
+                {m.value === 'hybrid' && !isActive && <span className="ml-0.5 opacity-60">⭐</span>}
               </button>
               <TooltipContent side="right" className="max-w-[200px] text-xs">
                 {m.tooltip}

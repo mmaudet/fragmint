@@ -70,11 +70,28 @@ export default function AdminFragmentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Derive from URL param so the drawer is deep-linkable (?fragment=<id>)
   const drawerFragmentId = searchParams.get('fragment') ?? null;
-  const openFragmentDrawer = useCallback((id: string) => {
-    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('fragment', id); return next; }, { replace: true });
-  }, [setSearchParams]);
+  const openFragmentDrawer = useCallback(
+    (id: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('fragment', id);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const closeFragmentDrawer = useCallback(() => {
-    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('fragment'); return next; }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('fragment');
+        return next;
+      },
+      { replace: true },
+    );
   }, [setSearchParams]);
   const [page, setPage] = useState(0);
 
@@ -171,21 +188,29 @@ export default function AdminFragmentsPage() {
         <h1 className="text-2xl font-bold mb-2">Fragments</h1>
         <div className="text-sm text-muted-foreground leading-relaxed space-y-1">
           <p>
-            Bibliothèque complète de tous les fragments du vault, toutes collections confondues.
-            Le cycle de vie d'un fragment est :{' '}
-            <span className="font-medium text-foreground/80">Draft</span> (rédigé par un contributeur)
+            Bibliothèque complète de tous les fragments du vault, toutes collections confondues. Le
+            cycle de vie d'un fragment est :{' '}
+            <span className="font-medium text-foreground/80">Draft</span> (rédigé par un
+            contributeur)
             {' →'}{' '}
-            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Reviewed</span>
-            {' '}(soumis à validation){' →'}{' '}
-            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Approved</span>
-            {' '}(utilisable dans les plans).
+            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              Reviewed
+            </span>{' '}
+            (soumis à validation){' →'}{' '}
+            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              Approved
+            </span>{' '}
+            (utilisable dans les plans).
           </p>
           <p>
-            <span className="font-medium text-foreground/80">Votre rôle :</span> approuver les fragments{' '}
-            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Reviewed</span>
+            <span className="font-medium text-foreground/80">Votre rôle :</span> approuver les
+            fragments{' '}
+            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              Reviewed
+            </span>
             , archiver les obsolètes, ou supprimer les erreurs. Les{' '}
-            <span className="font-medium text-foreground/80">Drafts</span> sont visibles pour supervision mais
-            seuls les contributeurs peuvent les soumettre en review.
+            <span className="font-medium text-foreground/80">Drafts</span> sont visibles pour
+            supervision mais seuls les contributeurs peuvent les soumettre en review.
           </p>
         </div>
       </div>
@@ -193,26 +218,42 @@ export default function AdminFragmentsPage() {
       <div className="px-8 py-6 space-y-6">
         {/* Stat cards — clicking filters the list */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {QUALITY_CARDS.map(({ value, label, sublabel, icon: Icon, iconColor, activeClass, countColor }) => {
-            // 'all' sums by_status (always global) — stats.total is filtered by current query.
-            const count = value === 'all'
-              ? Object.values(stats?.by_status ?? {}).reduce((sum: number, n: number) => sum + n, 0)
-              : (stats?.by_status[value] ?? 0);
-            const isActive = filters.quality === value;
-            return (
-              <button key={value} onClick={() => updateFilters({ quality: value })} className="text-left">
-                <Card className={`bg-background transition-all hover:shadow-sm ${isActive ? `border-2 ${activeClass}` : 'hover:border-muted-foreground/30'}`}>
-                  <CardContent className="pt-5 pb-4">
-                    <Icon className={`h-5 w-5 mb-3 ${isActive ? iconColor : 'text-muted-foreground/60'}`} />
-                    <p className={`text-2xl font-bold ${isActive ? countColor : count === 0 ? 'text-muted-foreground/40' : ''}`}>
-                      {count}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>
-                  </CardContent>
-                </Card>
-              </button>
-            );
-          })}
+          {QUALITY_CARDS.map(
+            ({ value, label, sublabel, icon: Icon, iconColor, activeClass, countColor }) => {
+              // 'all' sums by_status (always global) — stats.total is filtered by current query.
+              const count =
+                value === 'all'
+                  ? Object.values(stats?.by_status ?? {}).reduce(
+                      (sum: number, n: number) => sum + n,
+                      0,
+                    )
+                  : (stats?.by_status[value] ?? 0);
+              const isActive = filters.quality === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => updateFilters({ quality: value })}
+                  className="text-left"
+                >
+                  <Card
+                    className={`bg-background transition-all hover:shadow-sm ${isActive ? `border-2 ${activeClass}` : 'hover:border-muted-foreground/30'}`}
+                  >
+                    <CardContent className="pt-5 pb-4">
+                      <Icon
+                        className={`h-5 w-5 mb-3 ${isActive ? iconColor : 'text-muted-foreground/60'}`}
+                      />
+                      <p
+                        className={`text-2xl font-bold ${isActive ? countColor : count === 0 ? 'text-muted-foreground/40' : ''}`}
+                      >
+                        {count}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>
+                    </CardContent>
+                  </Card>
+                </button>
+              );
+            },
+          )}
         </div>
 
         {/* Toolbar: search + domain + type + origin + lang + sort */}

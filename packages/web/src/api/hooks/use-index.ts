@@ -22,8 +22,7 @@ export function useIndexStatus() {
 export function useTriggerReindex() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () =>
-      apiRequest<{ indexed: number; skipped: number }>('POST', '/v1/index/trigger'),
+    mutationFn: () => apiRequest<{ indexed: number; skipped: number }>('POST', '/v1/index/trigger'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['index-status'] });
     },

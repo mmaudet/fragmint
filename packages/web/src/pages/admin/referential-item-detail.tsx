@@ -3,14 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/api/client';
 import { useI18n } from '@/lib/i18n';
 
-const STATUS_KEYS: Record<string, 'statusActive' | 'statusPending' | 'statusArchived' | 'statusRejected'> = {
+const STATUS_KEYS: Record<
+  string,
+  'statusActive' | 'statusPending' | 'statusArchived' | 'statusRejected'
+> = {
   active: 'statusActive',
   pending: 'statusPending',
   archived: 'statusArchived',
   rejected: 'statusRejected',
 };
 
-const TRUST_KEYS: Record<string, 'trustHuman' | 'trustLlmConfirmed' | 'trustLlmInferred' | 'trustLlmDeviation'> = {
+const TRUST_KEYS: Record<
+  string,
+  'trustHuman' | 'trustLlmConfirmed' | 'trustLlmInferred' | 'trustLlmDeviation'
+> = {
   'human-direct': 'trustHuman',
   'llm-confirmed': 'trustLlmConfirmed',
   'llm-inferred': 'trustLlmInferred',
@@ -43,10 +49,17 @@ export function ReferentialItemDetailPage() {
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <Link
-        to={item.status === 'pending' ? '/admin/metadata?tab=validation' : '/admin/metadata?tab=referential'}
+        to={
+          item.status === 'pending'
+            ? '/admin/metadata?tab=validation'
+            : '/admin/metadata?tab=referential'
+        }
         className="text-sm text-primary hover:underline"
       >
-        ← {item.status === 'pending' ? t('admin', 'backToValidation') : t('admin', 'backToReferential')}
+        ←{' '}
+        {item.status === 'pending'
+          ? t('admin', 'backToValidation')
+          : t('admin', 'backToReferential')}
       </Link>
 
       <header>
@@ -104,9 +117,11 @@ export function ReferentialItemDetailPage() {
           <ul className="space-y-2 text-sm">
             {rename_history.map((r: any) => (
               <li key={r.id} className="border-l-2 border-muted pl-3">
-                <span className="font-mono">{r.old_value}</span> → <span className="font-mono">{r.new_value}</span>
+                <span className="font-mono">{r.old_value}</span> →{' '}
+                <span className="font-mono">{r.new_value}</span>
                 <p className="text-xs text-muted-foreground">
-                  Par {r.renamed_by} le {new Date(r.renamed_at).toLocaleString()} · {r.affected_fragments} fragments
+                  Par {r.renamed_by} le {new Date(r.renamed_at).toLocaleString()} ·{' '}
+                  {r.affected_fragments} fragments
                 </p>
               </li>
             ))}

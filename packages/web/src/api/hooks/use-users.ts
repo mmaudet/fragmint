@@ -29,8 +29,7 @@ export interface CreateUserInput {
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateUserInput) =>
-      apiRequest<AdminUser>('POST', '/v1/users', input),
+    mutationFn: (input: CreateUserInput) => apiRequest<AdminUser>('POST', '/v1/users', input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 }
@@ -53,8 +52,7 @@ export function useUpdateUser() {
 export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      apiRequest<{ deleted: boolean }>('DELETE', `/v1/users/${id}`),
+    mutationFn: (id: string) => apiRequest<{ deleted: boolean }>('DELETE', `/v1/users/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 }

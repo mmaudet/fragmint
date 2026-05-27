@@ -35,7 +35,9 @@ export function UploadHintsForm({ hints, onChange }: Props) {
       >
         <span>
           {t('harvest', 'hintsTitle')}{' '}
-          <span className="font-normal text-muted-foreground">({t('harvest', 'hintsSubtitle')})</span>
+          <span className="font-normal text-muted-foreground">
+            ({t('harvest', 'hintsSubtitle')})
+          </span>
         </span>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </button>
@@ -43,7 +45,9 @@ export function UploadHintsForm({ hints, onChange }: Props) {
       {open && (
         <div className="px-4 pb-4 space-y-4 border-t">
           <div className="mt-3">
-            <label className="text-sm font-medium mb-0.5 block">{t('harvest', 'hintsDomainLabel')}</label>
+            <label className="text-sm font-medium mb-0.5 block">
+              {t('harvest', 'hintsDomainLabel')}
+            </label>
             <p className="text-xs text-muted-foreground mb-2">{t('harvest', 'hintsDomainDesc')}</p>
             <AutocompleteSelect
               kind="domain"
@@ -56,7 +60,9 @@ export function UploadHintsForm({ hints, onChange }: Props) {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-0.5 block">{t('harvest', 'hintsTagsLabel')}</label>
+            <label className="text-sm font-medium mb-0.5 block">
+              {t('harvest', 'hintsTagsLabel')}
+            </label>
             <p className="text-xs text-muted-foreground mb-2">{t('harvest', 'hintsTagsDesc')}</p>
             <MultiAutocompleteSelect
               kind="tag"
@@ -68,11 +74,20 @@ export function UploadHintsForm({ hints, onChange }: Props) {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-0.5 block">{t('harvest', 'hintsEntitiesLabel')}</label>
-            <p className="text-xs text-muted-foreground mb-2">{t('harvest', 'hintsEntitiesDesc')}</p>
+            <label className="text-sm font-medium mb-0.5 block">
+              {t('harvest', 'hintsEntitiesLabel')}
+            </label>
+            <p className="text-xs text-muted-foreground mb-2">
+              {t('harvest', 'hintsEntitiesDesc')}
+            </p>
             <EntitySelector
               values={toStableEntries(hints.entities ?? [])}
-              onChange={(entries) => set('entities', entries.map((e) => e.name))}
+              onChange={(entries) =>
+                set(
+                  'entities',
+                  entries.map((e) => e.name),
+                )
+              }
             />
           </div>
         </div>

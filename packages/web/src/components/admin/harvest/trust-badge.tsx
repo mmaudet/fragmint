@@ -19,9 +19,7 @@ export function TrustBadge({ trustSourcesJson }: { trustSourcesJson: string | nu
   const level = getTrustLevel(trustSourcesJson);
   const c = CONFIG[level];
   return (
-    <span className={`text-xs px-2 py-0.5 rounded font-medium ${c.className}`}>
-      {c.label}
-    </span>
+    <span className={`text-xs px-2 py-0.5 rounded font-medium ${c.className}`}>{c.label}</span>
   );
 }
 

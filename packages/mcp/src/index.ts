@@ -16,7 +16,14 @@ import { composeDefinition, composeHandler } from './tools/document-compose.js';
 import { harvestDefinition, harvestHandler } from './tools/fragment-harvest.js';
 import { collectionListDefinition, collectionListHandler } from './tools/collection-list.js';
 import { getIndexDefinition, getIndexHandler } from './tools/index-get.js';
-import { listSubjectsDefinition, listSubjectsHandler, listEntitiesDefinition, listEntitiesHandler, listTagsDefinition, listTagsHandler } from './tools/references-list.js';
+import {
+  listSubjectsDefinition,
+  listSubjectsHandler,
+  listEntitiesDefinition,
+  listEntitiesHandler,
+  listTagsDefinition,
+  listTagsHandler,
+} from './tools/references-list.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';

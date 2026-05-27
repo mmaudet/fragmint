@@ -24,7 +24,7 @@ export function useFragments(collectionSlug: string, filters: FragmentFilters = 
   return {
     ...query,
     data: query.data?.data,
-    total: (query.data?.meta?.total as number | undefined),
+    total: query.data?.meta?.total as number | undefined,
   };
 }
 

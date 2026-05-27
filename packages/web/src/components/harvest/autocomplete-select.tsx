@@ -53,7 +53,7 @@ export function AutocompleteSelect({
   }, []);
 
   const select = (item: ReferenceItem) => {
-    const v = valueField === 'label' ? (item.label || item.slug) : item.slug;
+    const v = valueField === 'label' ? item.label || item.slug : item.slug;
     onChange(v);
     onConfirm?.(v);
     setQuery(onConfirm ? '' : v);
@@ -76,7 +76,8 @@ export function AutocompleteSelect({
     onChange('');
   };
 
-  const showCreate = allowCreate && open && query.trim().length > 0 && data.length === 0 && debouncedQuery === query;
+  const showCreate =
+    allowCreate && open && query.trim().length > 0 && data.length === 0 && debouncedQuery === query;
 
   // Total navigable items: data items + optional "create" entry
   const totalItems = data.length + (showCreate ? 1 : 0);
@@ -138,7 +139,10 @@ export function AutocompleteSelect({
         className="text-sm"
       />
       {open && (data.length > 0 || showCreate) && (
-        <div ref={listRef} className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+        <div
+          ref={listRef}
+          className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto"
+        >
           {data.map((item, idx) => (
             <button
               key={item.slug}
@@ -147,7 +151,9 @@ export function AutocompleteSelect({
               onMouseDown={() => select(item)}
             >
               {item.label}
-              {item.type && <span className="ml-1 text-xs text-muted-foreground">({item.type})</span>}
+              {item.type && (
+                <span className="ml-1 text-xs text-muted-foreground">({item.type})</span>
+              )}
             </button>
           ))}
           {showCreate && (

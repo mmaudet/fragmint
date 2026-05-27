@@ -63,7 +63,9 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                 i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
               )}
             >
-              <span className="truncate">{i + 1}. {s.title}</span>
+              <span className="truncate">
+                {i + 1}. {s.title}
+              </span>
               {reviewed && <span className="text-primary text-xs">✓</span>}
             </button>
           );
@@ -81,7 +83,9 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                   <CardTitle>{active.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{active.description}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {active.description}
+                  </p>
                   <div className="flex gap-2">
                     <Button
                       size="sm"

@@ -22,7 +22,11 @@ export default function AdminMetadataPage() {
           </button>
           <TooltipContent side="right">{t('admin', 'cooccurrenceTooltip')}</TooltipContent>
         </Tooltip>
-        {showCooccurrence && <div className="mt-4"><CooccurrenceHeatmap /></div>}
+        {showCooccurrence && (
+          <div className="mt-4">
+            <CooccurrenceHeatmap />
+          </div>
+        )}
       </div>
     </div>
   );

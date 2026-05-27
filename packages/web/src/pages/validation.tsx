@@ -12,7 +12,13 @@ import { useCurrentUser, canReview } from '@/api/hooks/use-current-user';
 import { ValidationTabContent } from '@/components/validation-tab-content';
 import { FragmentDetail } from '@/components/fragment-detail';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { BookOpen, Loader2, Trash2 } from 'lucide-react';
 
@@ -35,8 +41,20 @@ export default function ValidationPage() {
   const { t } = useI18n();
   const { activeCollection } = useCollection();
 
-  const { data: fragments, total, isLoading } = useFragments(activeCollection, { quality: 'draft', limit: pageSize, offset: page * pageSize });
-  const { data: searchResults, isLoading: isSearching } = useSearchFragments(activeCollection, search, { quality: 'draft' });
+  const {
+    data: fragments,
+    total,
+    isLoading,
+  } = useFragments(activeCollection, {
+    quality: 'draft',
+    limit: pageSize,
+    offset: page * pageSize,
+  });
+  const { data: searchResults, isLoading: isSearching } = useSearchFragments(
+    activeCollection,
+    search,
+    { quality: 'draft' },
+  );
 
   const { data: currentUser } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -46,15 +64,25 @@ export default function ValidationPage() {
   const countForSelect = isSearchMode ? list.length : total;
   const isAllSelected = !!countForSelect && selectedIds.size >= countForSelect;
 
-  const toggle = (set: Set<string>, id: string) => { const s = new Set(set); s.has(id) ? s.delete(id) : s.add(id); return s; };
+  const toggle = (set: Set<string>, id: string) => {
+    const s = new Set(set);
+    s.has(id) ? s.delete(id) : s.add(id);
+    return s;
+  };
 
   const fetchAllIds = async () => {
-    const { data } = await apiRequestFull<Fragment[]>('GET', collectionApiUrl(activeCollection, `/fragments?quality=draft&limit=99999`));
+    const { data } = await apiRequestFull<Fragment[]>(
+      'GET',
+      collectionApiUrl(activeCollection, `/fragments?quality=draft&limit=99999`),
+    );
     return data.map((f) => f.id);
   };
 
   const handleSelectAll = async () => {
-    if (isAllSelected) { setSelectedIds(new Set()); return; }
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
     const ids = isSearchMode ? (searchResults ?? []).map((f) => f.id) : await fetchAllIds();
     setSelectedIds(new Set(ids));
   };
@@ -63,15 +91,23 @@ export default function ValidationPage() {
     clearFn();
     setBulkPending(true);
     try {
-      const { job_id } = await apiRequest<{ job_id: string }>('POST', collectionApiUrl(activeCollection, endpoint), { ids });
+      const { job_id } = await apiRequest<{ job_id: string }>(
+        'POST',
+        collectionApiUrl(activeCollection, endpoint),
+        { ids },
+      );
       toast.info(t('validation', 'bulkProcessing'));
       const poll = async (): Promise<void> => {
-        const job = await apiRequest<{ status: string; done: number; error_count: number }>('GET', `/v1/jobs/${job_id}`);
+        const job = await apiRequest<{ status: string; done: number; error_count: number }>(
+          'GET',
+          `/v1/jobs/${job_id}`,
+        );
         if (job.status === 'done' || job.status === 'error') {
           if (job.status === 'done' || (job.status === 'error' && job.done > 0)) {
-            const msg = job.error_count > 0
-              ? `${job.done} ${t('validation', 'bulkDoneWithErrors')} ${job.error_count} ${t('validation', 'bulkErrors')}`
-              : `${job.done} ${t('validation', 'bulkDone')}`;
+            const msg =
+              job.error_count > 0
+                ? `${job.done} ${t('validation', 'bulkDoneWithErrors')} ${job.error_count} ${t('validation', 'bulkErrors')}`
+                : `${job.done} ${t('validation', 'bulkDone')}`;
             toast.success(msg);
             queryClient.invalidateQueries({ queryKey: ['fragments'] });
           } else {
@@ -161,9 +197,15 @@ export default function ValidationPage() {
         page={page}
         onPageChange={setPage}
         pageSize={pageSize}
-        onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(0);
+        }}
         search={search}
-        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(0);
+        }}
         searchPlaceholder={t('fragments', 'searchPlaceholder')}
         description={t('validation', 'reviewTabDesc')}
         emptyText={t('validation', 'noFragmentsPendingReview')}
@@ -173,16 +215,33 @@ export default function ValidationPage() {
         onToggle={canReview(currentUser) ? (id) => setSelectedIds((p) => toggle(p, id)) : undefined}
         onSelectAll={canReview(currentUser) ? handleSelectAll : undefined}
         isAllSelected={isAllSelected}
-        bulkAction={selectedIds.size > 0 ? {
-          label: <><BookOpen className="mr-2 h-3.5 w-3.5" />{t('fragments', 'markReviewed')}</>,
-          count: selectedIds.size,
-          onClick: () => startBulk('/fragments/bulk-review', Array.from(selectedIds), () => setSelectedIds(new Set())),
-          isPending: bulkPending,
-        } : null}
+        bulkAction={
+          selectedIds.size > 0
+            ? {
+                label: (
+                  <>
+                    <BookOpen className="mr-2 h-3.5 w-3.5" />
+                    {t('fragments', 'markReviewed')}
+                  </>
+                ),
+                count: selectedIds.size,
+                onClick: () =>
+                  startBulk('/fragments/bulk-review', Array.from(selectedIds), () =>
+                    setSelectedIds(new Set()),
+                  ),
+                isPending: bulkPending,
+              }
+            : null
+        }
         secondaryBulkAction={
           selectedIds.size > 0 && (isAdmin || canReview(currentUser))
             ? {
-                label: <><Trash2 className="mr-2 h-3.5 w-3.5" />{t('validation', 'deleteSelected')}</>,
+                label: (
+                  <>
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    {t('validation', 'deleteSelected')}
+                  </>
+                ),
                 count: selectedIds.size,
                 onClick: () => handleBulkDelete(Array.from(selectedIds)),
                 isPending: deletePending,

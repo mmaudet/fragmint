@@ -50,7 +50,10 @@ export function FragmentsToolbar({ filters, onFiltersChange }: Props) {
   const { data: domains } = useQuery({
     queryKey: ['references', 'subjects'],
     queryFn: async () => {
-      const data = await apiRequest<Array<{ slug: string; label: string }>>('GET', '/v1/references/subjects');
+      const data = await apiRequest<Array<{ slug: string; label: string }>>(
+        'GET',
+        '/v1/references/subjects',
+      );
       return data ?? [];
     },
     staleTime: 5 * 60 * 1000,
@@ -59,7 +62,10 @@ export function FragmentsToolbar({ filters, onFiltersChange }: Props) {
   const { data: types } = useQuery({
     queryKey: ['fragment-types'],
     queryFn: async () => {
-      const data = await apiRequest<Array<{ slug: string; label: string }>>('GET', '/v1/fragment-types');
+      const data = await apiRequest<Array<{ slug: string; label: string }>>(
+        'GET',
+        '/v1/fragment-types',
+      );
       return data ?? [];
     },
     staleTime: 5 * 60 * 1000,
@@ -84,7 +90,9 @@ export function FragmentsToolbar({ filters, onFiltersChange }: Props) {
       >
         <option value="">Tous domaines</option>
         {domains?.map((d) => (
-          <option key={d.slug} value={d.slug}>{d.label}</option>
+          <option key={d.slug} value={d.slug}>
+            {d.label}
+          </option>
         ))}
       </select>
 
@@ -96,7 +104,9 @@ export function FragmentsToolbar({ filters, onFiltersChange }: Props) {
       >
         <option value="">Tous types</option>
         {types?.map((t) => (
-          <option key={t.slug} value={t.slug}>{t.label}</option>
+          <option key={t.slug} value={t.slug}>
+            {t.label}
+          </option>
         ))}
       </select>
 

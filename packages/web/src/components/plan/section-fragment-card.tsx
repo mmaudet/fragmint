@@ -34,7 +34,8 @@ export function SectionFragmentCard({
 
   const approved = !!selection;
 
-  const displayBody = editedBody ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt ?? '';
+  const displayBody =
+    editedBody ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt ?? '';
 
   const matchTier: 'strong' | 'medium' | 'weak' =
     candidate.score >= 0.7 ? 'strong' : candidate.score >= 0.55 ? 'medium' : 'weak';
@@ -84,7 +85,9 @@ export function SectionFragmentCard({
     <Card className={cardClass}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm truncate">{candidate.title ?? candidate.fragment_id}</CardTitle>
+          <CardTitle className="text-sm truncate">
+            {candidate.title ?? candidate.fragment_id}
+          </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{candidate.quality}</Badge>
             <span
@@ -120,8 +123,12 @@ export function SectionFragmentCard({
               {t('planGeneration', 'proposeToLibrary')}
             </label>
             <div className="flex gap-2">
-              <Button size="sm" onClick={commitEdit}>{t('planGeneration', 'approve')}</Button>
-              <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+              <Button size="sm" onClick={commitEdit}>
+                {t('planGeneration', 'approve')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
             </div>
           </>
         ) : (
@@ -133,17 +140,25 @@ export function SectionFragmentCard({
               </div>
             ) : (
               <p className={`text-sm whitespace-pre-wrap ${expanded ? '' : 'line-clamp-3'}`}>
-                {(selection?.edited ? selection.body : null) ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt}
+                {(selection?.edited ? selection.body : null) ??
+                  fullFragment?.body ??
+                  selection?.body ??
+                  candidate.body_excerpt}
               </p>
             )}
             <button
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               onClick={() => setExpanded((v) => !v)}
             >
-              {expanded
-                ? <><ChevronUp className="h-3 w-3" /> Show less</>
-                : <><ChevronDown className="h-3 w-3" /> Show more</>
-              }
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3" /> Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" /> Show more
+                </>
+              )}
             </button>
             <div className="flex gap-2">
               {!approved && (

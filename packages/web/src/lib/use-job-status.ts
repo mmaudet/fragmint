@@ -13,7 +13,10 @@ export function useJobStatus(jobId: string | null, pollInterval = 1000) {
   const [status, setStatus] = useState<JobStatus | null>(null);
 
   useEffect(() => {
-    if (!jobId) { setStatus(null); return; }
+    if (!jobId) {
+      setStatus(null);
+      return;
+    }
 
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -26,12 +29,17 @@ export function useJobStatus(jobId: string | null, pollInterval = 1000) {
         if (!active) return;
         setStatus(data.data ?? data);
         if (data.data?.status === 'done' || data.data?.status === 'error') return;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       if (active) timer = setTimeout(poll, pollInterval);
     };
 
     poll();
-    return () => { active = false; clearTimeout(timer); };
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [jobId, pollInterval]);
 
   return status;

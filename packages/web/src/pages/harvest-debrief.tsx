@@ -39,9 +39,7 @@ export default function HarvestDebriefPage() {
           {data.fragments.total} fragments extraits.
           {data.had_hints && ` ${t('harvest', 'debriefHints')}`}
         </p>
-        <p className="text-sm text-muted-foreground mt-3">
-          {t('harvest', 'debriefNextStep')}
-        </p>
+        <p className="text-sm text-muted-foreground mt-3">{t('harvest', 'debriefNextStep')}</p>
       </div>
       <div className="flex justify-center gap-3">
         <Button asChild variant="outline">

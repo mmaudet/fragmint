@@ -48,10 +48,17 @@ interface ValidationTabContentProps {
 }
 
 function Pagination({
-  page, total, pageSize, onChange, onPageSizeChange,
+  page,
+  total,
+  pageSize,
+  onChange,
+  onPageSizeChange,
 }: {
-  page: number; total: number; pageSize: number;
-  onChange: (p: number) => void; onPageSizeChange: (s: number) => void;
+  page: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
 }) {
   const { t } = useI18n();
   const pageCount = Math.ceil(total / pageSize);
@@ -66,18 +73,32 @@ function Pagination({
           </SelectTrigger>
           <SelectContent>
             {PAGE_SIZE_OPTIONS.map((s) => (
-              <SelectItem key={s} value={String(s)} className="text-xs">{s}</SelectItem>
+              <SelectItem key={s} value={String(s)} className="text-xs">
+                {s}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <span>{t('common', 'perPage')}</span>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" disabled={page === 0} onClick={() => onChange(page - 1)}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === 0}
+          onClick={() => onChange(page - 1)}
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm text-muted-foreground">Page {page + 1} / {pageCount}</span>
-        <Button variant="outline" size="sm" disabled={page >= pageCount - 1} onClick={() => onChange(page + 1)}>
+        <span className="text-sm text-muted-foreground">
+          Page {page + 1} / {pageCount}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page >= pageCount - 1}
+          onClick={() => onChange(page + 1)}
+        >
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -86,9 +107,26 @@ function Pagination({
 }
 
 export function ValidationTabContent({
-  fragments, total, isLoading, isSearching, page, onPageChange, pageSize, onPageSizeChange,
-  search, onSearchChange, searchPlaceholder, description, emptyText,
-  selectedCardId, selectedIds, onCardClick, onToggle, onSelectAll, isAllSelected, bulkAction,
+  fragments,
+  total,
+  isLoading,
+  isSearching,
+  page,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
+  search,
+  onSearchChange,
+  searchPlaceholder,
+  description,
+  emptyText,
+  selectedCardId,
+  selectedIds,
+  onCardClick,
+  onToggle,
+  onSelectAll,
+  isAllSelected,
+  bulkAction,
   secondaryBulkAction,
 }: ValidationTabContentProps) {
   const { t } = useI18n();
@@ -97,7 +135,11 @@ export function ValidationTabContent({
   const handleSelectAll = async () => {
     if (!onSelectAll) return;
     setSelectingAll(true);
-    try { await onSelectAll(); } finally { setSelectingAll(false); }
+    try {
+      await onSelectAll();
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   return (
@@ -113,7 +155,11 @@ export function ValidationTabContent({
             onClick={handleSelectAll}
             disabled={selectingAll || bulkAction?.isPending}
           >
-            {selectingAll ? '…' : isAllSelected ? t('validation', 'deselectAll') : t('validation', 'selectAll')}
+            {selectingAll
+              ? '…'
+              : isAllSelected
+                ? t('validation', 'deselectAll')
+                : t('validation', 'selectAll')}
           </Button>
         )}
         {bulkAction && bulkAction.count > 0 && (
@@ -135,7 +181,9 @@ export function ValidationTabContent({
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-lg" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-lg" />
+          ))}
         </div>
       ) : fragments.length > 0 ? (
         <>

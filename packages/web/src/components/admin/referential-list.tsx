@@ -21,13 +21,19 @@ export function ReferentialList({ type }: Props) {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['referential', type, statusFilter, search, categoryFilter, sortBy],
     queryFn: async () => {
-      const params = new URLSearchParams({ status: statusFilter, search, sort: sortBy, order: sortBy === 'created' ? 'desc' : 'desc' });
+      const params = new URLSearchParams({
+        status: statusFilter,
+        search,
+        sort: sortBy,
+        order: sortBy === 'created' ? 'desc' : 'desc',
+      });
       if (categoryFilter) params.set('category', categoryFilter);
       return apiRequest<any>('GET', `/v1/admin/referential/${type}?${params}`);
     },
   });
 
-  if (isLoading) return <div className="text-muted-foreground text-sm">{t('common', 'loading')}</div>;
+  if (isLoading)
+    return <div className="text-muted-foreground text-sm">{t('common', 'loading')}</div>;
 
   const items: any[] = data?.items ?? [];
   const stats = data?.stats;
@@ -55,7 +61,11 @@ export function ReferentialList({ type }: Props) {
             <option value="rejected">{t('admin', 'filterStatusRejected')}</option>
           </select>
           {type === 'entity' && (
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-1.5 border rounded-md text-sm bg-background"
+            >
               <option value="">{t('admin', 'filterAllEntities')}</option>
               <option value="client">Clients</option>
               <option value="product">Produits</option>
@@ -65,7 +75,11 @@ export function ReferentialList({ type }: Props) {
               <option value="regulation">Régulations</option>
             </select>
           )}
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="px-3 py-1.5 border rounded-md text-sm bg-background">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          >
             <option value="created">{t('admin', 'sortDate')}</option>
             <option value="name">{t('admin', 'sortName')}</option>
             <option value="usage">{t('admin', 'sortUsage')}</option>
@@ -74,19 +88,44 @@ export function ReferentialList({ type }: Props) {
         {stats && (
           <div className="text-sm text-muted-foreground">
             {stats.byStatus.active} {t('admin', 'statsActive')}
-            {stats.byStatus.pending > 0 && <> · <span className="text-amber-600 font-medium">{stats.byStatus.pending} {t('admin', 'statsPending')}</span></>}
-            {stats.byStatus.rejected > 0 && <> · {stats.byStatus.rejected} {t('admin', 'statsRejected')}</>}
-            {stats.byStatus.archived > 0 && <> · {stats.byStatus.archived} {t('admin', 'statsArchived')}</>}
+            {stats.byStatus.pending > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <span className="text-amber-600 font-medium">
+                  {stats.byStatus.pending} {t('admin', 'statsPending')}
+                </span>
+              </>
+            )}
+            {stats.byStatus.rejected > 0 && (
+              <>
+                {' '}
+                · {stats.byStatus.rejected} {t('admin', 'statsRejected')}
+              </>
+            )}
+            {stats.byStatus.archived > 0 && (
+              <>
+                {' '}
+                · {stats.byStatus.archived} {t('admin', 'statsArchived')}
+              </>
+            )}
           </div>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">{t('admin', 'noResults')}</div>
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          {t('admin', 'noResults')}
+        </div>
       ) : (
         <div className="space-y-3">
           {items.map((item: any) => (
-            <ReferentialItemCard key={`${type}-${item.id}`} type={type} item={item} onChange={() => refetch()} />
+            <ReferentialItemCard
+              key={`${type}-${item.id}`}
+              type={type}
+              item={item}
+              onChange={() => refetch()}
+            />
           ))}
         </div>
       )}

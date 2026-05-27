@@ -30,7 +30,11 @@ export function RenameModal({ type, item, onClose, onSuccess }: Props) {
   const { t } = useI18n();
 
   useEffect(() => {
-    if (!debouncedValue || debouncedValue === item.label) { setImpact(null); setError(null); return; }
+    if (!debouncedValue || debouncedValue === item.label) {
+      setImpact(null);
+      setError(null);
+      return;
+    }
     const token = getToken();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -41,8 +45,13 @@ export function RenameModal({ type, item, onClose, onSuccess }: Props) {
     })
       .then((r) => r.json())
       .then((json) => {
-        if (json.error) { setError(json.error); setImpact(null); }
-        else { setImpact(json.data); setError(null); }
+        if (json.error) {
+          setError(json.error);
+          setImpact(null);
+        } else {
+          setImpact(json.data);
+          setError(null);
+        }
       })
       .catch(() => setError(t('admin', 'renameNetworkError')));
   }, [debouncedValue, item.id, item.label, type]);
@@ -50,9 +59,16 @@ export function RenameModal({ type, item, onClose, onSuccess }: Props) {
   const handleRename = async () => {
     setLoading(true);
     try {
-      const result = await apiRequest<{ recalculation_job_id?: string }>('POST', `/v1/admin/referential/${type}/${item.id}/rename`, { new_value: newValue });
+      const result = await apiRequest<{ recalculation_job_id?: string }>(
+        'POST',
+        `/v1/admin/referential/${type}/${item.id}/rename`,
+        { new_value: newValue },
+      );
       if (result?.recalculation_job_id) {
-        addJob({ id: result.recalculation_job_id, label: `Recalcul signaux après renommage de "${item.label}"` });
+        addJob({
+          id: result.recalculation_job_id,
+          label: `Recalcul signaux après renommage de "${item.label}"`,
+        });
       }
       onSuccess();
     } catch (e: any) {
@@ -81,15 +97,27 @@ export function RenameModal({ type, item, onClose, onSuccess }: Props) {
               autoFocus
             />
           </div>
-          {error && <div className="p-3 bg-destructive/10 border border-destructive/30 rounded text-sm text-destructive">{error}</div>}
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive/30 rounded text-sm text-destructive">
+              {error}
+            </div>
+          )}
           {impact && impact.affected_fragments > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded text-sm">
               <p className="font-medium text-amber-900">{t('admin', 'renameImpact')}</p>
               <ul className="mt-1 text-amber-700 list-disc list-inside">
-                <li>{impact.affected_fragments} {t('admin', 'renameFragmentsUpdated')}</li>
-                {impact.affected_candidates > 0 && <li>{impact.affected_candidates} {t('admin', 'renameCandidates')}</li>}
+                <li>
+                  {impact.affected_fragments} {t('admin', 'renameFragmentsUpdated')}
+                </li>
+                {impact.affected_candidates > 0 && (
+                  <li>
+                    {impact.affected_candidates} {t('admin', 'renameCandidates')}
+                  </li>
+                )}
                 {impact.fragments_will_recalculate_signals && (
-                  <li>{t('admin', 'renameRecalc')} (~{impact.estimated_recalc_duration_seconds}s)</li>
+                  <li>
+                    {t('admin', 'renameRecalc')} (~{impact.estimated_recalc_duration_seconds}s)
+                  </li>
                 )}
               </ul>
             </div>
@@ -101,7 +129,11 @@ export function RenameModal({ type, item, onClose, onSuccess }: Props) {
           )}
         </div>
         <div className="mt-6 flex gap-2 justify-end">
-          <button onClick={onClose} disabled={loading} className="px-4 py-2 border rounded-md text-sm hover:bg-muted">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 border rounded-md text-sm hover:bg-muted"
+          >
             {t('common', 'cancel')}
           </button>
           <button

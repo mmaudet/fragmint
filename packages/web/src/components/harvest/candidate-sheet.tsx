@@ -25,7 +25,14 @@ interface Props {
   onReject: () => void;
 }
 
-export function CandidateSheet({ candidate, open, onOpenChange, decision, onAccept, onReject }: Props) {
+export function CandidateSheet({
+  candidate,
+  open,
+  onOpenChange,
+  decision,
+  onAccept,
+  onReject,
+}: Props) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [type, setType] = useState('');
@@ -64,7 +71,10 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
       type,
       domain,
       lang,
-      tags: tagsStr.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: tagsStr
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
     };
   };
 
@@ -127,7 +137,9 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Tags (séparés par des virgules)</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Tags (séparés par des virgules)
+            </label>
             <input
               className="w-full text-sm border rounded px-2 py-1.5 bg-background"
               value={tagsStr}
@@ -153,7 +165,10 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
           <Button
             size="sm"
             variant="outline"
-            onClick={() => { onReject(); onOpenChange(false); }}
+            onClick={() => {
+              onReject();
+              onOpenChange(false);
+            }}
             className="text-destructive hover:text-destructive"
             disabled={decision === 'rejected'}
           >
@@ -162,7 +177,10 @@ export function CandidateSheet({ candidate, open, onOpenChange, decision, onAcce
           </Button>
           <Button
             size="sm"
-            onClick={() => { onAccept(buildMod()); onOpenChange(false); }}
+            onClick={() => {
+              onAccept(buildMod());
+              onOpenChange(false);
+            }}
             disabled={decision === 'accepted' && !isModified}
           >
             <Check className="h-3.5 w-3.5 mr-1.5" />

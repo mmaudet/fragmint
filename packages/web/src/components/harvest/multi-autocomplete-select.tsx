@@ -15,7 +15,14 @@ interface Props {
   knownSlugs?: string[];
 }
 
-export function MultiAutocompleteSelect({ kind, values, onChange, placeholder, allowCreate, knownSlugs }: Props) {
+export function MultiAutocompleteSelect({
+  kind,
+  values,
+  onChange,
+  placeholder,
+  allowCreate,
+  knownSlugs,
+}: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const debouncedQuery = useDebouncedValue(query, 300);
@@ -47,7 +54,12 @@ export function MultiAutocompleteSelect({ kind, values, onChange, placeholder, a
   const remove = (slug: string) => onChange(values.filter((v) => v !== slug));
 
   const filteredItems = data.filter((item) => !values.includes(item.slug));
-  const showCreate = allowCreate && open && query.trim().length > 0 && filteredItems.length === 0 && debouncedQuery === query;
+  const showCreate =
+    allowCreate &&
+    open &&
+    query.trim().length > 0 &&
+    filteredItems.length === 0 &&
+    debouncedQuery === query;
 
   const isKnown = (v: string) => !knownSlugs || knownSlugs.includes(v);
 

@@ -13,7 +13,8 @@ export const getIndexDefinition: ToolDefinition = {
       format: {
         type: 'string',
         enum: ['md', 'json'],
-        description: 'Response format: "md" for human-readable markdown (default), "json" for structured data.',
+        description:
+          'Response format: "md" for human-readable markdown (default), "json" for structured data.',
       },
       refresh: {
         type: 'boolean',
