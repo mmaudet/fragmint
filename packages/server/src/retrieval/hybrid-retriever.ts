@@ -3,8 +3,8 @@ import type { LlmClient } from '../services/llm-client.js';
 import type { FragmentRetriever, RetrievedFragment, SectionQuery } from './fragment-retriever.js';
 
 const PREFILTER_COUNT = 20;
-const VECTOR_WEIGHT = 0.4;
-const LLM_WEIGHT = 0.6;
+const VECTOR_WEIGHT = 0.5;
+const LLM_WEIGHT = 0.5;
 const LLM_NEUTRAL_SCORE = 5;
 
 export class HybridRetriever implements FragmentRetriever {
@@ -14,7 +14,7 @@ export class HybridRetriever implements FragmentRetriever {
   ) {}
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
-    const { text, filters, collectionSlug } = query;
+    const { text, filters, collectionSlug, spec_context } = query;
     const candidates = await this.searchService.search(
       text,
       {
@@ -27,7 +27,9 @@ export class HybridRetriever implements FragmentRetriever {
       },
       PREFILTER_COUNT,
     );
-    console.debug(`[retrieval][hybrid] section "${text.slice(0, 50)}" → ${candidates.length} vector candidates`);
+    console.debug(
+      `[retrieval][hybrid] section "${text.slice(0, 50)}" → ${candidates.length} vector candidates`,
+    );
 
     if (candidates.length === 0) return [];
 
@@ -41,7 +43,7 @@ export class HybridRetriever implements FragmentRetriever {
       }));
     }
 
-    const llmScores = await this.batchJudge(text, candidates);
+    const llmScores = await this.batchJudge(text, candidates, spec_context);
     const scoreMap = new Map(llmScores);
 
     const reranked = candidates
@@ -58,13 +60,16 @@ export class HybridRetriever implements FragmentRetriever {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
-    console.debug(`[retrieval][hybrid] section "${text.slice(0, 50)}" → returning top ${limit} after LLM re-rank`);
+    console.debug(
+      `[retrieval][hybrid] section "${text.slice(0, 50)}" → returning top ${limit} after LLM re-rank`,
+    );
     return reranked;
   }
 
   private async batchJudge(
     sectionText: string,
     candidates: SearchResult[],
+    specContext?: string,
   ): Promise<Array<[string, number]>> {
     const list = candidates
       .map(
@@ -73,16 +78,20 @@ export class HybridRetriever implements FragmentRetriever {
       )
       .join('\n\n');
 
-    const prompt = `Rate the relevance of each fragment for the following document section.
+    const contextLine = specContext
+      ? `\nDocument context (background only): "${specContext.slice(0, 300)}"\n`
+      : '';
 
+    const prompt = `Rate the relevance of each fragment for a document section.
+${contextLine}
 Section: "${sectionText}"
 
 Fragments:
 ${list}
 
+Score each fragment 0–10 based on relevance to the Section above (use document context only for disambiguation).
 Return a JSON array where each item is {"id": "...", "score": 7}.
-Score from 0 to 10. Include ALL ${candidates.length} fragments.
-Return ONLY the JSON array, no other text.`;
+Include ALL ${candidates.length} fragments. Return ONLY the JSON array, no other text.`;
 
     try {
       const response = await this.llm.chatMessages([{ role: 'user', content: prompt }]);

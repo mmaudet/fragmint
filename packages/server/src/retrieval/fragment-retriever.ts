@@ -5,6 +5,8 @@ export interface SectionQuery {
   filters: PlanFilters;
   collectionSlug: string | null;
   inferred_type?: string;
+  /** Full AO / spec prompt — passed to LLM-based retrievers for context-aware ranking */
+  spec_context?: string;
 }
 
 export interface RetrievedFragment {

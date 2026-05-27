@@ -193,12 +193,14 @@ export class PlanService {
     section: { title: string; description: string; inferred_type?: string },
     filters: PlanFilters,
     collectionSlug: string | null,
+    specContext?: string,
   ): Promise<FragmentCandidate[]> {
     const query: SectionQuery = {
       text: `${section.title}\n${section.description}`,
       filters,
       collectionSlug,
       inferred_type: section.inferred_type,
+      spec_context: specContext,
     };
     const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, 5);
     return results
@@ -251,12 +253,13 @@ export class PlanService {
       extra_instructions: args.extra_instructions,
     });
     const out = await this.requireLlm().chatMessages(messages);
-    return this.update(id, { plan_markdown: out.trim() });
+    return this.update(id, { plan_markdown: out.trim(), status: 'plan_generated' });
   }
 
   async validatePlan(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
+    if (p.status === 'draft') throw Object.assign(new Error('Generate the plan before validating'), { statusCode: 409 });
     const parsed = parsePlanSections(p.state.plan_markdown);
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
@@ -273,6 +276,7 @@ export class PlanService {
             { ...ps, inferred_type },
             filters,
             p.collection_slug,
+            p.state.spec_prompt, // spec_context — used by LLM retrievers for context-aware ranking
           );
         } catch (err) {
           console.error(`Section "${ps.title}" search failed:`, err);
@@ -315,6 +319,7 @@ export class PlanService {
       { ...section, inferred_type },
       filters,
       p.collection_slug,
+      p.state.spec_prompt, // spec_context — used by LLM retrievers for context-aware ranking
     );
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId
