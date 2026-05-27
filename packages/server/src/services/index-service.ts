@@ -77,7 +77,11 @@ function typeShort(type: string): string {
 
 function parseJsonArray(value: string | null): string[] {
   if (!value) return [];
-  try { return JSON.parse(value) as string[]; } catch { return []; }
+  try {
+    return JSON.parse(value) as string[];
+  } catch {
+    return [];
+  }
 }
 
 export class IndexService {
@@ -183,7 +187,38 @@ export class IndexService {
   }
 }
 
-function renderMarkdown(data: IndexData): string {
+export function buildReadableIdMap(data: IndexData): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const subj of Object.values(data.subjects)) {
+    for (const frags of Object.values(subj.types)) {
+      for (const f of frags) {
+        map.set(f.readable_id, f.id);
+      }
+    }
+  }
+  return map;
+}
+
+export function renderToc(data: IndexData): string {
+  const typeKeys = Object.keys(TYPE_SHORT);
+  const header = `| Domaine | ${typeKeys.join(' | ')} | Total |`;
+  const sep = `|---------|${typeKeys.map(() => '---').join('|')}|-------|`;
+  const rows = Object.entries(data.subjects)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([domain, subj]) => {
+      const counts = typeKeys.map((t) => subj.types[t]?.length ?? 0);
+      return `| ${subj.label} (${domain}) | ${counts.join(' | ')} | ${subj.count} |`;
+    });
+  return [
+    `# Fragmint — Table des matières (${data.total} fragments approuvés)`,
+    '',
+    header,
+    sep,
+    ...rows,
+  ].join('\n');
+}
+
+export function renderMarkdown(data: IndexData): string {
   const d = new Date(data.generated_at);
   const dateStr = d.toLocaleDateString('fr-FR');
   const lines: string[] = [
@@ -209,7 +244,9 @@ function renderMarkdown(data: IndexData): string {
     return lines.join('\n');
   }
 
-  for (const [domain, subj] of Object.entries(data.subjects).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [domain, subj] of Object.entries(data.subjects).sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
     lines.push(`## Catégorie : ${subj.label} (${subj.count} fragments)`);
     lines.push('');
     for (const [type, frags] of Object.entries(subj.types).sort(([a], [b]) => a.localeCompare(b))) {

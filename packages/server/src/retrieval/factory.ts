@@ -49,7 +49,11 @@ function build(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
     case 'vector-only':
       return new VectorRetriever(deps.searchService);
     case 'agentic-only':
-      return new AgenticRetriever(deps.indexService, deps.llm, deps.fragmentService);
+      // selfConsistency is intrinsic to agentic-only: 2 parallel agents with min-score consensus
+      // defines the mode's conservative precision strategy. Not env-configurable by design.
+      return new AgenticRetriever(deps.indexService, deps.llm, deps.fragmentService, {
+        selfConsistency: true,
+      });
     case 'hybrid':
       return new HybridRetriever(deps.searchService, deps.llm);
   }
