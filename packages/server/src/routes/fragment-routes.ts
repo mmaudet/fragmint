@@ -2,7 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../auth/middleware.js';
-import { FragmentService } from '../services/fragment-service.js';
+import { FragmentBulkService } from '../services/fragment-bulk-service.js';
 import { JobService } from '../services/job-service.js';
 import { createFragmentSchema, updateFragmentSchema } from '../schema/fragment.js';
 import { searchQuerySchema, inventoryQuerySchema } from '../schema/api.js';
@@ -11,7 +11,7 @@ import { fragmentTypes } from '../db/schema.js';
 
 export function fragmentRoutes(
   app: FastifyInstance,
-  fragmentService: FragmentService,
+  fragmentService: FragmentBulkService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
   options?: {
     prefix?: string;
@@ -66,22 +66,23 @@ export function fragmentRoutes(
       },
     },
     async (request) => {
-    const query = request.query as Record<string, string>;
-    const collection = request.collection;
-    const { rows, total } = await fragmentService.list({
-      type: query.type,
-      domain: query.domain,
-      lang: query.lang,
-      quality: query.quality,
-      limit: query.limit ? parseInt(query.limit) : undefined,
-      offset: query.offset ? parseInt(query.offset) : undefined,
-      collectionSlug: collection?.slug,
-      function_type: query.function_type ? query.function_type.split(',') : undefined,
-      audience: query.audience ? query.audience.split(',') : undefined,
-      maturity: query.maturity ? query.maturity.split(',') : undefined,
-    });
-    return { data: rows, meta: { count: rows.length, total }, error: null };
-  });
+      const query = request.query as Record<string, string>;
+      const collection = request.collection;
+      const { rows, total } = await fragmentService.list({
+        type: query.type,
+        domain: query.domain,
+        lang: query.lang,
+        quality: query.quality,
+        limit: query.limit ? parseInt(query.limit) : undefined,
+        offset: query.offset ? parseInt(query.offset) : undefined,
+        collectionSlug: collection?.slug,
+        function_type: query.function_type ? query.function_type.split(',') : undefined,
+        audience: query.audience ? query.audience.split(',') : undefined,
+        maturity: query.maturity ? query.maturity.split(',') : undefined,
+      });
+      return { data: rows, meta: { count: rows.length, total }, error: null };
+    },
+  );
 
   // Export fragments as XLSX
   app.get(
@@ -105,27 +106,28 @@ export function fragmentRoutes(
       },
     },
     async (request, reply) => {
-    const query = request.query as Record<string, string>;
-    const collection = request.collection;
-    const { rows } = await fragmentService.list({
-      type: query.type,
-      domain: query.domain,
-      lang: query.lang,
-      quality: query.quality,
-      collectionSlug: collection?.slug,
-      function_type: query.function_type ? query.function_type.split(',') : undefined,
-      audience: query.audience ? query.audience.split(',') : undefined,
-      maturity: query.maturity ? query.maturity.split(',') : undefined,
-    });
+      const query = request.query as Record<string, string>;
+      const collection = request.collection;
+      const { rows } = await fragmentService.list({
+        type: query.type,
+        domain: query.domain,
+        lang: query.lang,
+        quality: query.quality,
+        collectionSlug: collection?.slug,
+        function_type: query.function_type ? query.function_type.split(',') : undefined,
+        audience: query.audience ? query.audience.split(',') : undefined,
+        maturity: query.maturity ? query.maturity.split(',') : undefined,
+      });
 
-    const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
-    const buffer = await exportFragmentsToXlsx(rows);
+      const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
+      const buffer = await exportFragmentsToXlsx(rows);
 
-    return reply
-      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      .header('Content-Disposition', 'attachment; filename="fragments-export.xlsx"')
-      .send(buffer);
-  });
+      return reply
+        .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        .header('Content-Disposition', 'attachment; filename="fragments-export.xlsx"')
+        .send(buffer);
+    },
+  );
 
   // Get fragment by ID
   app.get(`${prefix}/fragments/:id`, { preHandler: readHandlers }, async (request, reply) => {
@@ -135,7 +137,11 @@ export function fragmentRoutes(
       return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
     const data = {
       ...frag,
-      tags: frag.tags ? (typeof frag.tags === 'string' ? (JSON.parse(frag.tags) as string[]) : frag.tags) : [],
+      tags: frag.tags
+        ? typeof frag.tags === 'string'
+          ? (JSON.parse(frag.tags) as string[])
+          : frag.tags
+        : [],
     };
     return { data, meta: null, error: null };
   });
@@ -203,7 +209,9 @@ export function fragmentRoutes(
     if (!parsed.success)
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     if (!(await validateType(parsed.data.type)))
-      return reply.status(400).send({ data: null, meta: null, error: `Invalid type '${parsed.data.type}'` });
+      return reply
+        .status(400)
+        .send({ data: null, meta: null, error: `Invalid type '${parsed.data.type}'` });
     const collection = (request as any).collection;
     const result = await fragmentService.create(
       parsed.data,
@@ -233,17 +241,24 @@ export function fragmentRoutes(
   });
 
   // Update entity links
-  app.put(`${prefix}/fragments/:id/entities`, { preHandler: writeHandlers }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { entity_ids } = request.body as { entity_ids?: unknown };
-    if (!Array.isArray(entity_ids) || entity_ids.some((x) => typeof x !== 'number')) {
-      return reply.status(400).send({ data: null, meta: null, error: 'entity_ids must be an array of numbers' });
-    }
-    const frag = await fragmentService.getById(id);
-    if (!frag) return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
-    await fragmentService.updateEntities(id, entity_ids as number[]);
-    return { data: { updated: entity_ids.length }, meta: null, error: null };
-  });
+  app.put(
+    `${prefix}/fragments/:id/entities`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { entity_ids } = request.body as { entity_ids?: unknown };
+      if (!Array.isArray(entity_ids) || entity_ids.some((x) => typeof x !== 'number')) {
+        return reply
+          .status(400)
+          .send({ data: null, meta: null, error: 'entity_ids must be an array of numbers' });
+      }
+      const frag = await fragmentService.getById(id);
+      if (!frag)
+        return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
+      await fragmentService.updateEntities(id, entity_ids as number[]);
+      return { data: { updated: entity_ids.length }, meta: null, error: null };
+    },
+  );
 
   // Review
   app.post(`${prefix}/fragments/:id/review`, { preHandler: writeHandlers }, async (request) => {
@@ -306,56 +321,104 @@ export function fragmentRoutes(
   );
 
   // Bulk review
-  app.post(`${prefix}/fragments/bulk-review`, { preHandler: writeHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const { ids } = request.body as { ids: string[] };
-    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const job = await jobService.create('bulk_review', ids.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService.bulkReview(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-review`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_review', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkReview(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 
   // Bulk delete
-  app.post(`${prefix}/fragments/bulk-delete`, { preHandler: adminHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const { ids } = request.body as { ids: string[] };
-    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const job = await jobService.create('bulk_delete', ids.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService.bulkDelete(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-delete`,
+    { preHandler: adminHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_delete', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkDelete(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 
   // Bulk delete own (contributor/expert — only deletes fragments authored by the requester, non-approved)
-  app.post(`${prefix}/fragments/bulk-delete-own`, { preHandler: writeHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const parseResult = z.object({ ids: z.array(z.string().min(1)).min(1) }).safeParse(request.body);
-    if (!parseResult.success)
-      return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const { ids } = parseResult.data;
-    const ownedIds = await fragmentService.filterOwnedIds(ids, request.user.login);
-    if (ownedIds.length === 0)
-      return reply.code(200).send({ data: { done: 0 }, meta: null, error: null });
-    const job = await jobService.create('bulk_delete', ownedIds.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService
-      .bulkDelete(ownedIds, request.user.login, request.ip, (done) => jobService.progress(job.id, done), (request.user as any).role ?? 'contributor')
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-delete-own`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const parseResult = z
+        .object({ ids: z.array(z.string().min(1)).min(1) })
+        .safeParse(request.body);
+      if (!parseResult.success)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const { ids } = parseResult.data;
+      const ownedIds = await fragmentService.filterOwnedIds(ids, request.user.login);
+      if (ownedIds.length === 0)
+        return reply.code(200).send({ data: { done: 0 }, meta: null, error: null });
+      const job = await jobService.create('bulk_delete', ownedIds.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkDelete(
+          ownedIds,
+          request.user.login,
+          request.ip,
+          (done) => jobService.progress(job.id, done),
+          (request.user as any).role ?? 'contributor',
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 
   // Bulk approve
-  app.post(`${prefix}/fragments/bulk-approve`, { preHandler: expertHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const { ids } = request.body as { ids: string[] };
-    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const job = await jobService.create('bulk_approve', ids.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService.bulkApprove(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-approve`,
+    { preHandler: expertHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_approve', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkApprove(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 }

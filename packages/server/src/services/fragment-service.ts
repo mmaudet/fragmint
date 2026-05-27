@@ -3,9 +3,18 @@ import { eq, and, or, desc, like, isNull, lte, gte, count, inArray, ne } from 'd
 import { join, relative } from 'node:path';
 import { readdirSync, unlinkSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, collections, fragmentDomains, fragmentTags, fragmentEntities, entities as entitiesTable } from '../db/schema.js';
+import {
+  fragments,
+  collections,
+  fragmentDomains,
+  fragmentTags,
+  fragmentEntities,
+  entities as entitiesTable,
+  fragmentTagLinks,
+} from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
+import type { FragmentMetadata } from '../search/search-service.js';
 import { buildCommitMessage } from '../git/commit-message.js';
 import {
   QUALITY_TRANSITIONS,
@@ -140,6 +149,14 @@ export class FragmentService {
       harvest_confidence: (input as any).harvest_confidence ?? null,
     });
 
+    // Sync fragment_tag_links
+    if (input.tags && input.tags.length > 0) {
+      await this.db
+        .insert(fragmentTagLinks)
+        .values(input.tags.map((slug) => ({ fragment_id: id, tag_slug: slug })))
+        .onConflictDoNothing();
+    }
+
     await this.audit.log({
       user_id: author,
       role: authorRole,
@@ -175,7 +192,11 @@ export class FragmentService {
     const filePath = join(this.storePath, row.file_path);
 
     const entityRows = await this.db
-      .select({ id: entitiesTable.id, canonicalName: entitiesTable.canonicalName, type: entitiesTable.type })
+      .select({
+        id: entitiesTable.id,
+        canonicalName: entitiesTable.canonicalName,
+        type: entitiesTable.type,
+      })
       .from(fragmentEntities)
       .innerJoin(entitiesTable, eq(entitiesTable.id, fragmentEntities.entity_id))
       .where(eq(fragmentEntities.fragment_id, id));
@@ -192,12 +213,13 @@ export class FragmentService {
   /** Replace the full set of entity links for a fragment. Only links to validated entities. */
   async updateEntities(fragmentId: string, entityIds: number[]): Promise<void> {
     // Verify all requested IDs are validated entities
-    const valid = entityIds.length > 0
-      ? await this.db
-          .select({ id: entitiesTable.id })
-          .from(entitiesTable)
-          .where(and(inArray(entitiesTable.id, entityIds), eq(entitiesTable.validated, 1)))
-      : [];
+    const valid =
+      entityIds.length > 0
+        ? await this.db
+            .select({ id: entitiesTable.id })
+            .from(entitiesTable)
+            .where(and(inArray(entitiesTable.id, entityIds), eq(entitiesTable.validated, 1)))
+        : [];
     const validIds = valid.map((r) => r.id);
 
     await this.db.delete(fragmentEntities).where(eq(fragmentEntities.fragment_id, fragmentId));
@@ -232,9 +254,7 @@ export class FragmentService {
       conditions.push(inArray(fragments.function_type, filters.function_type));
     }
     if (filters?.audience?.length) {
-      conditions.push(
-        or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))),
-      );
+      conditions.push(or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))));
     }
     if (filters?.maturity?.length) {
       conditions.push(inArray(fragments.maturity, filters.maturity));
@@ -391,27 +411,55 @@ export class FragmentService {
         git_hash: commitHash,
         file_path: newRelPath,
         function_type: updatedFrontmatter.function_type ?? null,
-        audience: updatedFrontmatter.audience
-          ? JSON.stringify(updatedFrontmatter.audience)
-          : null,
+        audience: updatedFrontmatter.audience ? JSON.stringify(updatedFrontmatter.audience) : null,
         maturity: updatedFrontmatter.maturity ?? null,
       })
       .where(eq(fragments.id, id));
+
+    // Sync fragment_tag_links: delete stale, insert current
+    await this.db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.fragment_id, id));
+    const newTags = updatedFrontmatter.tags ?? [];
+    if (newTags.length > 0) {
+      await this.db
+        .insert(fragmentTagLinks)
+        .values(newTags.map((slug) => ({ fragment_id: id, tag_slug: slug })))
+        .onConflictDoNothing();
+    }
 
     // Propagate human-direct trust to referential for any manually edited fields
     const now = new Date().toISOString();
     if (input.domain) {
       await this.db
         .insert(fragmentDomains)
-        .values({ slug: input.domain, label: input.domain, created_at: now, validated: 1, proposedBy: userId, trustSource: 'human-direct' })
-        .onConflictDoUpdate({ target: fragmentDomains.slug, set: { trustSource: 'human-direct', validated: 1 } });
+        .values({
+          slug: input.domain,
+          label: input.domain,
+          created_at: now,
+          validated: 1,
+          proposedBy: userId,
+          trustSource: 'human-direct',
+        })
+        .onConflictDoUpdate({
+          target: fragmentDomains.slug,
+          set: { trustSource: 'human-direct', validated: 1 },
+        });
     }
     if (input.tags && input.tags.length > 0) {
       for (const tag of input.tags) {
         await this.db
           .insert(fragmentTags)
-          .values({ slug: tag, label: tag, created_at: now, validated: 1, proposedBy: userId, trustSource: 'human-direct' })
-          .onConflictDoUpdate({ target: fragmentTags.slug, set: { trustSource: 'human-direct', validated: 1 } });
+          .values({
+            slug: tag,
+            label: tag,
+            created_at: now,
+            validated: 1,
+            proposedBy: userId,
+            trustSource: 'human-direct',
+          })
+          .onConflictDoUpdate({
+            target: fragmentTags.slug,
+            set: { trustSource: 'human-direct', validated: 1 },
+          });
       }
     }
 
@@ -593,6 +641,7 @@ export class FragmentService {
     } catch (e) {
       console.warn(`[delete] git rm failed for ${row.file_path}, forcing DB delete:`, e);
     }
+    await this.db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.fragment_id, id));
     await this.db.delete(fragments).where(eq(fragments.id, id));
     await this.searchService.removeFromIndex(id);
     await this.audit.log({
@@ -756,7 +805,9 @@ export class FragmentService {
   async reindex() {
     // Single vault: all collections live under fragments/<slug>/ in the root git.
     const customCollections = await this.db.select({ slug: collections.slug }).from(collections);
-    const collectionSlugs = new Set(customCollections.map((c) => c.slug).filter((s) => s !== 'common'));
+    const collectionSlugs = new Set(
+      customCollections.map((c) => c.slug).filter((s) => s !== 'common'),
+    );
     const vaults: Array<{ storePath: string; collectionSlug: string; fragmentsSubdir: string }> = [
       { storePath: this.storePath, collectionSlug: 'common', fragmentsSubdir: 'fragments' },
       ...[...collectionSlugs].map((slug) => ({
@@ -768,7 +819,7 @@ export class FragmentService {
 
     let indexed = 0;
     let totalFiles = 0;
-    const batchItems: Array<{ id: string; body: string; metadata: Record<string, unknown> }> = [];
+    const batchItems: Array<{ id: string; body: string; metadata: FragmentMetadata }> = [];
 
     for (const { storePath, collectionSlug, fragmentsSubdir } of vaults) {
       const fragmentsDir = join(storePath, fragmentsSubdir);
@@ -815,6 +866,18 @@ export class FragmentService {
                 valid_until: frontmatter.valid_until ?? null,
               },
             });
+
+          // Sync fragment_tag_links for reindexed fragment
+          const reindexTags: string[] = frontmatter.tags ?? [];
+          await this.db
+            .delete(fragmentTagLinks)
+            .where(eq(fragmentTagLinks.fragment_id, frontmatter.id));
+          if (reindexTags.length > 0) {
+            await this.db
+              .insert(fragmentTagLinks)
+              .values(reindexTags.map((slug) => ({ fragment_id: frontmatter.id, tag_slug: slug })))
+              .onConflictDoNothing();
+          }
 
           batchItems.push({
             id: frontmatter.id,

@@ -40,7 +40,7 @@ describe('renderXlsx', () => {
 
     // Parse the output and verify substitution
     const outputWorkbook = new ExcelJS.Workbook();
-    await outputWorkbook.xlsx.load(result.buffer);
+    await outputWorkbook.xlsx.load(result.buffer as any);
 
     const sheet = outputWorkbook.getWorksheet('Sheet1');
     expect(sheet).toBeDefined();
@@ -53,7 +53,7 @@ describe('renderXlsx', () => {
     const result = await renderXlsx(templatePath, { client: 'TestCorp' });
 
     const outputWorkbook = new ExcelJS.Workbook();
-    await outputWorkbook.xlsx.load(result.buffer);
+    await outputWorkbook.xlsx.load(result.buffer as any);
 
     const sheet = outputWorkbook.getWorksheet('Sheet1')!;
     expect(sheet.getCell('B1').value).toBe('Static text');

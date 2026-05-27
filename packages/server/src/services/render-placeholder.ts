@@ -81,7 +81,7 @@ function resolveForLoops(template: string, data: Record<string, any>): string {
         // Handle +++HTML $var.field+++ (Markdown → HTML)
         let resolved = body.replace(
           new RegExp(`\\+\\+\\+HTML\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-          (__, field) => {
+          (_: string, field: string) => {
             const val = item[field.trim()];
             if (val === undefined || val === null) return '';
             return markdownToHtmlSync(String(val));
@@ -90,7 +90,7 @@ function resolveForLoops(template: string, data: Record<string, any>): string {
         // Handle +++INS $var.field+++
         resolved = resolved.replace(
           new RegExp(`\\+\\+\\+INS\\s+\\$${varName}\\.(.+?)\\+\\+\\+`, 'g'),
-          (__, field) => {
+          (_: string, field: string) => {
             const val = item[field.trim()];
             return val !== undefined && val !== null ? String(val) : '';
           },

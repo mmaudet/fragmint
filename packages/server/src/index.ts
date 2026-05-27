@@ -1,5 +1,5 @@
 // packages/server/src/index.ts
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
@@ -416,7 +416,7 @@ export async function createServer(options?: {
   });
 
   // Error handler
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
     reply.status(statusCode).send({
       data: null,

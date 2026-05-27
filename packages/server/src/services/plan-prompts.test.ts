@@ -5,7 +5,7 @@ describe('buildPlanMessages', () => {
   it('builds a system + user message pair from a spec prompt', () => {
     const msgs = buildPlanMessages({
       spec_prompt: 'A doc about cloud security',
-      filters: { lang: 'fr', domain: 'cloud', tags: ['twake'] },
+      filters: { lang: 'fr', domain: ['cloud'], tags: ['twake'] },
     });
     expect(msgs).toHaveLength(2);
     expect(msgs[0].role).toBe('system');

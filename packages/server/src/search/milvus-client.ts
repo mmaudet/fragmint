@@ -14,9 +14,9 @@ export interface MilvusFragment {
   tags: string[];
   access_read: string[];
   community_id: number;
-  function_type: string;  // '' when null
+  function_type: string; // '' when null
   audience: string[];
-  maturity: string;        // '' when null
+  maturity: string; // '' when null
 }
 
 export interface MilvusSearchResult {
@@ -99,8 +99,10 @@ export class FragmintMilvusClient {
       const desc = await this.sdk.describeCollection({ collection_name: this.collectionName });
       const vectorField = desc.schema?.fields?.find((f: any) => f.name === 'vector');
       const storedDim = vectorField?.type_params?.find((p: any) => p.key === 'dim')?.value;
-      if (storedDim && parseInt(storedDim) !== this.dimensions) {
-        console.warn(`[milvus] dimension mismatch (stored=${storedDim}, configured=${this.dimensions}) — dropping and recreating collection`);
+      if (storedDim && parseInt(String(storedDim)) !== this.dimensions) {
+        console.warn(
+          `[milvus] dimension mismatch (stored=${storedDim}, configured=${this.dimensions}) — dropping and recreating collection`,
+        );
         await this.sdk.dropCollection({ collection_name: this.collectionName });
       } else {
         const fieldNames = (desc.schema?.fields ?? []).map((f: any) => f.name);
@@ -108,7 +110,9 @@ export class FragmintMilvusClient {
           (f) => !fieldNames.includes(f),
         );
         if (missingFields.length > 0) {
-          console.warn(`[milvus] schema missing fields ${missingFields.join(', ')} — recreating collection`);
+          console.warn(
+            `[milvus] schema missing fields ${missingFields.join(', ')} — recreating collection`,
+          );
           await this.sdk.dropCollection({ collection_name: this.collectionName });
         }
       }
@@ -182,7 +186,7 @@ export class FragmintMilvusClient {
     await this.sdk.upsert({
       collection_name: this.collectionName,
       ...(partitionName ? { partition_name: partitionName } : {}),
-      data: items,
+      data: items as unknown as import('@zilliz/milvus2-sdk-node').RowData[],
     });
   }
 

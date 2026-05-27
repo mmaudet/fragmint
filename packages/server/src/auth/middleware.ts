@@ -14,9 +14,15 @@ export interface AuthUser {
   tokenCollectionSlug?: string;
 }
 
+// Tell @fastify/jwt what the decoded user payload looks like
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    user: AuthUser;
+  }
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
-    user: AuthUser;
     collection?: any;
     collectionRole?: string;
   }
