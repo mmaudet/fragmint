@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Eye, Pencil, X } from 'lucide-react';
+import { Eye, Pencil, X, AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+function levenshteinSimilarity(a: string, b: string): number {
+  const longer = a.length > b.length ? a : b;
+  const shorter = a.length > b.length ? b : a;
+  if (longer.length === 0) return 1;
+  const rows = shorter.length + 1;
+  const cols = longer.length + 1;
+  const mat: number[][] = [];
+  for (let j = 0; j < rows; j++) {
+    mat[j] = [];
+    for (let i = 0; i < cols; i++) {
+      mat[j][i] = j === 0 ? i : i === 0 ? j : 0;
+    }
+  }
+  for (let j = 1; j <= shorter.length; j++)
+    for (let i = 1; i <= longer.length; i++)
+      mat[j][i] =
+        longer[i - 1] === shorter[j - 1]
+          ? mat[j - 1][i - 1]
+          : Math.min(mat[j][i - 1] + 1, mat[j - 1][i] + 1, mat[j - 1][i - 1] + 1);
+  return (longer.length - mat[shorter.length][longer.length]) / longer.length;
+}
+
+function findSimilarTag(normalized: string, availableTags: string[]): string | null {
+  if (normalized.length < 3) return null;
+  for (const tag of availableTags) {
+    if (tag === normalized) continue;
+    if (levenshteinSimilarity(normalized, tag) > 0.78) return tag;
+  }
+  return null;
+}
 
 const LANGS = ['fr', 'en', 'de', 'es', 'it', 'nl', 'pt', 'ar'];
 
@@ -25,23 +57,55 @@ interface Props {
   edits: MetaEdits;
   types: string[];
   domains: string[];
+  availableTags?: string[];
   onChange: (edits: MetaEdits) => void;
 }
 
-export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
+export function FragmentMetaEditor({ edits, types, domains, availableTags, onChange }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [editingBody, setEditingBody] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [similarTag, setSimilarTag] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const set = (patch: Partial<MetaEdits>) => onChange({ ...edits, ...patch });
 
   const addTag = (raw: string) => {
     const tag = raw.trim().toLowerCase().replace(/\s+/g, '-');
-    if (!tag || edits.tags.includes(tag)) return;
-    set({ tags: [...edits.tags, tag] });
+    if (tag && !edits.tags.includes(tag)) {
+      set({ tags: [...edits.tags, tag] });
+    }
     setTagInput('');
+    setShowSuggestions(false);
+    setActiveSuggestion(0);
+    setSimilarTag(null);
+  };
+
+  const handleTagInputChange = (value: string) => {
+    setTagInput(value);
+    setActiveSuggestion(0);
+    setShowSuggestions(true);
+    if (availableTags && value.trim().length >= 3) {
+      const normalized = value.trim().toLowerCase().replace(/\s+/g, '-');
+      setSimilarTag(findSimilarTag(normalized, availableTags));
+    } else {
+      setSimilarTag(null);
+    }
   };
 
   const removeTag = (tag: string) => set({ tags: edits.tags.filter((t) => t !== tag) });
+
+  const filteredSuggestions =
+    availableTags && tagInput.length > 0
+      ? availableTags
+          .filter(
+            (t) =>
+              t.toLowerCase().includes(tagInput.toLowerCase()) &&
+              !edits.tags.includes(t),
+          )
+          .slice(0, 8)
+      : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -107,18 +171,69 @@ export function FragmentMetaEditor({ edits, types, domains, onChange }: Props) {
             </Badge>
           ))}
         </div>
-        <Input
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-              e.preventDefault();
-              addTag(tagInput);
-            }
-          }}
-          placeholder="Ajouter un tag (Entrée)"
-          className="h-7 text-xs"
-        />
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            value={tagInput}
+            onChange={(e) => handleTagInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const target =
+                  filteredSuggestions.length > 0 && showSuggestions
+                    ? filteredSuggestions[activeSuggestion] ?? tagInput
+                    : tagInput;
+                addTag(target);
+              } else if (e.key === 'Escape') {
+                setTagInput('');
+                setShowSuggestions(false);
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveSuggestion((i) => Math.min(i + 1, filteredSuggestions.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveSuggestion((i) => Math.max(i - 1, 0));
+              }
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => {
+              // Commit partial input when focus leaves (e.g. user clicks a button)
+              // Small delay so mousedown on suggestion fires first
+              setTimeout(() => {
+                setShowSuggestions(false);
+                if (tagInput.trim()) addTag(tagInput);
+              }, 150);
+            }}
+            placeholder="Ajouter un tag (Entrée)"
+            className="h-7 text-xs"
+          />
+          {similarTag && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              Tag similaire existant&nbsp;: <code className="font-mono">{similarTag}</code> — doublon possible ?
+            </p>
+          )}
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <ul className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-md shadow-md overflow-hidden">
+              {filteredSuggestions.map((tag, i) => (
+                <li
+                  key={tag}
+                  className={cn(
+                    'px-3 py-1.5 text-xs cursor-pointer hover:bg-accent',
+                    i === activeSuggestion && 'bg-accent',
+                  )}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // prevent input blur before click
+                    addTag(tag);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* Body */}
