@@ -16,9 +16,8 @@ No introduction, no conclusion outside the plan, no commentary.`;
 export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
   const lang = args.filters.lang ?? 'fr';
   const domain = args.filters.domain ?? 'any';
-  const tags = args.filters.tags && args.filters.tags.length > 0
-    ? args.filters.tags.join(', ')
-    : 'none';
+  const tags =
+    args.filters.tags && args.filters.tags.length > 0 ? args.filters.tags.join(', ') : 'none';
 
   const parts: string[] = [];
   parts.push(`Context / specification:\n${args.spec_prompt}`);

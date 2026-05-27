@@ -15,7 +15,9 @@ function makeService() {
 
 describe('PlanService CRUD', () => {
   let svc: ReturnType<typeof makeService>;
-  beforeEach(() => { svc = makeService(); });
+  beforeEach(() => {
+    svc = makeService();
+  });
 
   it('creates a plan with default state and status="draft"', async () => {
     const p = await svc.create({
@@ -98,11 +100,13 @@ function fakeFragments(createdId = 'frag_new'): FragmentService {
   } as unknown as FragmentService;
 }
 
-function makeServiceFull(opts: {
-  llm?: LlmClient;
-  search?: SearchService;
-  fragments?: FragmentService;
-} = {}) {
+function makeServiceFull(
+  opts: {
+    llm?: LlmClient;
+    search?: SearchService;
+    fragments?: FragmentService;
+  } = {},
+) {
   const db = createDb(':memory:');
   return new PlanAssembler(db, {
     fragmentMaxChars: 4000,
@@ -144,7 +148,9 @@ describe('PlanService.validatePlan', () => {
 
   it('preserves existing per-section selections when re-validating with same section titles', async () => {
     const llm = fakeLlm([]);
-    const search = fakeSearch([{ id: 'fX', score: 0.9, title: 'X', body_excerpt: 'x', quality: 'draft' }]);
+    const search = fakeSearch([
+      { id: 'fX', score: 0.9, title: 'X', body_excerpt: 'x', quality: 'draft' },
+    ]);
     const svc = makeServiceFull({ llm, search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
     await svc.update(p.id, { plan_markdown: '## Keep\n\nDesc' });
@@ -165,7 +171,9 @@ describe('PlanService.validatePlan', () => {
 
 describe('PlanService.searchSection', () => {
   it('refreshes candidates for a single section', async () => {
-    const search = fakeSearch([{ id: 'fNEW', score: 1, title: 'new', body_excerpt: 'nb', quality: 'approved' }]);
+    const search = fakeSearch([
+      { id: 'fNEW', score: 1, title: 'new', body_excerpt: 'nb', quality: 'approved' },
+    ]);
     const svc = makeServiceFull({ search, llm: fakeLlm([]) });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
     await svc.update(p.id, { plan_markdown: '## S\n\nD' });
@@ -178,7 +186,9 @@ describe('PlanService.searchSection', () => {
 
 describe('PlanService.validateFragments', () => {
   it('creates library drafts for selections with propose_to_library=true', async () => {
-    const search = fakeSearch([{ id: 'fSrc', score: 1, title: 't', body_excerpt: 'b', quality: 'draft' }]);
+    const search = fakeSearch([
+      { id: 'fSrc', score: 1, title: 't', body_excerpt: 'b', quality: 'draft' },
+    ]);
     const fragments = fakeFragments('frag_proposed');
     const svc = makeServiceFull({ llm: fakeLlm([]), search, fragments });
     const p = await svc.create({ owner: 'alice', collection_slug: 'common', spec_prompt: '' });
@@ -262,11 +272,30 @@ describe('PlanService.generateSection', () => {
 describe('PlanService.assemble', () => {
   it('concatenates section bodies into draft_markdown', async () => {
     const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]) });
-    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '', title: 'Doc' });
+    const p = await svc.create({
+      owner: 'a',
+      collection_slug: null,
+      spec_prompt: '',
+      title: 'Doc',
+    });
     await svc.update(p.id, {
       sections: [
-        { id: 's1', title: 'A', description: 'D', candidates: [], selected: [], generated_markdown: 'Body A.' },
-        { id: 's2', title: 'B', description: 'D', candidates: [], selected: [], generated_markdown: 'Body B.' },
+        {
+          id: 's1',
+          title: 'A',
+          description: 'D',
+          candidates: [],
+          selected: [],
+          generated_markdown: 'Body A.',
+        },
+        {
+          id: 's2',
+          title: 'B',
+          description: 'D',
+          candidates: [],
+          selected: [],
+          generated_markdown: 'Body B.',
+        },
       ],
       status: 'fragments_validated',
     });
@@ -334,7 +363,12 @@ describe('PlanService.generateSection — full body fetch', () => {
           candidates: [],
           selected: [
             // edited=false → service should call getById and use the full body
-            { fragment_id: 'fOrig', body: 'truncated excerpt', edited: false, propose_to_library: false },
+            {
+              fragment_id: 'fOrig',
+              body: 'truncated excerpt',
+              edited: false,
+              propose_to_library: false,
+            },
           ],
         },
       ],
@@ -363,7 +397,12 @@ describe('PlanService.generateSection — full body fetch', () => {
           description: 'D',
           candidates: [],
           selected: [
-            { fragment_id: 'fOrig', body: 'my edited body', edited: true, propose_to_library: false },
+            {
+              fragment_id: 'fOrig',
+              body: 'my edited body',
+              edited: true,
+              propose_to_library: false,
+            },
           ],
         },
       ],
@@ -423,7 +462,12 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
           description: 'D',
           candidates: [],
           selected: [
-            { fragment_id: 'fOrig', body: 'edited body of the fragment', edited: true, propose_to_library: true },
+            {
+              fragment_id: 'fOrig',
+              body: 'edited body of the fragment',
+              edited: true,
+              propose_to_library: true,
+            },
           ],
         },
       ],
@@ -478,9 +522,7 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
           title: 'S',
           description: 'D',
           candidates: [],
-          selected: [
-            { fragment_id: 'fOrig', body: 'b', edited: true, propose_to_library: true },
-          ],
+          selected: [{ fragment_id: 'fOrig', body: 'b', edited: true, propose_to_library: true }],
         },
       ],
       status: 'plan_validated',

@@ -9,7 +9,15 @@ import type { FragmentBulkService } from './fragment-bulk-service.js';
 import type { UploadHints } from '../schema/trust-source.js';
 import type { CoherenceFlag } from './quality-signals.js';
 import type { JudgeResult } from './quality-judge.js';
-import { runPipeline, extractBlockText, chunkMarkdown, deduplicateBlocks, detectLanguage, MAX_CHUNK_CHARS, OVERLAP_CHARS } from './harvester-pipeline.js';
+import {
+  runPipeline,
+  extractBlockText,
+  chunkMarkdown,
+  deduplicateBlocks,
+  detectLanguage,
+  MAX_CHUNK_CHARS,
+  OVERLAP_CHARS,
+} from './harvester-pipeline.js';
 import { validate, bulkAccept as bulkAcceptCandidates } from './harvester-validation.js';
 
 export interface HarvestJobWithCandidates {
@@ -103,9 +111,11 @@ export class HarvesterService {
 
     // Launch pipeline async without awaiting
     setImmediate(() => {
-      this._runPipeline(jobId, files, filenames, options.min_confidence, uploadHints ?? {}).catch((err) => {
-        console.error(`Pipeline error for job ${jobId}:`, err);
-      });
+      this._runPipeline(jobId, files, filenames, options.min_confidence, uploadHints ?? {}).catch(
+        (err) => {
+          console.error(`Pipeline error for job ${jobId}:`, err);
+        },
+      );
     });
 
     return jobId;
@@ -118,7 +128,16 @@ export class HarvesterService {
     minConfidence: number,
     uploadHints: UploadHints = {},
   ): Promise<void> {
-    return runPipeline(this.db, this.llmClient, this.searchService, jobId, files, filenames, minConfidence, uploadHints);
+    return runPipeline(
+      this.db,
+      this.llmClient,
+      this.searchService,
+      jobId,
+      files,
+      filenames,
+      minConfidence,
+      uploadHints,
+    );
   }
 
   async getJob(jobId: string): Promise<HarvestJobWithCandidates | null> {
@@ -169,7 +188,9 @@ export class HarvesterService {
         fragment_id: c.fragment_id,
         trust_sources_json: c.trust_sources_json ?? null,
         entities_json: c.entities_json ?? null,
-        quality_signals: c.quality_signals ? (JSON.parse(c.quality_signals) as CoherenceFlag[]) : [],
+        quality_signals: c.quality_signals
+          ? (JSON.parse(c.quality_signals) as CoherenceFlag[])
+          : [],
         judge_result: c.judge_result ? (JSON.parse(c.judge_result) as JudgeResult) : null,
       })),
     };
@@ -183,7 +204,10 @@ export class HarvesterService {
     return validate(this.db, this.fragmentService, jobId, validation, userId);
   }
 
-  async bulkAccept(candidates: (typeof harvestCandidates.$inferSelect)[], userId: string): Promise<number> {
+  async bulkAccept(
+    candidates: (typeof harvestCandidates.$inferSelect)[],
+    userId: string,
+  ): Promise<number> {
     return bulkAcceptCandidates(this.db, this.fragmentService, candidates, userId);
   }
 

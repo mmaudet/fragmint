@@ -223,6 +223,9 @@ Thank you for reading this document.`;
         }),
         'testuser',
         'expert',
+        undefined,
+        undefined,
+        undefined,
       );
 
       // Verify candidate statuses were updated

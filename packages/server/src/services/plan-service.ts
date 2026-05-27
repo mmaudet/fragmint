@@ -1,11 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq, and, desc } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import {
-  plans,
-  fragmentTypes,
-  fragmentDomains,
-} from '../db/schema.js';
+import { plans, fragmentTypes, fragmentDomains } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -20,7 +16,11 @@ import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
-import type { FragmentRetriever, RetrievedFragment, SectionQuery } from '../retrieval/fragment-retriever.js';
+import type {
+  FragmentRetriever,
+  RetrievedFragment,
+  SectionQuery,
+} from '../retrieval/fragment-retriever.js';
 import { VectorRetriever } from '../retrieval/vector-retriever.js';
 import { getCurrentRetriever } from '../retrieval/factory.js';
 
@@ -433,5 +433,4 @@ export class PlanService {
     );
     return this.update(planId, { sections: updatedSections });
   }
-
 }

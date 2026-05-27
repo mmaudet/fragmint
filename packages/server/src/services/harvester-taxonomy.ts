@@ -193,4 +193,3 @@ export const INITIAL_TAGS = [
   { slug: 'health', label: 'Health', category: 'industry' },
   { slug: 'european-initiative', label: 'European Initiative', category: 'concept' },
 ];
-

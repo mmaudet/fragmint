@@ -24,12 +24,19 @@ import type { JudgeResult } from './quality-judge.js';
 import type { LlmClient, CombinedBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import { type UploadHints, computeTrustSources } from '../schema/trust-source.js';
-import { setupHintEntities, applyUploadHintsInPlace, insertNewProposals, flushHintReferentials } from './harvest-hint-processor.js';
+import {
+  setupHintEntities,
+  applyUploadHintsInPlace,
+  insertNewProposals,
+  flushHintReferentials,
+} from './harvest-hint-processor.js';
 
 const execFileAsync = promisify(execFile);
 
 function getMetadataStatus(block: CombinedBlock): string {
-  const pc = (block.new_proposals?.tags?.length ?? 0) + Object.values(block.new_proposals?.entities ?? {}).flat().length;
+  const pc =
+    (block.new_proposals?.tags?.length ?? 0) +
+    Object.values(block.new_proposals?.entities ?? {}).flat().length;
   if (block.confidence >= 0.85 && pc === 0) return 'auto-validated';
   if (block.confidence >= 0.6 && pc <= 2) return 'needs-review';
   return 'requires-review';
@@ -49,9 +56,9 @@ export async function runPipeline(
   console.log(`[dup-detect] ▶ runPipeline START jobId=${jobId} files=${files.length}`);
   // ───────────────────────────────────────────────────────────────────────
   try {
-    const existingTypes = (
-      await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)
-    ).map((r) => r.slug);
+    const existingTypes = (await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map(
+      (r) => r.slug,
+    );
     const domainRows = await db
       .select({ slug: fragmentDomains.slug, description: fragmentDomains.description })
       .from(fragmentDomains);
@@ -73,7 +80,11 @@ export async function runPipeline(
     const validFunctions = validFunctionRows.map((r) => r.slug);
 
     let validEntityRows = await db
-      .select({ type: entities.type, canonicalName: entities.canonicalName, normalizedName: entities.normalizedName })
+      .select({
+        type: entities.type,
+        canonicalName: entities.canonicalName,
+        normalizedName: entities.normalizedName,
+      })
       .from(entities)
       .where(eq(entities.validated, 1));
 
@@ -108,7 +119,13 @@ export async function runPipeline(
 
       let markdown: string;
       try {
-        const { stdout } = await execFileAsync('pandoc', ['--from', 'docx', '--to', 'markdown', tempFile]);
+        const { stdout } = await execFileAsync('pandoc', [
+          '--from',
+          'docx',
+          '--to',
+          'markdown',
+          tempFile,
+        ]);
         markdown = stdout;
       } finally {
         try {
@@ -172,7 +189,9 @@ export async function runPipeline(
 
           // ── header ──────────────────────────────────────────────────────
           console.log(`[dup-detect] candidate "${title}" — checking duplicates`);
-          console.log(`[dup-detect]   filters: domain=${block.domain}, type=${block.type}, lang=${block.lang}`);
+          console.log(
+            `[dup-detect]   filters: domain=${block.domain}, type=${block.type}, lang=${block.lang}`,
+          );
 
           // 1. Exact match — always runs, Milvus-independent
           console.log(`[dup-detect]   exact-match pool size: ${existingFragmentRows.length}`);
@@ -189,7 +208,9 @@ export async function runPipeline(
           //    a constant ~0.65 and would produce false near-duplicates).
           //    Filter by domain/type/lang to prevent cross-domain false matches.
           const milvusFilters = { domain: [block.domain], type: [block.type], lang: block.lang };
-          console.log(`[dup-detect]   near-match Milvus call with filters=${JSON.stringify(milvusFilters)}`);
+          console.log(
+            `[dup-detect]   near-match Milvus call with filters=${JSON.stringify(milvusFilters)}`,
+          );
           const vectorResults = await searchService.searchVector(block.body, milvusFilters, 1);
           if (vectorResults === null) {
             console.log(`[dup-detect]   near-match score: no match (Milvus disabled)`);
@@ -205,16 +226,22 @@ export async function runPipeline(
           const raw = vectorResults[0].score;
           const nearMatchScore = Math.min(raw, 1.0);
           const pct = Math.round(nearMatchScore * 100);
-          console.log(`[dup-detect]   near-match score: ${nearMatchScore.toFixed(4)} (${pct}%) — fragment id=${vectorResults[0].id} raw=${raw.toFixed(4)}`);
-          if (nearMatchScore > 0.70) {
+          console.log(
+            `[dup-detect]   near-match score: ${nearMatchScore.toFixed(4)} (${pct}%) — fragment id=${vectorResults[0].id} raw=${raw.toFixed(4)}`,
+          );
+          if (nearMatchScore > 0.7) {
             const reason =
-              nearMatchScore >= 0.95 ? 'quasi-exact duplicate'
-              : nearMatchScore >= 0.80 ? 'strong similarity — possible update'
-              : 'moderate similarity';
+              nearMatchScore >= 0.95
+                ? 'quasi-exact duplicate'
+                : nearMatchScore >= 0.8
+                  ? 'strong similarity — possible update'
+                  : 'moderate similarity';
             const verdict =
-              nearMatchScore >= 0.95 ? 'DOUBLON'
-              : nearMatchScore >= 0.80 ? 'MISE-A-JOUR?'
-              : 'PROCHE';
+              nearMatchScore >= 0.95
+                ? 'DOUBLON'
+                : nearMatchScore >= 0.8
+                  ? 'MISE-A-JOUR?'
+                  : 'PROCHE';
             console.log(`[dup-detect]   final verdict: ${verdict} (${reason}, score=${pct}%)`);
             return { id: vectorResults[0].id, score: nearMatchScore };
           }
@@ -223,10 +250,12 @@ export async function runPipeline(
         }),
       );
       // ── summary ──────────────────────────────────────────────────────────
-      const dupesSummary = dupeChecks.map((d, i) =>
-        d ? `#${i}→DUPE(${Math.round(d.score * 100)}%)` : `#${i}→OK`
-      ).join(' | ');
-      console.log(`[dup-detect] ── done in ${((Date.now() - t1) / 1000).toFixed(1)}s — ${dupesSummary} ──`);
+      const dupesSummary = dupeChecks
+        .map((d, i) => (d ? `#${i}→DUPE(${Math.round(d.score * 100)}%)` : `#${i}→OK`))
+        .join(' | ');
+      console.log(
+        `[dup-detect] ── done in ${((Date.now() - t1) / 1000).toFixed(1)}s — ${dupesSummary} ──`,
+      );
 
       // Count stats
       blocks.forEach((b, j) => {
@@ -235,13 +264,26 @@ export async function runPipeline(
       });
 
       // Body-scan: inject hint entities found in block body; track coherent hints
-      applyUploadHintsInPlace(blocks, uploadHints, hintEntityNames, hintEntityMeta, hintEntitiesFound, hintTagsFound);
+      applyUploadHintsInPlace(
+        blocks,
+        uploadHints,
+        hintEntityNames,
+        hintEntityMeta,
+        hintEntitiesFound,
+        hintTagsFound,
+      );
 
       // Compute quality signals for all blocks
       const qualitySignalsPerBlock = blocks.map((block, j) => {
         const blockEntityMap = (block.entities ?? {}) as Record<string, string[]>;
         return computeQualitySignals(
-          { type: block.type, body: block.body, domain: block.domain, function_type: block.function_type, entities: blockEntityMap },
+          {
+            type: block.type,
+            body: block.body,
+            domain: block.domain,
+            function_type: block.function_type,
+            entities: blockEntityMap,
+          },
           dupeChecks[j],
           hintEntityNames,
         );
@@ -253,15 +295,20 @@ export async function runPipeline(
         blocks.map(async (block, j) => {
           const signals = qualitySignalsPerBlock[j];
           if (!shouldRunJudge(signals, !!dupeChecks[j])) return null;
-          return runQualityJudge(llmClient, {
-            title: block.title || 'Untitled',
-            body: block.body,
-            domain: block.domain,
-            function_type: block.function_type,
-            type: block.type,
-            audience: block.audience,
-            entities: (block.entities ?? {}) as Record<string, string[]>,
-          }, signals, judgeTaxonomy);
+          return runQualityJudge(
+            llmClient,
+            {
+              title: block.title || 'Untitled',
+              body: block.body,
+              domain: block.domain,
+              function_type: block.function_type,
+              type: block.type,
+              audience: block.audience,
+              entities: (block.entities ?? {}) as Record<string, string[]>,
+            },
+            signals,
+            judgeTaxonomy,
+          );
         }),
       );
 
@@ -281,7 +328,7 @@ export async function runPipeline(
             function_type: validFunctions,
             tags: knownTags,
           },
-        )
+        ),
       );
 
       // Batch insert all candidates
@@ -322,7 +369,14 @@ export async function runPipeline(
     }
 
     // Post-pipeline: surface coherent hints to admin referential queues
-    await flushHintReferentials(db, uploadHints, hintEntityNames, hintEntitiesFound, hintTagsFound, existingDomains);
+    await flushHintReferentials(
+      db,
+      uploadHints,
+      hintEntityNames,
+      hintEntitiesFound,
+      hintTagsFound,
+      existingDomains,
+    );
 
     const stats = {
       total: totalCandidates,
@@ -411,12 +465,42 @@ export function deduplicateBlocks<T extends { body: string }>(blocks: T[]): T[] 
 
 export function detectLanguage(text: string): 'fr' | 'en' {
   const frStops = [
-    'le', 'la', 'les', 'de', 'du', 'des', 'un', 'une', 'est', 'sont',
-    'dans', 'pour', 'avec', 'qui', 'que', 'nous', 'cette', 'sur',
+    'le',
+    'la',
+    'les',
+    'de',
+    'du',
+    'des',
+    'un',
+    'une',
+    'est',
+    'sont',
+    'dans',
+    'pour',
+    'avec',
+    'qui',
+    'que',
+    'nous',
+    'cette',
+    'sur',
   ];
   const enStops = [
-    'the', 'is', 'are', 'of', 'in', 'to', 'for', 'with', 'and', 'that',
-    'this', 'from', 'have', 'has', 'been', 'will',
+    'the',
+    'is',
+    'are',
+    'of',
+    'in',
+    'to',
+    'for',
+    'with',
+    'and',
+    'that',
+    'this',
+    'from',
+    'have',
+    'has',
+    'been',
+    'will',
   ];
 
   const words = text.toLowerCase().split(/\s+/);

@@ -29,8 +29,14 @@ export async function renderMarkdownToDocx(
     await runPandoc(args);
     return readFileSync(docxPath);
   } finally {
-    if (existsSync(mdPath)) try { unlinkSync(mdPath); } catch (_) {}
-    if (existsSync(docxPath)) try { unlinkSync(docxPath); } catch (_) {}
+    if (existsSync(mdPath))
+      try {
+        unlinkSync(mdPath);
+      } catch (_) {}
+    if (existsSync(docxPath))
+      try {
+        unlinkSync(docxPath);
+      } catch (_) {}
   }
 }
 
@@ -42,7 +48,9 @@ function runPandoc(args: string[]): Promise<void> {
       child.kill('SIGKILL');
       reject(new Error('Pandoc timed out after 30s'));
     }, TIMEOUT_MS);
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
     child.on('error', (err) => {
       clearTimeout(timer);
       reject(new Error(`Pandoc spawn error: ${err.message}`));

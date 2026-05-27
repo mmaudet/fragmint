@@ -11,8 +11,8 @@ describe('renderMarkdownToDocx', () => {
   }, 15000);
 
   it('throws with a helpful message on invalid reference-doc path', async () => {
-    await expect(
-      renderMarkdownToDocx('# x', '/nonexistent/path.docx'),
-    ).rejects.toThrow(/reference|pandoc/i);
+    await expect(renderMarkdownToDocx('# x', '/nonexistent/path.docx')).rejects.toThrow(
+      /reference|pandoc/i,
+    );
   }, 15000);
 });
