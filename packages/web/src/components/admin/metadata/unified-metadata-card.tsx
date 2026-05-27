@@ -53,10 +53,22 @@ const ROLE_KEYS: Record<string, 'roleAdmin' | 'roleContributor' | 'roleExpert' |
   manager: 'roleManager',
 };
 
-const FLAG_LABEL_KEYS: Record<string, 'flagLowUsage' | 'flagPossiblyEntity'> = {
+const FLAG_LABEL_KEYS: Record<string, 'flagLowUsage' | 'flagPossiblyEntity' | 'flagWrongType'> = {
   'Low usage': 'flagLowUsage',
   'Possibly entity': 'flagPossiblyEntity',
+  'Wrong type?': 'flagWrongType',
 };
+
+type TranslateFn = ReturnType<typeof import('@/lib/i18n').useI18n>['t'];
+
+function renderFlagLabel(label: string, t: TranslateFn): string {
+  if (FLAG_LABEL_KEYS[label]) return t('admin', FLAG_LABEL_KEYS[label]);
+  const similarMatch = label.match(/^Similar to (.+)$/);
+  if (similarMatch) return `${t('admin', 'flagSimilarTo')} ${similarMatch[1]}`;
+  const canonicalMatch = label.match(/^Canonical: (.+)$/);
+  if (canonicalMatch) return `${t('admin', 'flagCanonical')} ${canonicalMatch[1]}`;
+  return label;
+}
 
 export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh }: Props) {
   const [renameOpen, setRenameOpen] = useState(false);
@@ -83,11 +95,12 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
     onRefresh();
   };
 
+  const cleanLabel = item.label.replace(/^NEW:\s*/i, '');
   const proposalForDialogs = {
     id: item.id,
     kind,
-    name: item.label,
-    label: item.label,
+    name: cleanLabel,
+    label: cleanLabel,
     entity_type: item.category as any,
     usage_count: item.usageCount,
     validated: !isPending,
@@ -127,10 +140,10 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
           <div className="flex items-start justify-between gap-2 mb-1">
             {/* Left: label + usage + trust source + flags */}
             <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{item.label.replace(/^NEW:\s*/i, '')}</code>
+              <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">{cleanLabel}</code>
               {item.usageCount > 0 && (
                 <Badge variant="secondary">
-                  {item.category && <span className="mr-1">{item.category} ·</span>}
+                  {item.category && item.category !== 'proposed' && <span className="mr-1">{item.category} ·</span>}
                   {item.usageCount} {item.usageCount === 1 ? 'fragment' : 'fragments'}
                 </Badge>
               )}
@@ -149,7 +162,7 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
               {item.flags.map((flag, i) => (
                 <Badge key={i} variant={flag.type === 'warning' ? 'destructive' : 'info'} className="text-xs">
                   {flag.type === 'warning' ? <AlertTriangle className="h-3 w-3 mr-1" /> : <Info className="h-3 w-3 mr-1" />}
-                  {FLAG_LABEL_KEYS[flag.label] ? t('admin', FLAG_LABEL_KEYS[flag.label]) : flag.label}
+                  {renderFlagLabel(flag.label, t)}
                 </Badge>
               ))}
             </div>
@@ -233,6 +246,7 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
         open={sheetOpen}
         onOpenChange={handleSheetOpenChange}
         initialItem={item as SheetInitialItem}
+        onRefresh={onRefresh}
       />
     </Card>
   );

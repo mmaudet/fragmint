@@ -515,6 +515,9 @@ const translations = {
     // Flag labels (from backend)
     flagLowUsage: { fr: 'Faible utilisation', en: 'Low usage' },
     flagPossiblyEntity: { fr: 'Peut-être une entité', en: 'Possibly entity' },
+    flagSimilarTo: { fr: 'Similaire à', en: 'Similar to' },
+    flagCanonical: { fr: 'Alias de', en: 'Alias of' },
+    flagWrongType: { fr: 'Mauvais type ?', en: 'Wrong type?' },
     // Referential item actions
     archiveItem: { fr: 'Archiver', en: 'Archive' },
     restoreItem: { fr: 'Restaurer', en: 'Restore' },
