@@ -2,6 +2,7 @@
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { requireRole } from '../auth/middleware.js';
 import type { TemplateService } from '../services/template-service.js';
 import type { ComposerService } from '../services/composer-service.js';
@@ -16,6 +17,7 @@ export function templateRoutes(
     prefix?: string;
     collectionMiddleware?: any;
     defaultReferenceDocPath?: string;
+    defaultReferenceDocName?: string;
   },
 ) {
   const prefix = options?.prefix ?? '/v1';
@@ -29,9 +31,8 @@ export function templateRoutes(
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('admin')];
 
-  const defaultReferenceName = options?.defaultReferenceDocPath
-    ? basename(options.defaultReferenceDocPath)
-    : null;
+  const defaultReferenceName = options?.defaultReferenceDocName
+    ?? (options?.defaultReferenceDocPath ? basename(options.defaultReferenceDocPath) : null);
 
   // List templates
   app.get(`${prefix}/templates`, { preHandler: readHandlers }, async (request) => {
@@ -221,16 +222,20 @@ export function templateRoutes(
     },
   );
 
+  const ResolveRequestSchema = z.object({
+    context: z.record(z.unknown()).optional(),
+    overrides: z.record(z.string()).optional(),
+  });
+
   // Resolve slots without rendering (preview what compose would pick)
   app.post(
     `${prefix}/templates/:id/resolve`,
     { preHandler: readHandlers },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
-        context?: Record<string, any>;
-        overrides?: Record<string, string>;
-      };
+      const parsed = ResolveRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const body = parsed.data;
       try {
         const result = await composerService.resolveSlots(
           id,

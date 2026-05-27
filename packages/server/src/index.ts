@@ -354,6 +354,7 @@ export async function createServer(options?: {
   );
   templateRoutes(app, templateService, composerService, authenticate, {
     defaultReferenceDocPath: config.plan_docx_reference_path,
+    defaultReferenceDocName: config.plan_docx_reference_name,
   });
   harvestRoutes(app, harvesterService, authenticate, { db });
   planRoutes(app, planService, templateService, config.store_path, authenticate);
@@ -380,6 +381,8 @@ export async function createServer(options?: {
   templateRoutes(app, templateService, composerService, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    defaultReferenceDocPath: config.plan_docx_reference_path,
+    defaultReferenceDocName: config.plan_docx_reference_name,
   });
   harvestRoutes(app, harvesterService, authenticate, {
     prefix: collPrefix,
