@@ -4,6 +4,7 @@ import { eq, and, like, inArray, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentTags,
+  fragmentTagLinks,
   fragmentDomains,
   fragmentFunctions,
   fragmentTypes,
@@ -57,7 +58,17 @@ export function adminMetadataRoutes(
         if (search) conditions.push(like(fragmentTags.label, `%${search}%`));
         if (trust_source) conditions.push(eq(fragmentTags.trustSource, trust_source));
         const tags = await db
-          .select()
+          .select({
+            slug: fragmentTags.slug,
+            label: fragmentTags.label,
+            category: fragmentTags.category,
+            created_at: fragmentTags.created_at,
+            validated: fragmentTags.validated,
+            proposedBy: fragmentTags.proposedBy,
+            trustSource: fragmentTags.trustSource,
+            status: fragmentTags.status,
+            usageCount: sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`,
+          })
           .from(fragmentTags)
           .where(and(...conditions))
           .limit(Number(limit))
@@ -158,12 +169,16 @@ export function adminMetadataRoutes(
         proposals.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
       }
 
-      const proposerNames = [...new Set(proposals.map((p) => p.proposed_by).filter((n) => n && n !== 'llm-auto'))];
+      const proposerNames = [
+        ...new Set(proposals.map((p) => p.proposed_by).filter((n) => n && n !== 'llm-auto')),
+      ];
       let roleMap: Record<string, string> = {};
       let displayMap: Record<string, string> = {};
       if (proposerNames.length > 0) {
-        const userRows = await db.select({ login: users.login, role: users.role, display_name: users.display_name })
-          .from(users).where(inArray(users.login, proposerNames));
+        const userRows = await db
+          .select({ login: users.login, role: users.role, display_name: users.display_name })
+          .from(users)
+          .where(inArray(users.login, proposerNames));
         roleMap = Object.fromEntries(userRows.map((r) => [r.login, r.role]));
         displayMap = Object.fromEntries(userRows.map((r) => [r.login, r.display_name ?? r.login]));
       }
@@ -174,7 +189,11 @@ export function adminMetadataRoutes(
       }));
 
       const counts = await computeCounts(db);
-      return { data: { proposals: proposalsWithRole, total: proposalsWithRole.length, counts }, meta: null, error: null };
+      return {
+        data: { proposals: proposalsWithRole, total: proposalsWithRole.length, counts },
+        meta: null,
+        error: null,
+      };
     },
   );
 
@@ -192,19 +211,32 @@ export function adminMetadataRoutes(
       const stripNew = (s: string) => s.replace(/^NEW:\s*/i, '').trim();
       if (kind === 'tag') {
         const cleanLabel = stripNew(id);
-        await db.update(fragmentTags).set({ validated: 1, status: 'active', label: cleanLabel }).where(eq(fragmentTags.slug, id));
+        await db
+          .update(fragmentTags)
+          .set({ validated: 1, status: 'active', label: cleanLabel })
+          .where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
         const cleanLabel = stripNew(id);
-        await db.update(fragmentDomains).set({ validated: 1, status: 'active', label: cleanLabel }).where(eq(fragmentDomains.slug, id));
+        await db
+          .update(fragmentDomains)
+          .set({ validated: 1, status: 'active', label: cleanLabel })
+          .where(eq(fragmentDomains.slug, id));
       } else {
         // For entities, fetch the current name and strip NEW: prefix
-        const [ent] = await db.select({ name: entities.name, canonicalName: entities.canonicalName }).from(entities).where(eq(entities.id, Number(id))).limit(1);
+        const [ent] = await db
+          .select({ name: entities.name, canonicalName: entities.canonicalName })
+          .from(entities)
+          .where(eq(entities.id, Number(id)))
+          .limit(1);
         await db
           .update(entities)
           .set({
             validated: 1,
             status: 'active',
-            ...(ent && { name: stripNew(ent.name), canonicalName: stripNew(ent.canonicalName ?? ent.name) }),
+            ...(ent && {
+              name: stripNew(ent.name),
+              canonicalName: stripNew(ent.canonicalName ?? ent.name),
+            }),
           })
           .where(eq(entities.id, Number(id)));
       }
@@ -238,6 +270,7 @@ export function adminMetadataRoutes(
             .where(eq(fragments.id, f.id));
         }
         affectedFragments = fragmentsUsing.length;
+        await db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.tag_slug, id));
         await db.delete(fragmentTags).where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
         await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, id));
@@ -315,21 +348,35 @@ export function adminMetadataRoutes(
       let affectedFragments = 0;
 
       if (kind === 'tag') {
+        // Read first (outside transaction — reads don't need atomicity)
         const fragmentsUsing = await db
           .select()
           .from(fragments)
           .where(like(fragments.tags, `%"${id}"%`));
-        for (const f of fragmentsUsing) {
-          const newTags = [
-            ...new Set(JSON.parse(f.tags ?? '[]').map((t: string) => (t === id ? target_id : t))),
-          ];
-          await db
-            .update(fragments)
-            .set({ tags: JSON.stringify(newTags) })
-            .where(eq(fragments.id, f.id));
-        }
+
+        // Atomically update JSON, repoint links, delete source tag
+        db.transaction((tx) => {
+          for (const f of fragmentsUsing) {
+            const newTags = [
+              ...new Set(
+                (JSON.parse(f.tags ?? '[]') as string[]).map((t: string) =>
+                  t === id ? target_id : t,
+                ),
+              ),
+            ];
+            tx.update(fragments)
+              .set({ tags: JSON.stringify(newTags) })
+              .where(eq(fragments.id, f.id))
+              .run();
+          }
+          tx.run(
+            sql`INSERT OR IGNORE INTO fragment_tag_links (fragment_id, tag_slug) SELECT fragment_id, ${target_id} FROM fragment_tag_links WHERE tag_slug = ${id}`,
+          );
+          tx.delete(fragmentTagLinks).where(eq(fragmentTagLinks.tag_slug, id)).run();
+          tx.delete(fragmentTags).where(eq(fragmentTags.slug, id)).run();
+        });
+
         affectedFragments = fragmentsUsing.length;
-        await db.delete(fragmentTags).where(eq(fragmentTags.slug, id));
       } else if (kind === 'entity') {
         await db
           .update(fragmentEntities)
@@ -412,14 +459,31 @@ export function adminMetadataRoutes(
         entity_type?: string;
       };
       let rows: any[];
-      if (kind === 'tag')
-        rows = await db.select().from(fragmentTags).where(eq(fragmentTags.validated, 1));
-      else if (kind === 'domain')
-        rows = await db.select().from(fragmentDomains).where(eq(fragmentDomains.validated, 1));
-      else {
+      if (kind === 'tag') {
+        const raw = await db
+          .select({
+            slug: fragmentTags.slug,
+            label: fragmentTags.label,
+            category: fragmentTags.category,
+            status: fragmentTags.status,
+            validated: fragmentTags.validated,
+            usageCount: sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`,
+          })
+          .from(fragmentTags)
+          .where(eq(fragmentTags.validated, 1));
+        // Normalize: tags use `slug` as PK — expose it as `id` so the merge picker can use v.id
+        rows = raw.map((r) => ({ ...r, id: r.slug, usage_count: r.usageCount }));
+      } else if (kind === 'domain') {
+        const raw = await db.select().from(fragmentDomains).where(eq(fragmentDomains.validated, 1));
+        rows = raw.map((r) => ({ ...r, id: r.slug, usage_count: r.usageCount }));
+      } else {
         const conditions: any[] = [eq(entities.validated, 1)];
         if (entity_type) conditions.push(eq(entities.type, entity_type));
-        rows = await db.select().from(entities).where(and(...conditions));
+        const raw = await db
+          .select()
+          .from(entities)
+          .where(and(...conditions));
+        rows = raw.map((r) => ({ ...r, usage_count: r.usageCount }));
       }
       return { data: rows, meta: null, error: null };
     },
@@ -432,18 +496,43 @@ export function adminMetadataRoutes(
   });
 
   // GET /v1/admin/metadata/pending-count — lightweight badge counter
-  app.get('/v1/admin/metadata/pending-count', { preHandler: [authenticate, requireRole('admin')] }, async () => {
-    const [tagRows, entityRows, domainRows, typeRows] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` }).from(fragmentTags).where(eq(fragmentTags.status, 'pending')),
-      db.select({ count: sql<number>`count(*)` }).from(entities).where(eq(entities.status, 'pending')),
-      db.select({ count: sql<number>`count(*)` }).from(fragmentDomains).where(eq(fragmentDomains.status, 'pending')),
-      db.select({ count: sql<number>`count(*)` }).from(fragmentTypes).where(eq(fragmentTypes.status, 'pending')),
-    ]);
-    const tags = tagRows[0]?.count ?? 0;
-    const entitiesCount = entityRows[0]?.count ?? 0;
-    const domains = domainRows[0]?.count ?? 0;
-    const types = typeRows[0]?.count ?? 0;
-    return { data: { tags, entities: entitiesCount, domains, types, total: tags + entitiesCount + domains + types }, meta: null, error: null };
-  });
-
+  app.get(
+    '/v1/admin/metadata/pending-count',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async () => {
+      const [tagRows, entityRows, domainRows, typeRows] = await Promise.all([
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(fragmentTags)
+          .where(eq(fragmentTags.status, 'pending')),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(entities)
+          .where(eq(entities.status, 'pending')),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(fragmentDomains)
+          .where(eq(fragmentDomains.status, 'pending')),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(fragmentTypes)
+          .where(eq(fragmentTypes.status, 'pending')),
+      ]);
+      const tags = tagRows[0]?.count ?? 0;
+      const entitiesCount = entityRows[0]?.count ?? 0;
+      const domains = domainRows[0]?.count ?? 0;
+      const types = typeRows[0]?.count ?? 0;
+      return {
+        data: {
+          tags,
+          entities: entitiesCount,
+          domains,
+          types,
+          total: tags + entitiesCount + domains + types,
+        },
+        meta: null,
+        error: null,
+      };
+    },
+  );
 }

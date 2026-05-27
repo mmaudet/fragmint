@@ -31,8 +31,9 @@ export function templateRoutes(
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('admin')];
 
-  const defaultReferenceName = options?.defaultReferenceDocName
-    ?? (options?.defaultReferenceDocPath ? basename(options.defaultReferenceDocPath) : null);
+  const defaultReferenceName =
+    options?.defaultReferenceDocName ??
+    (options?.defaultReferenceDocPath ? basename(options.defaultReferenceDocPath) : null);
 
   // List templates
   app.get(`${prefix}/templates`, { preHandler: readHandlers }, async (request) => {
@@ -234,7 +235,8 @@ export function templateRoutes(
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const parsed = ResolveRequestSchema.safeParse(request.body ?? {});
-      if (!parsed.success) return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
       const body = parsed.data;
       try {
         const result = await composerService.resolveSlots(
@@ -276,7 +278,10 @@ export function templateRoutes(
     const displayName = name ?? filename;
 
     reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream');
-    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+    );
     return reply.send(createReadStream(outputPath));
   });
 }

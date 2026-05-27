@@ -1,8 +1,9 @@
-import { eq, inArray, like, and, type SQL } from 'drizzle-orm';
+import { eq, inArray, like, and } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentDomains,
   fragmentTags,
+  fragmentTagLinks,
   fragmentTypes,
   fragmentFunctions,
   entities,
@@ -50,7 +51,9 @@ export async function batchUserInfo(
     .select({ login: users.login, role: users.role, displayName: users.display_name })
     .from(users)
     .where(inArray(users.login, names));
-  return Object.fromEntries(rows.map((r) => [r.login, { role: r.role, displayName: r.displayName }]));
+  return Object.fromEntries(
+    rows.map((r) => [r.login, { role: r.role, displayName: r.displayName }]),
+  );
 }
 
 export function formatItem(row: any, type: ReferentialType) {
@@ -101,8 +104,9 @@ export async function getFragmentsForItem(
     case 'tag':
       return db
         .select(FRAGMENT_FIELDS)
-        .from(fragments)
-        .where(like(fragments.tags, `%"${id}"%`))
+        .from(fragmentTagLinks)
+        .innerJoin(fragments, eq(fragmentTagLinks.fragment_id, fragments.id))
+        .where(eq(fragmentTagLinks.tag_slug, id as string))
         .limit(100);
     case 'entity':
       return db
@@ -126,17 +130,23 @@ export async function getCandidatesForItem(
       return db
         .select({ id: harvestCandidates.id })
         .from(harvestCandidates)
-        .where(and(eq(harvestCandidates.domain, id as string), eq(harvestCandidates.status, 'pending')));
+        .where(
+          and(eq(harvestCandidates.domain, id as string), eq(harvestCandidates.status, 'pending')),
+        );
     case 'type':
       return db
         .select({ id: harvestCandidates.id })
         .from(harvestCandidates)
-        .where(and(eq(harvestCandidates.type, id as string), eq(harvestCandidates.status, 'pending')));
+        .where(
+          and(eq(harvestCandidates.type, id as string), eq(harvestCandidates.status, 'pending')),
+        );
     case 'tag':
       return db
         .select({ id: harvestCandidates.id })
         .from(harvestCandidates)
-        .where(and(like(harvestCandidates.tags, `%"${id}"%`), eq(harvestCandidates.status, 'pending')));
+        .where(
+          and(like(harvestCandidates.tags, `%"${id}"%`), eq(harvestCandidates.status, 'pending')),
+        );
     default:
       return [];
   }
@@ -162,7 +172,10 @@ export async function renameTagInJson(db: FragmintDb, oldTag: string, newTag: st
     if (!frag.tags) continue;
     const tags = JSON.parse(frag.tags) as string[];
     const updated = tags.map((t) => (t === oldTag ? newTag : t));
-    await db.update(fragments).set({ tags: JSON.stringify(updated) }).where(eq(fragments.id, frag.id));
+    await db
+      .update(fragments)
+      .set({ tags: JSON.stringify(updated) })
+      .where(eq(fragments.id, frag.id));
   }
   const candsWithTag = await db
     .select({ id: harvestCandidates.id, tags: harvestCandidates.tags })
