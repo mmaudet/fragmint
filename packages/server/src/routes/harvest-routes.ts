@@ -72,11 +72,17 @@ export function harvestRoutes(
           const parsed = JSON.parse(part.value as string);
           const result = UploadHintsSchema.safeParse(parsed);
           if (!result.success) {
-            return reply.status(400).send({ data: null, meta: null, error: 'Invalid upload_hints: ' + result.error.issues[0]?.message });
+            return reply.status(400).send({
+              data: null,
+              meta: null,
+              error: 'Invalid upload_hints: ' + result.error.issues[0]?.message,
+            });
           }
           uploadHints = result.data;
         } catch {
-          return reply.status(400).send({ data: null, meta: null, error: 'Invalid upload_hints JSON' });
+          return reply
+            .status(400)
+            .send({ data: null, meta: null, error: 'Invalid upload_hints JSON' });
         }
       }
     }
@@ -237,7 +243,12 @@ export function harvestRoutes(
           .where(eq(harvestCandidates.job_id, id));
 
         const byTrust = { high: 0, mixed: 0, low: 0 };
-        const byTrustSource = { 'human-direct': 0, 'llm-confirmed': 0, 'llm-deviation': 0, 'llm-inferred': 0 };
+        const byTrustSource = {
+          'human-direct': 0,
+          'llm-confirmed': 0,
+          'llm-deviation': 0,
+          'llm-inferred': 0,
+        };
 
         for (const row of candidateRows) {
           const worst = worstTrust(row.trust_sources_json);
@@ -277,7 +288,12 @@ export function harvestRoutes(
       `${prefix}/admin/harvest/candidates`,
       { preHandler: adminHandlers },
       async (request) => {
-        const { job_id, trust_level, limit = 500, offset = 0 } = (request.query ?? {}) as {
+        const {
+          job_id,
+          trust_level,
+          limit = 500,
+          offset = 0,
+        } = (request.query ?? {}) as {
           job_id?: string;
           trust_level?: 'high' | 'mixed' | 'low';
           limit?: number;
@@ -298,7 +314,8 @@ export function harvestRoutes(
         const filtered = trust_level
           ? rows.filter((c) => {
               const worst = worstTrust(c.trust_sources_json);
-              if (trust_level === 'high') return worst === 'human-direct' || worst === 'llm-confirmed';
+              if (trust_level === 'high')
+                return worst === 'human-direct' || worst === 'llm-confirmed';
               if (trust_level === 'mixed') return worst === 'llm-deviation';
               return worst === 'llm-inferred';
             })
@@ -324,7 +341,12 @@ export function harvestRoutes(
         const candidates = await db
           .select()
           .from(harvestCandidates)
-          .where(and(inArray(harvestCandidates.id, candidate_ids), eq(harvestCandidates.status, 'pending')));
+          .where(
+            and(
+              inArray(harvestCandidates.id, candidate_ids),
+              eq(harvestCandidates.status, 'pending'),
+            ),
+          );
 
         const accepted = await harvesterService.bulkAccept(candidates, request.user.login);
         return reply.send({ data: { accepted }, meta: null, error: null });
@@ -346,8 +368,17 @@ export function harvestRoutes(
         const result = await db
           .update(harvestCandidates)
           .set({ status: 'rejected' })
-          .where(and(inArray(harvestCandidates.id, candidate_ids), eq(harvestCandidates.status, 'pending')));
-        return reply.send({ data: { rejected: result.changes ?? candidate_ids.length }, meta: null, error: null });
+          .where(
+            and(
+              inArray(harvestCandidates.id, candidate_ids),
+              eq(harvestCandidates.status, 'pending'),
+            ),
+          );
+        return reply.send({
+          data: { rejected: result.changes ?? candidate_ids.length },
+          meta: null,
+          error: null,
+        });
       },
     );
 
@@ -370,25 +401,33 @@ export function harvestRoutes(
 
   // DELETE /v1/harvest/jobs/:id — admin only, deletes job + all its candidates
   if (db) {
-    app.delete(`${prefix}/harvest/jobs/:id`, { preHandler: adminHandlers }, async (request, reply) => {
-      const { id } = request.params as { id: string };
+    app.delete(
+      `${prefix}/harvest/jobs/:id`,
+      { preHandler: adminHandlers },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
 
-      const existing = await db
-        .select({ id: harvestJobs.id, status: harvestJobs.status })
-        .from(harvestJobs)
-        .where(eq(harvestJobs.id, id))
-        .limit(1);
+        const existing = await db
+          .select({ id: harvestJobs.id, status: harvestJobs.status })
+          .from(harvestJobs)
+          .where(eq(harvestJobs.id, id))
+          .limit(1);
 
-      if (existing.length === 0)
-        return reply.status(404).send({ data: null, meta: null, error: 'Job not found' });
+        if (existing.length === 0)
+          return reply.status(404).send({ data: null, meta: null, error: 'Job not found' });
 
-      if (existing[0].status === 'processing')
-        return reply.status(409).send({ data: null, meta: null, error: 'Cannot delete a job that is still processing' });
+        if (existing[0].status === 'processing')
+          return reply.status(409).send({
+            data: null,
+            meta: null,
+            error: 'Cannot delete a job that is still processing',
+          });
 
-      await db.delete(harvestCandidates).where(eq(harvestCandidates.job_id, id));
-      await db.delete(harvestJobs).where(eq(harvestJobs.id, id));
+        await db.delete(harvestCandidates).where(eq(harvestCandidates.job_id, id));
+        await db.delete(harvestJobs).where(eq(harvestJobs.id, id));
 
-      return reply.send({ data: { deleted: true }, meta: null, error: null });
-    });
+        return reply.send({ data: { deleted: true }, meta: null, error: null });
+      },
+    );
   }
 }

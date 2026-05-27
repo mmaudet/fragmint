@@ -1,11 +1,12 @@
 // packages/server/src/services/harvester-validation.ts
 // Validation and bulk-accept logic for the harvester — extracted from harvester-service.ts
-import { eq, and, inArray, sql, count } from 'drizzle-orm';
+import { eq, and, inArray, count } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   harvestCandidates,
   harvestJobs,
   fragmentTags,
+  fragmentTagLinks,
   entities,
   fragmentEntities,
 } from '../db/schema.js';
@@ -214,6 +215,13 @@ export async function bulkAccept(
       .set({ status: 'accepted', fragment_id: id })
       .where(eq(harvestCandidates.id, candidate.id));
     await linkFragmentEntities(db, id, candidate.entities_json);
+    const candidateTags = items[idx]?.tags ?? [];
+    if (candidateTags.length > 0) {
+      await db
+        .insert(fragmentTagLinks)
+        .values(candidateTags.map((slug) => ({ fragment_id: id, tag_slug: slug })))
+        .onConflictDoNothing();
+    }
   }
 
   return created.length;
@@ -227,8 +235,11 @@ export function tagsFromCandidate(
   candidate: { tags: string | null; new_proposals: string | null },
   overrideTags?: string[],
 ): string[] {
-  const rawKnown: string[] = overrideTags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
-  const proposals = candidate.new_proposals ? (JSON.parse(candidate.new_proposals) as Record<string, unknown>) : {};
+  const rawKnown: string[] =
+    overrideTags ?? (candidate.tags ? (JSON.parse(candidate.tags) as string[]) : []);
+  const proposals = candidate.new_proposals
+    ? (JSON.parse(candidate.new_proposals) as Record<string, unknown>)
+    : {};
   const rawProposed: string[] = (proposals.tags as string[] | undefined) ?? [];
   const merged = [...new Set([...rawKnown, ...rawProposed].map(normalizeTagSlug))].filter(Boolean);
   return merged;
@@ -248,7 +259,10 @@ export async function linkFragmentEntities(
   }
   const allNames = Object.values(parsed).flat();
   for (const raw of allNames) {
-    const normalized = raw.replace(/^NEW:/i, '').toLowerCase().replace(/[\s\-.]+/g, '-');
+    const normalized = raw
+      .replace(/^NEW:/i, '')
+      .toLowerCase()
+      .replace(/[\s\-.]+/g, '-');
     const found = await db
       .select({ id: entities.id })
       .from(entities)
@@ -266,25 +280,27 @@ export async function linkFragmentEntities(
 export async function upsertTags(db: FragmintDb, tags: string[]): Promise<void> {
   if (tags.length === 0) return;
   // Safety net: normalize slugs before inserting (strip NEW: prefix, lowercase, spaces→dashes)
-  const normalized = [...new Set(
-    tags.map((t) => t.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-').trim()).filter(Boolean),
-  )];
+  const normalized = [
+    ...new Set(
+      tags
+        .map((t) => t.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-').trim())
+        .filter(Boolean),
+    ),
+  ];
   if (normalized.length === 0) return;
   const now = new Date().toISOString();
   await db
     .insert(fragmentTags)
-    .values(normalized.map((slug) => ({
-      slug,
-      label: slug,
-      usageCount: 1,
-      validated: 0,
-      status: 'pending' as const,
-      proposedBy: 'llm-auto',
-      trustSource: 'llm-inferred',
-      created_at: now,
-    })))
-    .onConflictDoUpdate({
-      target: fragmentTags.slug,
-      set: { usageCount: sql`usage_count + 1` },
-    });
+    .values(
+      normalized.map((slug) => ({
+        slug,
+        label: slug,
+        validated: 0,
+        status: 'pending' as const,
+        proposedBy: 'llm-auto',
+        trustSource: 'llm-inferred',
+        created_at: now,
+      })),
+    )
+    .onConflictDoNothing();
 }

@@ -29,7 +29,9 @@ export class VectorRetriever implements FragmentRetriever {
         body_excerpt: r.body_excerpt,
         quality: r.quality,
       }));
-    console.debug(`[retrieval][vector-only] section "${text.slice(0, 50)}" → ${filtered.length} candidates after threshold`);
+    console.debug(
+      `[retrieval][vector-only] section "${text.slice(0, 50)}" → ${filtered.length} candidates after threshold`,
+    );
     return filtered;
   }
 }

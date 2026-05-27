@@ -4,7 +4,11 @@ import { eq } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { entities, fragmentDomains, fragmentTags } from '../db/schema.js';
 import type { CombinedBlock } from './llm-client.js';
-import { type UploadHints, type TrustSourcesPerMetadata, overallTrustSource } from '../schema/trust-source.js';
+import {
+  type UploadHints,
+  type TrustSourcesPerMetadata,
+  overallTrustSource,
+} from '../schema/trust-source.js';
 
 // ---------------------------------------------------------------------------
 // Shared utilities
@@ -48,19 +52,22 @@ export async function setupHintEntities(
         hintEntityMeta.set(name.toLowerCase(), existing.type);
       } else {
         // Create as pending (validated=0) — promoted to validated=1 if found in ≥1 fragment
-        await db.insert(entities).values({
-          type: 'client',
-          name,
-          canonicalName: name,
-          normalizedName: normalized,
-          aliases: '[]',
-          validated: 0,
-          usageCount: 0,
-          proposedBy: 'harvest-hint',
-          createdAt: now,
-          trustSource: 'human-direct',
-          status: 'active',
-        }).onConflictDoNothing();
+        await db
+          .insert(entities)
+          .values({
+            type: 'client',
+            name,
+            canonicalName: name,
+            normalizedName: normalized,
+            aliases: '[]',
+            validated: 0,
+            usageCount: 0,
+            proposedBy: 'harvest-hint',
+            createdAt: now,
+            trustSource: 'human-direct',
+            status: 'active',
+          })
+          .onConflictDoNothing();
         hintEntityMeta.set(name.toLowerCase(), 'client');
       }
     }
@@ -95,7 +102,15 @@ export function applyUploadHintsInPlace(
   for (const block of blocks) {
     // Hint entities — inject into block.entities where name appears in body
     if (hintEntityNames.length > 0) {
-      if (!block.entities) block.entities = { clients: [], products: [], technologies: [], partners: [], certifications: [], regulations: [] } as typeof block.entities;
+      if (!block.entities)
+        block.entities = {
+          clients: [],
+          products: [],
+          technologies: [],
+          partners: [],
+          certifications: [],
+          regulations: [],
+        } as typeof block.entities;
       const blockEntities = block.entities as Record<string, string[]>;
       for (const hintName of hintEntityNames) {
         if (!hintEntityRegexes.get(hintName)?.test(block.body)) continue;
@@ -122,7 +137,15 @@ export function applyUploadHintsInPlace(
 //    Auto-validates when trust_source is human-direct or llm-confirmed.
 // ---------------------------------------------------------------------------
 
-const VALID_ENTITY_TYPES = ['client', 'product', 'technology', 'partner', 'certification', 'regulation', 'metric'];
+const VALID_ENTITY_TYPES = [
+  'client',
+  'product',
+  'technology',
+  'partner',
+  'certification',
+  'regulation',
+  'metric',
+];
 
 export async function insertNewProposals(
   db: FragmintDb,
@@ -137,7 +160,7 @@ export async function insertNewProposals(
     const proposals = block.new_proposals ?? {};
 
     const tagTrust = blockTrustSources?.tags ?? 'llm-inferred';
-    const tagAutoValidated = (tagTrust === 'human-direct' || tagTrust === 'llm-confirmed') ? 1 : 0;
+    const tagAutoValidated = tagTrust === 'human-direct' || tagTrust === 'llm-confirmed' ? 1 : 0;
 
     for (const rawTag of proposals.tags ?? []) {
       const slug = rawTag.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
@@ -159,7 +182,8 @@ export async function insertNewProposals(
     }
 
     const domainTrust = blockTrustSources?.domain ?? 'llm-inferred';
-    const domainAutoValidated = (domainTrust === 'human-direct' || domainTrust === 'llm-confirmed') ? 1 : 0;
+    const domainAutoValidated =
+      domainTrust === 'human-direct' || domainTrust === 'llm-confirmed' ? 1 : 0;
 
     for (const rawDomain of proposals.domains ?? []) {
       const slug = rawDomain.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
@@ -179,7 +203,8 @@ export async function insertNewProposals(
     }
 
     const entityOverallTrust = overallTrustSource(blockTrustSources ?? {});
-    const entityAutoValidated = (entityOverallTrust === 'human-direct' || entityOverallTrust === 'llm-confirmed') ? 1 : 0;
+    const entityAutoValidated =
+      entityOverallTrust === 'human-direct' || entityOverallTrust === 'llm-confirmed' ? 1 : 0;
 
     for (const [entType, entNames] of Object.entries(proposals.entities ?? {})) {
       // Guard: LLM occasionally returns a string instead of an array — skip silently
@@ -228,34 +253,42 @@ export async function flushHintReferentials(
   for (const name of hintEntityNames) {
     if (hintEntitiesFound.has(name.toLowerCase())) {
       const normalized = normalizeEntityName(name);
-      await db.update(entities).set({ validated: 1 }).where(eq(entities.normalizedName, normalized));
+      await db
+        .update(entities)
+        .set({ validated: 1 })
+        .where(eq(entities.normalizedName, normalized));
     }
   }
 
   // Create pending domain entry if hint domain is new (not yet in referential)
   if (uploadHints.domain && !existingDomains.includes(uploadHints.domain)) {
-    await db.insert(fragmentDomains).values({
-      slug: uploadHints.domain,
-      label: uploadHints.domain,
-      description: 'Hint-proposed',
-      validated: 0,
-      proposedBy: 'harvest-hint',
-      trustSource: 'human-direct',
-      created_at: now,
-    }).onConflictDoNothing();
+    await db
+      .insert(fragmentDomains)
+      .values({
+        slug: uploadHints.domain,
+        label: uploadHints.domain,
+        description: 'Hint-proposed',
+        validated: 0,
+        proposedBy: 'harvest-hint',
+        trustSource: 'human-direct',
+        created_at: now,
+      })
+      .onConflictDoNothing();
   }
 
   // Create pending tag entries for hint tags applied to ≥1 fragment by the LLM
   for (const tag of hintTagsFound) {
-    await db.insert(fragmentTags).values({
-      slug: tag,
-      label: tag,
-      usageCount: 0,
-      validated: 0,
-      status: 'pending',
-      proposedBy: 'harvest-hint',
-      trustSource: 'human-direct',
-      created_at: now,
-    }).onConflictDoNothing();
+    await db
+      .insert(fragmentTags)
+      .values({
+        slug: tag,
+        label: tag,
+        validated: 0,
+        status: 'pending',
+        proposedBy: 'harvest-hint',
+        trustSource: 'human-direct',
+        created_at: now,
+      })
+      .onConflictDoNothing();
   }
 }
