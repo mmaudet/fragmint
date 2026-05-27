@@ -61,7 +61,7 @@ export class LlmClient {
     return this.chatMessages([{ role: 'user', content }]);
   }
 
-  async chatMessages(messages: ChatMessage[]): Promise<string> {
+  async chatMessages(messages: ChatMessage[], options?: { temperature?: number }): Promise<string> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.config.timeout);
 
@@ -75,7 +75,7 @@ export class LlmClient {
         headers,
         body: JSON.stringify({
           model: this.config.model,
-          temperature: this.config.temperature,
+          temperature: options?.temperature ?? this.config.temperature,
           messages,
         }),
         signal: controller.signal,
@@ -176,11 +176,14 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     const hintsBlock = hasAnyHint
       ? `\n# Operator hints (high confidence — prefer these unless content clearly contradicts them)\n${
           uploadHints.domain ? `- domain: ${uploadHints.domain}\n` : ''
-        }${uploadHints.function_type ? `- function_type: ${uploadHints.function_type}\n` : ''
-        }${uploadHints.audience?.length ? `- audience: ${uploadHints.audience.join(', ')}\n` : ''
-        }${uploadHints.maturity ? `- maturity: ${uploadHints.maturity}\n` : ''
-        }${uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
-        }${uploadHints.entities?.length ? `- entities (suggested): ${uploadHints.entities.join(', ')}\n` : ''
+        }${uploadHints.function_type ? `- function_type: ${uploadHints.function_type}\n` : ''}${
+          uploadHints.audience?.length ? `- audience: ${uploadHints.audience.join(', ')}\n` : ''
+        }${uploadHints.maturity ? `- maturity: ${uploadHints.maturity}\n` : ''}${
+          uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
+        }${
+          uploadHints.entities?.length
+            ? `- entities (suggested): ${uploadHints.entities.join(', ')}\n`
+            : ''
         }`
       : '';
 

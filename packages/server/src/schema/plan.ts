@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const PLAN_STATUSES = ['draft', 'plan_validated', 'fragments_validated', 'completed'] as const;
+export const PLAN_STATUSES = [
+  'draft',
+  'plan_validated',
+  'fragments_validated',
+  'completed',
+] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 export const PlanFiltersSchema = z.object({
@@ -93,7 +98,10 @@ export const AddFragmentToSectionSchema = z
       .object({
         body: z.string().min(1),
         type: z.string().optional(),
-        lang: z.string().regex(/^[a-z]{2}$/).default('fr'),
+        lang: z
+          .string()
+          .regex(/^[a-z]{2}$/)
+          .default('fr'),
         domain: z.string().min(1).default('other'),
       })
       .optional(),

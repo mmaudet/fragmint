@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeForComparison, detectExactDuplicate, checkSubjectCoherence, checkEntityCoverage, computeQualitySignals } from '../../services/quality-signals.js';
+import {
+  normalizeForComparison,
+  detectExactDuplicate,
+  checkSubjectCoherence,
+  checkEntityCoverage,
+  computeQualitySignals,
+} from '../../services/quality-signals.js';
 
 describe('normalizeForComparison', () => {
   it('lowercases and collapses whitespace', () => {
@@ -53,12 +59,18 @@ describe('detectExactDuplicate', () => {
 
 describe('checkSubjectCoherence', () => {
   it('returns ok when subject keyword found in body', () => {
-    const result = checkSubjectCoherence({ domain: 'twake-mail', body: 'Twake Mail est une messagerie basée sur Apache James et JMAP.' });
+    const result = checkSubjectCoherence({
+      domain: 'twake-mail',
+      body: 'Twake Mail est une messagerie basée sur Apache James et JMAP.',
+    });
     expect(result.level).toBe('ok');
   });
 
   it('returns warning when no keyword matches', () => {
-    const result = checkSubjectCoherence({ domain: 'twake-mail', body: 'Contenu totalement sans rapport.' });
+    const result = checkSubjectCoherence({
+      domain: 'twake-mail',
+      body: 'Contenu totalement sans rapport.',
+    });
     expect(result.level).toBe('warning');
     expect(result.type).toBe('subject_coherence');
   });
@@ -73,7 +85,14 @@ describe('checkEntityCoverage', () => {
   it('returns ok when expected entities present for function', () => {
     const result = checkEntityCoverage({
       function_type: 'commercial',
-      entities: { products: ['Twake Mail'], clients: [], technologies: [], partners: [], certifications: [], regulations: [] },
+      entities: {
+        products: ['Twake Mail'],
+        clients: [],
+        technologies: [],
+        partners: [],
+        certifications: [],
+        regulations: [],
+      },
     });
     expect(result.level).toBe('ok');
   });
@@ -81,7 +100,14 @@ describe('checkEntityCoverage', () => {
   it('returns warning when expected entities missing', () => {
     const result = checkEntityCoverage({
       function_type: 'reference',
-      entities: { products: [], clients: [], technologies: [], partners: [], certifications: [], regulations: [] },
+      entities: {
+        products: [],
+        clients: [],
+        technologies: [],
+        partners: [],
+        certifications: [],
+        regulations: [],
+      },
     });
     expect(result.level).toBe('warning');
     expect(result.message).toContain('clients');
@@ -90,7 +116,14 @@ describe('checkEntityCoverage', () => {
   it('returns info for function with no expectations', () => {
     const result = checkEntityCoverage({
       function_type: 'strategic',
-      entities: { products: [], clients: [], technologies: [], partners: [], certifications: [], regulations: [] },
+      entities: {
+        products: [],
+        clients: [],
+        technologies: [],
+        partners: [],
+        certifications: [],
+        regulations: [],
+      },
     });
     expect(result.level).toBe('info');
   });
@@ -99,7 +132,20 @@ describe('checkEntityCoverage', () => {
 describe('computeQualitySignals', () => {
   it('returns 3 flags for a clean block', () => {
     const result = computeQualitySignals(
-      { type: 'argument', body: 'Twake Mail est une solution de messagerie souveraine.', domain: 'twake-mail', function_type: 'commercial', entities: { products: ['Twake Mail'], clients: [], technologies: [], partners: [], certifications: [], regulations: [] } },
+      {
+        type: 'argument',
+        body: 'Twake Mail est une solution de messagerie souveraine.',
+        domain: 'twake-mail',
+        function_type: 'commercial',
+        entities: {
+          products: ['Twake Mail'],
+          clients: [],
+          technologies: [],
+          partners: [],
+          certifications: [],
+          regulations: [],
+        },
+      },
       null,
     );
     expect(result).toHaveLength(3);

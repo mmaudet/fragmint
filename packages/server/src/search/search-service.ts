@@ -375,12 +375,21 @@ export class SearchService {
     limit = 20,
   ): Promise<SearchResult[]> {
     const conditions = [];
-    const keywords = [...new Set(
-      query.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()).filter((w) => w.length > 3),
-    )].slice(0, 8);
+    const keywords = [
+      ...new Set(
+        query
+          .split(/\s+/)
+          .map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase())
+          .filter((w) => w.length > 3),
+      ),
+    ].slice(0, 8);
     if (keywords.length > 0) {
       conditions.push(
-        or(...keywords.map((kw) => or(like(fragments.title, `%${kw}%`), like(fragments.body_excerpt, `%${kw}%`)))),
+        or(
+          ...keywords.map((kw) =>
+            or(like(fragments.title, `%${kw}%`), like(fragments.body_excerpt, `%${kw}%`)),
+          ),
+        ),
       );
     }
 
@@ -412,9 +421,7 @@ export class SearchService {
       conditions.push(inArray(fragments.function_type, filters.function_type));
     }
     if (filters?.audience?.length) {
-      conditions.push(
-        or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))),
-      );
+      conditions.push(or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))));
     }
     if (filters?.maturity?.length) {
       conditions.push(inArray(fragments.maturity, filters.maturity));

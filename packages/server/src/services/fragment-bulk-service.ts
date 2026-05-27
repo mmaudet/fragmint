@@ -28,8 +28,7 @@ export class FragmentBulkService extends FragmentService {
         frontmatter.reviewed_by = userId;
         frontmatter.updated_at = now;
         writeFragment(dirname(existingAbsPath), frontmatter, body);
-        if (!groups.has(this.storePath))
-          groups.set(this.storePath, { filePaths: [], ids: [] });
+        if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
@@ -98,8 +97,7 @@ export class FragmentBulkService extends FragmentService {
         frontmatter.approved_by = userId;
         frontmatter.updated_at = now;
         writeFragment(dirname(existingAbsPath), frontmatter, body);
-        if (!groups.has(this.storePath))
-          groups.set(this.storePath, { filePaths: [], ids: [] });
+        if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
@@ -160,8 +158,7 @@ export class FragmentBulkService extends FragmentService {
         frontmatter.quality = 'deprecated';
         frontmatter.updated_at = now;
         writeFragment(dirname(existingAbsPath), frontmatter, body);
-        if (!groups.has(this.storePath))
-          groups.set(this.storePath, { filePaths: [], ids: [] });
+        if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
@@ -199,7 +196,11 @@ export class FragmentBulkService extends FragmentService {
 
     // Remove all IDs from search index (best-effort)
     for (const id of ids) {
-      try { await this.searchService.removeFromIndex(id); } catch { /* ignore */ }
+      try {
+        await this.searchService.removeFromIndex(id);
+      } catch {
+        /* ignore */
+      }
     }
     return { done, errors };
   }
@@ -219,8 +220,7 @@ export class FragmentBulkService extends FragmentService {
       try {
         const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
         if (!frag) continue;
-        if (!groups.has(this.storePath))
-          groups.set(this.storePath, { filePaths: [], ids: [] });
+        if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
         g.ids.push(id);
@@ -233,7 +233,10 @@ export class FragmentBulkService extends FragmentService {
     let done = 0;
     for (const [, { filePaths, ids: gIds }] of groups) {
       try {
-        await this.git.rmFiles(filePaths, `chore: bulk delete ${gIds.length} fragments by ${userId}`);
+        await this.git.rmFiles(
+          filePaths,
+          `chore: bulk delete ${gIds.length} fragments by ${userId}`,
+        );
         await this.db.delete(fragments).where(inArray(fragments.id, gIds));
         for (const id of gIds) await this.searchService.removeFromIndex(id);
         await this.audit.log({
@@ -269,6 +272,9 @@ export class FragmentBulkService extends FragmentService {
     }>,
     author: string,
   ): Promise<Array<{ idx: number; id: string; file_path: string; commit_hash: string }>> {
+    // NOTE: This method does NOT insert into fragment_tag_links.
+    // Callers (e.g. harvester-validation.ts bulkAccept) are responsible
+    // for inserting tag links after calling this method.
     const now = new Date().toISOString();
     const { mkdirSync } = await import('node:fs');
     type Group = {

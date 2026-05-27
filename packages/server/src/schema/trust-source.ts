@@ -11,14 +11,16 @@ export interface UploadHints {
   entities?: string[];
 }
 
-export const UploadHintsSchema = z.object({
-  domain: z.string().max(100).optional(),
-  function_type: z.string().max(100).optional(),
-  audience: z.array(z.string().max(50)).max(4).optional(),
-  maturity: z.enum(['production', 'beta', 'roadmap', 'archive']).optional(),
-  tags: z.array(z.string().max(80)).max(20).optional(),
-  entities: z.array(z.string().max(100)).max(20).optional(),
-}).strict();
+export const UploadHintsSchema = z
+  .object({
+    domain: z.string().max(100).optional(),
+    function_type: z.string().max(100).optional(),
+    audience: z.array(z.string().max(50)).max(4).optional(),
+    maturity: z.enum(['production', 'beta', 'roadmap', 'archive']).optional(),
+    tags: z.array(z.string().max(80)).max(20).optional(),
+    entities: z.array(z.string().max(100)).max(20).optional(),
+  })
+  .strict();
 
 export type TrustSourcesPerMetadata = Partial<Record<keyof UploadHints, TrustSource>>;
 
@@ -28,9 +30,7 @@ export type TrustSourcesPerMetadata = Partial<Record<keyof UploadHints, TrustSou
 function normalizeToArray(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value
-      .filter((v): v is string => typeof v === 'string')
-      .map((v) => v.toLowerCase());
+    return value.filter((v): v is string => typeof v === 'string').map((v) => v.toLowerCase());
   }
   if (typeof value === 'string') {
     return value.trim() === '' ? [] : [value.toLowerCase()];
@@ -58,10 +58,7 @@ function arraysEqual(arr1: string[], arr2: string[]): boolean {
  *
  * Note: 'human-direct' is NEVER set here — it only comes from an explicit admin correction action.
  */
-export function determineTrustSource(
-  hint: unknown,
-  llmValue: unknown,
-): TrustSource {
+export function determineTrustSource(hint: unknown, llmValue: unknown): TrustSource {
   const hintArray = normalizeToArray(hint);
 
   if (hintArray.length === 0) {
@@ -88,7 +85,14 @@ export function computeTrustSources(
 ): TrustSourcesPerMetadata {
   const sources: TrustSourcesPerMetadata = {};
 
-  const fields: (keyof UploadHints)[] = ['domain', 'function_type', 'audience', 'maturity', 'tags', 'entities'];
+  const fields: (keyof UploadHints)[] = [
+    'domain',
+    'function_type',
+    'audience',
+    'maturity',
+    'tags',
+    'entities',
+  ];
 
   for (const field of fields) {
     sources[field] = determineTrustSource(hints[field], block[field]);

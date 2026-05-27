@@ -44,9 +44,10 @@ export async function runQualityJudge(
   signals: CoherenceFlag[],
   taxonomy?: { domains: string[]; types: string[]; tags: string[] },
 ): Promise<JudgeResult | null> {
-  const signalsSummary = signals.length > 0
-    ? signals.map((s) => `- [${s.level.toUpperCase()}] ${s.type}: ${s.message}`).join('\n')
-    : '- No issues detected';
+  const signalsSummary =
+    signals.length > 0
+      ? signals.map((s) => `- [${s.level.toUpperCase()}] ${s.type}: ${s.message}`).join('\n')
+      : '- No issues detected';
 
   const taxonomySection = taxonomy
     ? `
@@ -114,7 +115,9 @@ Return ONLY valid JSON:
     if (
       !parsed ||
       typeof parsed !== 'object' ||
-      !dims.every((d) => validVerdicts.includes((parsed[d] as Record<string, unknown>)?.verdict as string)) ||
+      !dims.every((d) =>
+        validVerdicts.includes((parsed[d] as Record<string, unknown>)?.verdict as string),
+      ) ||
       !validRecs.includes(parsed.overall_recommendation as string)
     ) {
       return null;

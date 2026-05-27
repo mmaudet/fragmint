@@ -17,7 +17,12 @@ export function detectExactDuplicate(
 }
 
 export interface CoherenceFlag {
-  type: 'subject_coherence' | 'entity_coverage' | 'hint_entity_coverage' | 'duplicate_check' | 'prototype_distance';
+  type:
+    | 'subject_coherence'
+    | 'entity_coverage'
+    | 'hint_entity_coverage'
+    | 'duplicate_check'
+    | 'prototype_distance';
   level: 'ok' | 'warning' | 'error' | 'info';
   message: string;
 }
@@ -37,14 +42,26 @@ const SUBJECT_KEYWORDS: Record<string, string[]> = {
 export function checkSubjectCoherence(block: { domain: string; body: string }): CoherenceFlag {
   const keywords = SUBJECT_KEYWORDS[block.domain];
   if (!keywords) {
-    return { type: 'subject_coherence', level: 'info', message: `No keyword list for domain "${block.domain}"` };
+    return {
+      type: 'subject_coherence',
+      level: 'info',
+      message: `No keyword list for domain "${block.domain}"`,
+    };
   }
   const bodyLower = block.body.toLowerCase();
   const matches = keywords.filter((kw) => bodyLower.includes(kw));
   if (matches.length === 0) {
-    return { type: 'subject_coherence', level: 'warning', message: `Domain "${block.domain}" not mentioned in body` };
+    return {
+      type: 'subject_coherence',
+      level: 'warning',
+      message: `Domain "${block.domain}" not mentioned in body`,
+    };
   }
-  return { type: 'subject_coherence', level: 'ok', message: `Keywords found: ${matches.join(', ')}` };
+  return {
+    type: 'subject_coherence',
+    level: 'ok',
+    message: `Keywords found: ${matches.join(', ')}`,
+  };
 }
 
 const ENTITY_EXPECTATIONS: Record<string, string[]> = {
@@ -60,11 +77,19 @@ export function checkEntityCoverage(block: {
 }): CoherenceFlag {
   const expected = ENTITY_EXPECTATIONS[block.function_type ?? ''] ?? [];
   if (expected.length === 0) {
-    return { type: 'entity_coverage', level: 'info', message: 'No entity expectations for this function' };
+    return {
+      type: 'entity_coverage',
+      level: 'info',
+      message: 'No entity expectations for this function',
+    };
   }
   const missing = expected.filter((t) => !block.entities[t] || block.entities[t].length === 0);
   if (missing.length > 0) {
-    return { type: 'entity_coverage', level: 'warning', message: `Missing expected entities: ${missing.join(', ')}` };
+    return {
+      type: 'entity_coverage',
+      level: 'warning',
+      message: `Missing expected entities: ${missing.join(', ')}`,
+    };
   }
   return { type: 'entity_coverage', level: 'ok', message: 'Expected entities present' };
 }
@@ -81,7 +106,7 @@ function duplicateSignal(dupResult: { id: string; score: number } | null): Coher
       message: `Doublon quasi-exact de ${dupResult.id} (${pct}%)`,
     };
   }
-  if (dupResult.score >= 0.80) {
+  if (dupResult.score >= 0.8) {
     return {
       type: 'duplicate_check',
       level: 'warning',
@@ -97,7 +122,10 @@ function duplicateSignal(dupResult: { id: string; score: number } | null): Coher
 }
 
 /** Check that hint entities from upload hints are present in the fragment body. */
-export function checkHintEntityCoverage(body: string, hintEntities: string[]): CoherenceFlag | null {
+export function checkHintEntityCoverage(
+  body: string,
+  hintEntities: string[],
+): CoherenceFlag | null {
   if (hintEntities.length === 0) return null;
   const missing = hintEntities.filter((name) => {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -112,7 +140,13 @@ export function checkHintEntityCoverage(body: string, hintEntities: string[]): C
 }
 
 export function computeQualitySignals(
-  block: { type: string; body: string; domain: string; function_type?: string | null; entities?: Record<string, string[]> },
+  block: {
+    type: string;
+    body: string;
+    domain: string;
+    function_type?: string | null;
+    entities?: Record<string, string[]>;
+  },
   dupResult: { id: string; score: number } | null,
   hintEntities: string[] = [],
 ): CoherenceFlag[] {

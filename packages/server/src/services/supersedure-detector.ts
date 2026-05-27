@@ -71,10 +71,7 @@ async function loadEntityMeta(
   };
 }
 
-function formatFragmentContext(
-  frag: FragmentRow,
-  entityNames: string[],
-): string {
+function formatFragmentContext(frag: FragmentRow, entityNames: string[]): string {
   const tags = frag.tags ? (JSON.parse(frag.tags) as string[]) : [];
   const lines = [
     `domain: ${frag.domain}`,

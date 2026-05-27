@@ -212,7 +212,11 @@ export class TemplateService {
       .select()
       .from(templates)
       .where(
-        conditions.length ? (conditions.length === 1 ? conditions[0] : and(...conditions)) : undefined,
+        conditions.length
+          ? conditions.length === 1
+            ? conditions[0]
+            : and(...conditions)
+          : undefined,
       )
       .orderBy(desc(templates.updated_at))
       .limit(limit)

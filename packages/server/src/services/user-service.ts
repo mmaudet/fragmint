@@ -65,7 +65,15 @@ export class UserService {
   async update(id: string, patch: { role?: string; display_name?: string; active?: number }) {
     await this.db.update(users).set(patch).where(eq(users.id, id));
     const rows = await this.db
-      .select({ id: users.id, login: users.login, display_name: users.display_name, role: users.role, active: users.active, created_at: users.created_at, last_login: users.last_login })
+      .select({
+        id: users.id,
+        login: users.login,
+        display_name: users.display_name,
+        role: users.role,
+        active: users.active,
+        created_at: users.created_at,
+        last_login: users.last_login,
+      })
       .from(users)
       .where(eq(users.id, id))
       .limit(1);
