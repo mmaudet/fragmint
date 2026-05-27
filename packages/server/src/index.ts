@@ -318,6 +318,7 @@ export async function createServer(options?: {
 
   // Index service (agentique pipeline)
   const indexService = new IndexService(db);
+  fragmentService.indexService = indexService;
 
   const retriever = createRetriever(config.retrieval_mode, {
     searchService,

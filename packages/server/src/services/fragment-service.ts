@@ -30,6 +30,7 @@ import { detectAndPropose } from './supersedure-detector.js';
 export class FragmentService {
   protected git: GitRepository;
   llmClient?: LlmClient;
+  indexService?: { invalidateCache(): void };
 
   constructor(
     protected db: FragmintDb,
@@ -490,6 +491,7 @@ export class FragmentService {
     if (input.quality === 'reviewed' && this.llmClient) {
       detectAndPropose(id, this.db, this.llmClient).catch(() => {});
     }
+    this.indexService?.invalidateCache();
 
     return { id, commit_hash: commitHash };
   }
@@ -556,6 +558,7 @@ export class FragmentService {
       audience: frontmatter.audience ?? [],
       maturity: frontmatter.maturity ?? null,
     });
+    this.indexService?.invalidateCache();
 
     return { id, commit_hash: commitHash, quality: 'approved' };
   }
@@ -609,6 +612,7 @@ export class FragmentService {
     });
 
     await this.searchService.removeFromIndex(id);
+    this.indexService?.invalidateCache();
 
     return { id, commit_hash: commitHash, quality: 'deprecated' };
   }
@@ -644,6 +648,7 @@ export class FragmentService {
     await this.db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.fragment_id, id));
     await this.db.delete(fragments).where(eq(fragments.id, id));
     await this.searchService.removeFromIndex(id);
+    this.indexService?.invalidateCache();
     await this.audit.log({
       user_id: userId,
       role: 'admin',
