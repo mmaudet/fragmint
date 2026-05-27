@@ -225,9 +225,6 @@ export function createDb(path: string | ':memory:') {
     sqlite.exec('ALTER TABLE fragment_tags ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
   } catch (_) {}
   try {
-    sqlite.exec('ALTER TABLE fragment_tags ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
-  } catch (_) {}
-  try {
     sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
   } catch (_) {}
 
@@ -352,20 +349,44 @@ export function createDb(path: string | ':memory:') {
   // Migration 013 — statut cycle de vie sur les tables référentiels
   // ALTER TABLE only runs once (fails silently if column exists)
   // No backfill UPDATE — new items get DEFAULT 'active'; status is set explicitly on approve/reject actions
-  try { sqlite.exec("ALTER TABLE fragment_domains ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
-  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_domains_status ON fragment_domains(status)'); } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_domains ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE INDEX IF NOT EXISTS idx_fragment_domains_status ON fragment_domains(status)',
+    );
+  } catch (_) {}
 
-  try { sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
-  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_tags_status ON fragment_tags(status)'); } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_tags_status ON fragment_tags(status)');
+  } catch (_) {}
 
-  try { sqlite.exec("ALTER TABLE fragment_types ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
-  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_types_status ON fragment_types(status)'); } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_types ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_types_status ON fragment_types(status)');
+  } catch (_) {}
 
-  try { sqlite.exec("ALTER TABLE fragment_functions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
-  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_functions_status ON fragment_functions(status)'); } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_functions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE INDEX IF NOT EXISTS idx_fragment_functions_status ON fragment_functions(status)',
+    );
+  } catch (_) {}
 
-  try { sqlite.exec("ALTER TABLE entities ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"); } catch (_) {}
-  try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)'); } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE entities ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)');
+  } catch (_) {}
 
   // Migration 014 — table historique des renommages
   sqlite.exec(`
@@ -403,11 +424,13 @@ export function createDb(path: string | ':memory:') {
     CREATE INDEX IF NOT EXISTS sp_status_idx ON supersedure_proposals(status);
   `);
 
-  // Cascade delete triggers (SQLite doesn't support ALTER TABLE ADD CONSTRAINT)
+  // Drop and recreate cascade triggers to keep them current (idempotent)
   sqlite.exec(`
-    CREATE TRIGGER IF NOT EXISTS cascade_delete_fragment
+    DROP TRIGGER IF EXISTS cascade_delete_fragment;
+    CREATE TRIGGER cascade_delete_fragment
       BEFORE DELETE ON fragments BEGIN
         DELETE FROM fragment_entities WHERE fragment_id = OLD.id;
+        DELETE FROM fragment_tag_links WHERE fragment_id = OLD.id;
         DELETE FROM plan_fragment_usages WHERE fragment_id = OLD.id;
         DELETE FROM supersedure_proposals WHERE new_fragment_id = OLD.id OR old_fragment_id = OLD.id;
         UPDATE harvest_candidates SET fragment_id = NULL WHERE fragment_id = OLD.id;
@@ -423,6 +446,29 @@ export function createDb(path: string | ':memory:') {
         DELETE FROM plan_fragment_usages WHERE plan_id = OLD.id;
       END;
   `);
+
+  // Migration 015 — fragment_tag_links: replace stale usageCount with live join table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS fragment_tag_links (
+      fragment_id TEXT NOT NULL,
+      tag_slug TEXT NOT NULL,
+      PRIMARY KEY (fragment_id, tag_slug)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ftl_tag_slug ON fragment_tag_links(tag_slug);
+    CREATE INDEX IF NOT EXISTS idx_ftl_fragment_id ON fragment_tag_links(fragment_id);
+  `);
+
+  // Populate fragment_tag_links from existing fragments.tags JSON (one-time, idempotent via INSERT OR IGNORE)
+  try {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO fragment_tag_links (fragment_id, tag_slug)
+      SELECT f.id, jt.value
+      FROM fragments f, json_each(f.tags) jt
+      WHERE f.tags IS NOT NULL AND f.tags != '[]' AND f.tags != 'null'
+    `);
+  } catch (_) {
+    // json_each may not be available in very old SQLite — skip silently
+  }
 
   const db = drizzle(sqlite, { schema });
   return db;

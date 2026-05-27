@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 export const fragments = sqliteTable('fragments', {
   id: text('id').primaryKey(),
@@ -155,8 +155,8 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   new_proposals: text('new_proposals'),
   metadata_status: text('metadata_status'),
   trust_sources_json: text('trust_sources_json'),
-  quality_signals: text('quality_signals'),   // JSON: CoherenceFlag[]
-  judge_result: text('judge_result'),          // JSON: JudgeResult | null
+  quality_signals: text('quality_signals'), // JSON: CoherenceFlag[]
+  judge_result: text('judge_result'), // JSON: JudgeResult | null
 });
 
 export const jobs = sqliteTable('jobs', {
@@ -199,7 +199,10 @@ export const fragmentTypes = sqliteTable('fragment_types', {
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status').notNull().default('active').$type<'pending' | 'active' | 'rejected' | 'archived'>(),
+  status: text('status')
+    .notNull()
+    .default('active')
+    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
 
 export const fragmentDomains = sqliteTable('fragment_domains', {
@@ -211,7 +214,10 @@ export const fragmentDomains = sqliteTable('fragment_domains', {
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status').notNull().default('active').$type<'pending' | 'active' | 'rejected' | 'archived'>(),
+  status: text('status')
+    .notNull()
+    .default('active')
+    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
 
 export const fragmentTags = sqliteTable('fragment_tags', {
@@ -220,11 +226,25 @@ export const fragmentTags = sqliteTable('fragment_tags', {
   category: text('category'),
   created_at: text('created_at').notNull(),
   validated: integer('validated').notNull().default(1),
-  usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status').notNull().default('active').$type<'pending' | 'active' | 'rejected' | 'archived'>(),
+  status: text('status')
+    .notNull()
+    .default('active')
+    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
+
+export const fragmentTagLinks = sqliteTable(
+  'fragment_tag_links',
+  {
+    fragment_id: text('fragment_id').notNull(),
+    tag_slug: text('tag_slug').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.fragment_id, t.tag_slug] }),
+    index('idx_ftl_tag_slug').on(t.tag_slug),
+  ],
+);
 
 export const fragmentFunctions = sqliteTable('fragment_functions', {
   slug: text('slug').primaryKey(),
@@ -235,7 +255,10 @@ export const fragmentFunctions = sqliteTable('fragment_functions', {
   proposedBy: text('proposed_by').notNull().default('admin'),
   createdAt: text('created_at').notNull(),
   trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status').notNull().default('active').$type<'pending' | 'active' | 'rejected' | 'archived'>(),
+  status: text('status')
+    .notNull()
+    .default('active')
+    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
 
 export const entities = sqliteTable('entities', {
@@ -250,7 +273,10 @@ export const entities = sqliteTable('entities', {
   proposedBy: text('proposed_by').notNull().default('admin'),
   createdAt: text('created_at').notNull(),
   trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status').notNull().default('active').$type<'pending' | 'active' | 'rejected' | 'archived'>(),
+  status: text('status')
+    .notNull()
+    .default('active')
+    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
 
 export const referentialRenames = sqliteTable('referential_renames', {
@@ -264,10 +290,14 @@ export const referentialRenames = sqliteTable('referential_renames', {
   recalculation_job_id: text('recalculation_job_id'),
 });
 
-export const fragmentEntities = sqliteTable('fragment_entities', {
-  fragment_id: text('fragment_id').notNull(),
-  entity_id: integer('entity_id').notNull(),
-});
+export const fragmentEntities = sqliteTable(
+  'fragment_entities',
+  {
+    fragment_id: text('fragment_id').notNull(),
+    entity_id: integer('entity_id').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fragment_id, t.entity_id] })],
+);
 
 export const supersedureProposals = sqliteTable('supersedure_proposals', {
   id: text('id').primaryKey(),
@@ -283,4 +313,3 @@ export const supersedureProposals = sqliteTable('supersedure_proposals', {
   resolvedAt: text('resolved_at'),
   createdAt: text('created_at').notNull(),
 });
-
