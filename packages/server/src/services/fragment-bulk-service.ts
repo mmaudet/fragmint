@@ -16,6 +16,7 @@ export class FragmentBulkService extends FragmentService {
     const now = new Date().toISOString();
     type Group = { filePaths: string[]; ids: string[] };
     const groups = new Map<string, Group>();
+    const indexData = new Map<string, { body: string; frontmatter: any }>();
     let errors = 0;
 
     for (const id of ids) {
@@ -28,6 +29,7 @@ export class FragmentBulkService extends FragmentService {
         frontmatter.reviewed_by = userId;
         frontmatter.updated_at = now;
         writeFragment(dirname(existingAbsPath), frontmatter, body);
+        indexData.set(id, { body, frontmatter });
         if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
@@ -56,6 +58,13 @@ export class FragmentBulkService extends FragmentService {
           fragment_id: gIds.join(','),
           ip_source: ip,
         });
+        const batch = gIds.flatMap((id) => {
+          const item = indexData.get(id);
+          if (!item) return [];
+          const { body, frontmatter: fm } = item;
+          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'reviewed', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now, function_type: fm.function_type ?? null, audience: fm.audience ?? [], maturity: fm.maturity ?? null } }];
+        });
+        if (batch.length > 0) await this.searchService.indexBatch(batch).catch((e) => console.error('[bulkReview] vector index failed:', e));
         done += gIds.length;
         onProgress?.(done);
       } catch (e) {
@@ -85,6 +94,7 @@ export class FragmentBulkService extends FragmentService {
     const now = new Date().toISOString();
     type Group = { filePaths: string[]; ids: string[] };
     const groups = new Map<string, Group>();
+    const indexData = new Map<string, { body: string; frontmatter: any }>();
     let errors = 0;
 
     for (const id of ids) {
@@ -97,6 +107,7 @@ export class FragmentBulkService extends FragmentService {
         frontmatter.approved_by = userId;
         frontmatter.updated_at = now;
         writeFragment(dirname(existingAbsPath), frontmatter, body);
+        indexData.set(id, { body, frontmatter });
         if (!groups.has(this.storePath)) groups.set(this.storePath, { filePaths: [], ids: [] });
         const g = groups.get(this.storePath)!;
         g.filePaths.push(frag.file_path);
@@ -125,6 +136,13 @@ export class FragmentBulkService extends FragmentService {
           fragment_id: gIds.join(','),
           ip_source: ip,
         });
+        const batch = gIds.flatMap((id) => {
+          const item = indexData.get(id);
+          if (!item) return [];
+          const { body, frontmatter: fm } = item;
+          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'approved', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now, function_type: fm.function_type ?? null, audience: fm.audience ?? [], maturity: fm.maturity ?? null } }];
+        });
+        if (batch.length > 0) await this.searchService.indexBatch(batch).catch((e) => console.error('[bulkApprove] vector index failed:', e));
         done += gIds.length;
         onProgress?.(done);
       } catch (e) {
@@ -132,6 +150,7 @@ export class FragmentBulkService extends FragmentService {
         errors += gIds.length;
       }
     }
+    this.indexService?.invalidateCache();
     return { done, errors };
   }
 
@@ -202,6 +221,7 @@ export class FragmentBulkService extends FragmentService {
         /* ignore */
       }
     }
+    this.indexService?.invalidateCache();
     return { done, errors };
   }
 
@@ -253,6 +273,7 @@ export class FragmentBulkService extends FragmentService {
         errors += gIds.length;
       }
     }
+    this.indexService?.invalidateCache();
     return { done, errors };
   }
 
