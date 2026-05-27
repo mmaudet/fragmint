@@ -20,12 +20,12 @@ const MODES: {
   {
     value: 'agentic-only',
     label: 'Agentique',
-    tooltip: 'LLM judge sur index.md Karpathy — 2-5s/section, qualité maximale',
+    tooltip: 'LLM judge sur index.md Karpathy — 2-5s/section, meilleure qualité ⭐',
   },
   {
     value: 'hybrid',
     label: 'Hybride',
-    tooltip: 'Milvus pré-filtrage + LLM re-rank — 1-3s, recommandé pour la démo',
+    tooltip: 'Milvus pré-filtrage + LLM re-rank — 1-3s, bon compromis',
   },
 ];
 
@@ -67,7 +67,7 @@ export function RetrievalModeToggle() {
                 )}
               >
                 {m.label}
-                {m.value === 'hybrid' && !isActive && <span className="ml-0.5 opacity-60">⭐</span>}
+                {m.value === 'agentic-only' && !isActive && <span className="ml-0.5 opacity-60">⭐</span>}
               </button>
               <TooltipContent side="right" className="max-w-[200px] text-xs">
                 {m.tooltip}
