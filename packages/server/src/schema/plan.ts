@@ -16,12 +16,24 @@ export const PlanFiltersSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+export const ScoreBreakdownSchema = z.object({
+  method: z.enum(['vector', 'agentic', 'hybrid_rrf', 'sqlite_like']),
+  vector_score: z.number().optional(),
+  vector_rank: z.number().optional(),
+  llm_score: z.number().optional(),
+  llm_rank: z.number().optional(),
+  rrf_score: z.number().optional(),
+  rrf_k: z.number().optional(),
+});
+
 export const FragmentCandidateSchema = z.object({
   fragment_id: z.string(),
-  score: z.number(),
+  score: z.number().nullable(),
   title: z.string().nullable(),
   body_excerpt: z.string().nullable(),
   quality: z.string(),
+  score_breakdown: ScoreBreakdownSchema.optional(),
+  justification: z.string().optional(),
 });
 
 export const SectionFragmentSelectionSchema = z.object({

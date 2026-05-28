@@ -314,6 +314,7 @@ export async function createServer(options?: {
     searchService,
     fragmentService,
     storePath,
+    { dupeShinglesThreshold: config.dupe_shingles_threshold },
   );
 
   // Index service (agentique pipeline)
@@ -325,6 +326,9 @@ export async function createServer(options?: {
     llm: llmClient,
     indexService,
     fragmentService,
+    rrfK: config.rrf_k,
+    rrfWeightsPreset: config.rrf_weights,
+    hybridLlmFloor: config.hybrid_llm_floor,
   });
 
   const planService = new PlanAssembler(db, {
@@ -419,6 +423,9 @@ export async function createServer(options?: {
   // Error handler
   app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
+    if (statusCode >= 500) {
+      console.error(`[error] ${request.method} ${request.url} → ${statusCode}:`, error);
+    }
     reply.status(statusCode).send({
       data: null,
       meta: null,

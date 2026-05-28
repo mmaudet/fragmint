@@ -14,30 +14,40 @@ export interface RetrieverDeps {
   llm: LlmClient;
   indexService: IndexService;
   fragmentService: FragmentService;
+  rrfK?: number;
+  rrfWeightsPreset?: string;
+  hybridLlmFloor?: number;
 }
 
 let _mode: RetrievalMode = 'vector-only';
 let _deps: RetrieverDeps | null = null;
 let _retriever: FragmentRetriever | null = null;
+let _weightsPreset: string = 'balanced';
 
 export function createRetriever(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
   _mode = mode;
   _deps = deps;
+  _weightsPreset = deps.rrfWeightsPreset ?? 'balanced';
   _retriever = build(mode, deps);
   console.log(`[retrieval] mode=${mode}`);
   return _retriever;
 }
 
-export function setRetrievalMode(mode: RetrievalMode): FragmentRetriever {
+export function setRetrievalMode(mode: RetrievalMode, weightsPreset?: string): FragmentRetriever {
   if (!_deps) throw new Error('Call createRetriever before setRetrievalMode');
   _mode = mode;
-  _retriever = build(mode, _deps);
-  console.log(`[retrieval] mode switched to ${mode}`);
+  if (weightsPreset !== undefined) _weightsPreset = weightsPreset;
+  _retriever = build(mode, { ..._deps, rrfWeightsPreset: _weightsPreset });
+  console.log(`[retrieval] mode switched to ${mode} (weights=${_weightsPreset})`);
   return _retriever;
 }
 
 export function getCurrentMode(): RetrievalMode {
   return _mode;
+}
+
+export function getCurrentWeightsPreset(): string {
+  return _weightsPreset;
 }
 
 export function getCurrentRetriever(): FragmentRetriever | null {
@@ -55,6 +65,12 @@ function build(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
         selfConsistency: true,
       });
     case 'hybrid':
-      return new HybridRetriever(deps.searchService, deps.llm);
+      return new HybridRetriever(
+        deps.searchService,
+        deps.llm,
+        deps.rrfK ?? 60,
+        deps.rrfWeightsPreset ?? 'balanced',
+        deps.hybridLlmFloor ?? 3,
+      );
   }
 }

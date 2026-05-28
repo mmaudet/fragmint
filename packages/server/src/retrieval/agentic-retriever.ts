@@ -70,7 +70,7 @@ export class AgenticRetriever implements FragmentRetriever {
 
     const allResults = await Promise.all(candidateIds.map(judge));
     const scored = allResults.filter(
-      (r): r is RetrievedFragment => r !== null && r.score >= PHASE2_SCORE_MIN,
+      (r): r is RetrievedFragment => r !== null && r.score !== null && r.score >= PHASE2_SCORE_MIN,
     );
 
     console.info(
@@ -79,7 +79,7 @@ export class AgenticRetriever implements FragmentRetriever {
         `(threshold=${PHASE2_SCORE_MIN}, self-consistency=${this.selfConsistency})`,
     );
 
-    return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+    return scored.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, limit);
   }
 
   private async selectDomainTypes(
@@ -128,10 +128,17 @@ ${query.inferred_type ? `Preferred fragment type: ${query.inferred_type}` : ''}
 ${filtersLine}
 ${collectionLine}
 
-Fragment index (ID then title):
+Fragment library index (organized by domain → type, with \`type:\` explicit on each fragment line):
 ${indexMd}
 
 Select the ${count} most relevant fragment IDs for this section.
+Instructions:
+- Each fragment has a \`type:\` field — use it to match the section's purpose:
+  - "références clients" / "client references" → prefer type: reference or type: testimonial
+  - "cas d'usage" / "use cases" → prefer type: use-case
+  - "présentation" / "introduction" → prefer type: introduction or type: argument
+  - "méthodologie" → prefer type: methodology
+- Use entities and tags to further refine relevance within matching types.
 Return ONLY a JSON array of ID strings: ["TM-arg-001", "LC-intro-003", ...]`;
 
     try {
@@ -172,8 +179,15 @@ Fragment title: "${fragment.title ?? ''}"
 Fragment body (excerpt):
 ${(fragment.body ?? '').slice(0, 800)}
 
-Score relevance from 0 to 10 (integer). 7+ = good fit. 3 or below = poor fit.
-Return ONLY JSON: {"score": 8, "reason": "..."}`;
+Score relevance from 0 to 10 (integer). Be strict and discriminating:
+9-10 = perfect fit, directly and specifically addresses the section goal
+7-8 = good fit, clearly relevant content
+5-6 = partial fit, tangentially related
+3-4 = weak fit, loosely related topic
+0-2 = poor fit, wrong topic or section mismatch
+
+Most fragments should score 5-7. Only exceptional matches score 8+.
+Return ONLY JSON: {"score": N, "reason": "one sentence explanation"}`;
 
     try {
       const response = await this.llm.chatMessages(
@@ -192,6 +206,10 @@ Return ONLY JSON: {"score": 8, "reason": "..."}`;
         body_excerpt: (fragment.body ?? '').slice(0, 200),
         quality: fragment.quality,
         justification: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+        score_breakdown: {
+          method: 'agentic' as const,
+          llm_score: rawScore,
+        },
       };
     } catch {
       return null;
@@ -221,25 +239,27 @@ Return ONLY JSON: {"score": 8, "reason": "..."}`;
       return result1;
     }
 
-    const finalScore = Math.min(result1.score, result2.score);
-    const disagreement = Math.abs(result1.score - result2.score);
+    const score1 = result1.score ?? 0;
+    const score2 = result2.score ?? 0;
+    const finalScore = Math.min(score1, score2);
+    const disagreement = Math.abs(score1 - score2);
 
     console.debug(
       `[retrieval][agentic-only][phase2][${fragmentId.slice(0, 8)}] ` +
-        `agent1=${result1.score.toFixed(2)} agent2=${result2.score.toFixed(2)} ` +
+        `agent1=${score1.toFixed(2)} agent2=${score2.toFixed(2)} ` +
         `→ final=${finalScore.toFixed(2)} (min)`,
     );
 
     if (disagreement > STRONG_DISAGREEMENT_THRESHOLD) {
       console.warn(
         `[retrieval][agentic-only][phase2][${fragmentId.slice(0, 8)}] ` +
-          `STRONG_DISAGREEMENT: scores=${result1.score.toFixed(2)}/${result2.score.toFixed(2)} ` +
+          `STRONG_DISAGREEMENT: scores=${score1.toFixed(2)}/${score2.toFixed(2)} ` +
           `(diff=${disagreement.toFixed(2)}, threshold=${STRONG_DISAGREEMENT_THRESHOLD})`,
       );
     }
 
     // Justification from the more pessimistic agent (consistent with min strategy)
-    const finalAgent = result1.score <= result2.score ? result1 : result2;
+    const finalAgent = score1 <= score2 ? result1 : result2;
     return {
       ...finalAgent,
       score: finalScore,

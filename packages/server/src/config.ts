@@ -52,6 +52,12 @@ export interface FragmintConfig {
 
   // Retrieval
   retrieval_mode: 'vector-only' | 'agentic-only' | 'hybrid';
+
+  // Retrieval scoring
+  rrf_k: number;
+  rrf_weights: 'balanced' | 'vector-heavy' | 'llm-heavy';
+  hybrid_llm_floor: number;         // FRAGMINT_HYBRID_LLM_FLOOR (default 3) — drop fragments with llm_score < floor after RRF
+  dupe_shingles_threshold: number;  // FRAGMINT_DUPE_SHINGLES_THRESHOLD (default 0.70)
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -148,6 +154,10 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       toRetrievalMode(process.env.FRAGMINT_RETRIEVAL_MODE) ??
       fileConfig.retrieval_mode ??
       'vector-only',
+    rrf_k: Number(process.env.FRAGMINT_RRF_K ?? fileConfig.rrf_k ?? 60),
+    rrf_weights: toRrfWeights(process.env.FRAGMINT_RRF_WEIGHTS) ?? fileConfig.rrf_weights ?? 'balanced',
+    hybrid_llm_floor: toFloat(process.env.FRAGMINT_HYBRID_LLM_FLOOR) ?? fileConfig.hybrid_llm_floor ?? 3,
+    dupe_shingles_threshold: toFloat(process.env.FRAGMINT_DUPE_SHINGLES_THRESHOLD) ?? fileConfig.dupe_shingles_threshold ?? 0.70,
   };
 }
 
@@ -169,4 +179,12 @@ function toRetrievalMode(val?: string): FragmintConfig['retrieval_mode'] | undef
   if (!val) return undefined;
   const valid = VALID_RETRIEVAL_MODES as readonly string[];
   return valid.includes(val) ? (val as FragmintConfig['retrieval_mode']) : undefined;
+}
+
+const VALID_RRF_WEIGHTS = ['balanced', 'vector-heavy', 'llm-heavy'] as const;
+
+function toRrfWeights(val?: string): FragmintConfig['rrf_weights'] | undefined {
+  if (!val) return undefined;
+  const valid = VALID_RRF_WEIGHTS as readonly string[];
+  return valid.includes(val) ? (val as FragmintConfig['rrf_weights']) : undefined;
 }

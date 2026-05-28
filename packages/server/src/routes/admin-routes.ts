@@ -8,7 +8,7 @@ import { FragmentService } from '../services/fragment-service.js';
 import { SearchService } from '../search/search-service.js';
 import { z } from 'zod';
 import { createUserSchema, createTokenSchema } from '../schema/api.js';
-import { setRetrievalMode, getCurrentMode, type RetrievalMode } from '../retrieval/factory.js';
+import { setRetrievalMode, getCurrentMode, getCurrentWeightsPreset, type RetrievalMode } from '../retrieval/factory.js';
 
 const patchUserSchema = z.object({
   role: z.enum(['reader', 'contributor', 'expert', 'admin']).optional(),
@@ -151,7 +151,11 @@ export function adminRoutes(
     '/v1/admin/retrieval/mode',
     { preHandler: [authenticate, requireRole('admin')] },
     async (_req, reply) => {
-      return reply.send({ data: { mode: getCurrentMode() }, meta: null, error: null });
+      return reply.send({
+        data: { mode: getCurrentMode(), weights_preset: getCurrentWeightsPreset() },
+        meta: null,
+        error: null,
+      });
     },
   );
 
@@ -161,13 +165,18 @@ export function adminRoutes(
     async (request, reply) => {
       const retrievalModeSchema = z.object({
         mode: z.enum(['vector-only', 'agentic-only', 'hybrid']),
+        weights_preset: z.enum(['balanced', 'vector-heavy', 'llm-heavy']).optional(),
       });
       const parsed = retrievalModeSchema.safeParse(request.body);
       if (!parsed.success)
         return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
-      const retriever = setRetrievalMode(parsed.data.mode as RetrievalMode);
+      const retriever = setRetrievalMode(parsed.data.mode as RetrievalMode, parsed.data.weights_preset);
       return reply.send({
-        data: { mode: parsed.data.mode, retriever_type: retriever.constructor.name },
+        data: {
+          mode: parsed.data.mode,
+          weights_preset: getCurrentWeightsPreset(),
+          retriever_type: retriever.constructor.name,
+        },
         meta: null,
         error: null,
       });

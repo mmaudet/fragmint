@@ -203,14 +203,26 @@ export class PlanService {
       spec_context: specContext,
     };
     const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, 5);
+    const seenIds = new Set<string>();
     return results
-      .filter((r) => r.score >= SECTION_SCORE_THRESHOLD)
+      .filter((r) => r.score == null || r.score >= SECTION_SCORE_THRESHOLD)
+      .filter((r) => {
+        // Deduplicate by fragment_id — agentic Phase 1 may select same ID twice
+        if (seenIds.has(r.fragment_id)) {
+          console.debug(`[plan-service] dedup: fragment ${r.fragment_id.slice(0, 8)} returned twice, keeping first`);
+          return false;
+        }
+        seenIds.add(r.fragment_id);
+        return true;
+      })
       .map((r) => ({
         fragment_id: r.fragment_id,
         score: r.score,
         title: r.title,
         body_excerpt: r.body_excerpt,
         quality: r.quality,
+        score_breakdown: r.score_breakdown,
+        justification: r.justification,
       }));
   }
 

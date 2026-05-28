@@ -255,6 +255,7 @@ export function renderMarkdown(data: IndexData): string {
       for (const f of frags) {
         lines.push(`- **[${f.readable_id}]** ${f.title}`);
         const meta: string[] = [];
+        meta.push(`\`type: ${type}\``);
         if (f.entities.length > 0) meta.push(`\`entities: ${f.entities.join(', ')}\``);
         if (f.tags.length > 0) meta.push(`\`tags: ${f.tags.join(', ')}\``);
         meta.push(`\`lang: ${f.lang}\``);

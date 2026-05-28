@@ -173,6 +173,20 @@ describe('VectorRetriever', () => {
     expect(results[0].title).toBeNull();
     expect(results[0].body_excerpt).toBeNull();
   });
+
+  it('passes through null-score SQLite results without threshold', async () => {
+    const sqliteResult: SearchResult = { ...SAMPLE_RESULT, id: 'sqlite-1', score: null as unknown as number };
+    const svc = fakeSearchService([sqliteResult]);
+    const retriever = new VectorRetriever(svc);
+    const results = await retriever.searchForSection({
+      text: 'cloud',
+      filters: {},
+      collectionSlug: null,
+    });
+    expect(results).toHaveLength(1);
+    expect(results[0].score).toBeNull();
+    expect(results[0].score_breakdown?.method).toBe('sqlite_like');
+  });
 });
 
 function makeIndexData(overrides: Partial<IndexData> = {}): IndexData {
@@ -496,33 +510,45 @@ describe('AgenticRetriever — Phase 0 TOC filtering', () => {
   });
 });
 
-describe('HybridRetriever', () => {
-  it('returns vector results directly when count <= limit (no LLM needed)', async () => {
-    const svc = fakeSearchService([SAMPLE_RESULT]);
-    const llm = fakeLlmClient([]);
-    const retriever = new HybridRetriever(svc, llm);
-    const results = await retriever.searchForSection(
-      { text: 'x', filters: {}, collectionSlug: null },
-      5,
-    );
-    expect(results).toHaveLength(1);
-    expect(results[0].fragment_id).toBe('frag-1');
-    expect(vi.mocked(llm.chatMessages).mock.calls).toHaveLength(0);
-  });
-
-  it('applies combined score when LLM re-ranks multiple candidates', async () => {
+describe('HybridRetriever (RRF)', () => {
+  it('returns RRF-fused results with score_breakdown', async () => {
     const candidates: SearchResult[] = [
       { ...SAMPLE_RESULT, id: 'f1', score: 0.9 },
       { ...SAMPLE_RESULT, id: 'f2', score: 0.8 },
       { ...SAMPLE_RESULT, id: 'f3', score: 0.7 },
     ];
     const svc = fakeSearchService(candidates);
-    // LLM scores: f1=5, f2=9, f3=3 → normalized: 0.5, 0.9, 0.3
-    // combined: f1=0.4*0.9+0.6*0.5=0.36+0.3=0.66, f2=0.4*0.8+0.6*0.9=0.32+0.54=0.86, f3=...
     const llmResp = JSON.stringify([
-      { id: 'f1', score: 5 },
-      { id: 'f2', score: 9 },
-      { id: 'f3', score: 3 },
+      { id: 'f1', score: 3 },
+      { id: 'f2', score: 7 },
+      { id: 'f3', score: 9 },
+    ]);
+    const llm = fakeLlmClient([llmResp]);
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      3,
+    );
+    expect(results).toHaveLength(3);
+    expect(results[0].score_breakdown?.method).toBe('hybrid_rrf');
+    expect(results[0].score_breakdown?.vector_score).toBeDefined();
+    expect(results[0].score_breakdown?.llm_score).toBeDefined();
+    expect(results[0].score_breakdown?.rrf_score).toBeDefined();
+    expect(results[0].score).not.toBeNull();
+  });
+
+  it('promotes fragment ranked low in vector but high in LLM', async () => {
+    const candidates: SearchResult[] = [
+      { ...SAMPLE_RESULT, id: 'f1', score: 0.95 }, // rank 1 vector
+      { ...SAMPLE_RESULT, id: 'f2', score: 0.85 }, // rank 2 vector
+      { ...SAMPLE_RESULT, id: 'f3', score: 0.60 }, // rank 3 vector
+    ];
+    const svc = fakeSearchService(candidates);
+    // LLM: f3=10 (rank 1), f2=5 (rank 2), f1=1 (rank 3)
+    const llmResp = JSON.stringify([
+      { id: 'f1', score: 1 },
+      { id: 'f2', score: 5 },
+      { id: 'f3', score: 10 },
     ]);
     const llm = fakeLlmClient([llmResp]);
     const retriever = new HybridRetriever(svc, llm);
@@ -530,15 +556,18 @@ describe('HybridRetriever', () => {
       { text: 'x', filters: {}, collectionSlug: null },
       2,
     );
-    expect(results).toHaveLength(2);
-    expect(results[0].fragment_id).toBe('f2'); // highest combined
+    // f1: rank 1 vector + rank 3 LLM = 1/61 + 1/63 ≈ 0.0321
+    // f3: rank 3 vector + rank 1 LLM = 1/63 + 1/61 ≈ 0.0321 (symmetric — very close)
+    // Both should appear in top 2
+    const ids = results.map((r) => r.fragment_id);
+    expect(ids).toContain('f3');
+    expect(ids).toContain('f1');
   });
 
-  it('falls back to top-K by vector score when LLM returns unparseable response', async () => {
+  it('falls back to neutral LLM score when LLM returns unparseable response', async () => {
     const candidates: SearchResult[] = [
       { ...SAMPLE_RESULT, id: 'fa', score: 0.9 },
       { ...SAMPLE_RESULT, id: 'fb', score: 0.8 },
-      { ...SAMPLE_RESULT, id: 'fc', score: 0.7 },
     ];
     const svc = fakeSearchService(candidates);
     const llm = fakeLlmClient(['This is not JSON at all, sorry.']);
@@ -547,19 +576,32 @@ describe('HybridRetriever', () => {
       { text: 'x', filters: {}, collectionSlug: null },
       2,
     );
-    // Neutral fallback score = 5 → combined 0.4*score + 0.6*0.5, so vector order preserved
-    expect(results).toHaveLength(2);
+    // Fallback: neutral LLM score 5 for all → both lists rank in same order
+    // → RRF preserves vector order
     expect(results[0].fragment_id).toBe('fa');
+    expect(results).toHaveLength(2);
   });
 
   it('returns empty when SearchService returns no results', async () => {
     const retriever = new HybridRetriever(fakeSearchService([]), fakeLlmClient([]));
-    const results = await retriever.searchForSection({
-      text: 'x',
-      filters: {},
-      collectionSlug: null,
-    });
-    expect(results).toEqual([]);
+    expect(
+      await retriever.searchForSection({ text: 'x', filters: {}, collectionSlug: null }),
+    ).toEqual([]);
+  });
+
+  it('score_breakdown.llm_score is the raw 0-10 value', async () => {
+    const candidates: SearchResult[] = [{ ...SAMPLE_RESULT, id: 'f1', score: 0.8 }];
+    const svc = fakeSearchService(candidates);
+    const llm = fakeLlmClient([JSON.stringify([{ id: 'f1', score: 7 }])]);
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      1,
+    );
+    expect(results[0].score_breakdown?.llm_score).toBe(7);
+    expect(results[0].score_breakdown?.vector_score).toBeCloseTo(0.8);
+    expect(results[0].score_breakdown?.vector_rank).toBe(1);
+    expect(results[0].score_breakdown?.llm_rank).toBe(1);
   });
 });
 
@@ -682,6 +724,69 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
     // Phase1 (1 call) + Phase2 single agent (1 call) = 2 total
     expect(llmSpy.mock.calls).toHaveLength(2);
+  });
+});
+
+import { rrfFusion, normalizeRrfScore } from './rrf.js';
+
+describe('rrfFusion', () => {
+  it('ranks item first in both lists at the top', () => {
+    const list1 = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    const list2 = [{ id: 'a' }, { id: 'c' }, { id: 'b' }];
+    const result = rrfFusion([list1, list2]);
+    expect(result[0].item.id).toBe('a');
+  });
+
+  it('promotes item ranked low in vector but high in LLM', () => {
+    const vectorList = [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }];
+    const llmList = [{ id: 'f3' }, { id: 'f1' }, { id: 'f2' }];
+    const result = rrfFusion([vectorList, llmList]);
+    expect(result[0].item.id).toBe('f1');
+    expect(result[1].item.id).toBe('f3');
+  });
+
+  it('includes items that appear in only one list', () => {
+    const list1 = [{ id: 'a' }, { id: 'b' }];
+    const list2 = [{ id: 'c' }, { id: 'a' }];
+    const result = rrfFusion([list1, list2]);
+    const ids = result.map((r) => r.item.id);
+    expect(ids).toContain('b');
+    expect(ids).toContain('c');
+  });
+
+  it('respects weights — higher weight list dominates', () => {
+    const list1 = [{ id: 'f1' }, { id: 'f2' }];
+    const list2 = [{ id: 'f2' }, { id: 'f1' }];
+    const result = rrfFusion([list1, list2], 60, [1, 2]);
+    expect(result[0].item.id).toBe('f2');
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(rrfFusion([])).toEqual([]);
+    expect(rrfFusion([[]])).toEqual([]);
+  });
+});
+
+describe('normalizeRrfScore', () => {
+  it('maps max possible score to 1.0', () => {
+    const maxRrf = 1 / 61 + 1 / 61;
+    expect(normalizeRrfScore(maxRrf, [1, 1])).toBeCloseTo(1.0);
+  });
+
+  it('returns 0 for score 0', () => {
+    expect(normalizeRrfScore(0, [1, 1])).toBe(0);
+  });
+
+  it('returns 0 when weights sum to 0', () => {
+    expect(normalizeRrfScore(0.1, [0, 0])).toBe(0);
+  });
+
+  it('clamps to 1.0 on rounding edge', () => {
+    expect(normalizeRrfScore(999, [1, 1])).toBe(1.0);
+  });
+
+  it('maps midpoint correctly', () => {
+    expect(normalizeRrfScore(1 / 61, [1, 1])).toBeCloseTo(0.5);
   });
 });
 
