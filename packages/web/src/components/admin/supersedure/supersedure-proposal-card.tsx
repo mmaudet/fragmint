@@ -65,8 +65,9 @@ export function SupersedureProposalCard({ proposal, onViewDiff }: Props) {
         <Badge variant={confidenceVariant(proposal.llm_confidence)} className="text-xs">
           {t('supersedure', 'confidence')}: {(proposal.llm_confidence * 100).toFixed(0)}%
         </Badge>
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className="text-xs" title="Jaccard shingles k=3">
           {t('supersedure', 'similarity')}: {(proposal.similarity_score * 100).toFixed(0)}%
+          <span className="ml-1 text-muted-foreground">(shingles)</span>
         </Badge>
         {proposal.new_fragment?.domain && (
           <Badge variant="secondary" className="text-xs">

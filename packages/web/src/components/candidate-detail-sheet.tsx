@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-editor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -225,6 +226,50 @@ export function CandidateDetailSheet({
           </div>
         </SheetHeader>
 
+        {candidate.duplicate_of && (() => {
+          const score = candidate.duplicate_score ?? 0;
+          const pct = Math.round(score * 100);
+          const level = score >= 0.95 ? 'exact' : score >= 0.8 ? 'high' : 'moderate';
+          const config = {
+            exact: {
+              label: 'Doublon quasi-exact',
+              bannerCn: 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200',
+              icon: <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />,
+            },
+            high: {
+              label: 'Forte similarité',
+              bannerCn: 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200',
+              icon: <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />,
+            },
+            moderate: {
+              label: 'Proche de',
+              bannerCn: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
+              icon: <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />,
+            },
+          }[level];
+          return (
+            <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${config.bannerCn}`}>
+              {config.icon}
+              <span>
+                <strong>{config.label}</strong>
+                {' — '}
+                <strong>{pct}%</strong>
+                {candidate.duplicate_method && (
+                  <span className="opacity-70"> ({candidate.duplicate_method})</span>
+                )}
+                {' avec '}
+                <Link
+                  to={`/fragments?fragment=${candidate.duplicate_of}`}
+                  className="font-mono text-xs underline underline-offset-2 hover:opacity-70"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {candidate.duplicate_of.slice(0, 8)}…
+                </Link>
+              </span>
+            </div>
+          );
+        })()}
+
         <FragmentMetaEditor
           edits={{
             type: current.type,
@@ -254,54 +299,12 @@ export function CandidateDetailSheet({
           onChange={(json) => onEditsChange({ ...edits, entities_json: json })}
         />
 
-        {candidate.duplicate_of &&
-          (() => {
-            const score = candidate.duplicate_score ?? 0;
-            const pct = Math.round(score * 100);
-            const level = score >= 0.95 ? 'exact' : score >= 0.8 ? 'high' : 'moderate';
-            const config = {
-              exact: {
-                label: 'Doublon',
-                detail: `Doublon quasi-exact de ${candidate.duplicate_of} (${pct}%)`,
-                className: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30',
-                icon: <XCircle className="h-3.5 w-3.5 shrink-0" />,
-              },
-              high: {
-                label: 'Mise à jour ?',
-                detail: `Forte similarité avec ${candidate.duplicate_of} (${pct}%) — possible mise à jour`,
-                className:
-                  'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30',
-                icon: <AlertTriangle className="h-3.5 w-3.5 shrink-0" />,
-              },
-              moderate: {
-                label: 'Proche de',
-                detail: `Similarité modérée avec ${candidate.duplicate_of} (${pct}%)`,
-                className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30',
-                icon: <Info className="h-3.5 w-3.5 shrink-0" />,
-              },
-            }[level];
-            return (
-              <div
-                className={cn(
-                  'flex items-start gap-2 text-xs rounded px-2 py-1.5',
-                  config.className,
-                )}
-              >
-                {config.icon}
-                <div>
-                  <span className="font-medium">{config.label}</span>
-                  <span className="ml-1 opacity-80">— {config.detail}</span>
-                </div>
-              </div>
-            );
-          })()}
-
-        {candidate.quality_signals && candidate.quality_signals.length > 0 && (
+        {candidate.quality_signals && candidate.quality_signals.filter((s) => s.type !== 'duplicate_check').length > 0 && (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t('harvest', 'qualitySignals')}
             </p>
-            {candidate.quality_signals.map((s) => (
+            {candidate.quality_signals.filter((s) => s.type !== 'duplicate_check').map((s) => (
               <div
                 key={s.type}
                 className={cn(

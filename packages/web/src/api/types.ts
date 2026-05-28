@@ -26,6 +26,12 @@ export interface Fragment {
   frontmatter?: Record<string, any>;
   valid_from?: string | null;
   valid_until?: string | null;
+  origin?: string;
+  harvest_near_dup?: {
+    fragment_id: string;
+    score: number | null;
+    method: string | null;
+  } | null;
 }
 
 export interface Template {
@@ -156,6 +162,7 @@ export interface HarvestCandidate {
   origin_page: number | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
+  duplicate_method?: string | null;
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
   fragment_id: string | null;
   trust_sources_json: string | null;
@@ -197,10 +204,20 @@ export interface PlanFilters {
 
 export interface FragmentCandidate {
   fragment_id: string;
-  score: number;
+  score: number | null;
   title: string | null;
   body_excerpt: string | null;
   quality: string;
+  score_breakdown?: {
+    method: 'vector' | 'agentic' | 'hybrid_rrf' | 'sqlite_like';
+    vector_score?: number;
+    vector_rank?: number;
+    llm_score?: number;
+    llm_rank?: number;
+    rrf_score?: number;
+    rrf_k?: number;
+  };
+  justification?: string;
 }
 
 export interface SectionFragmentSelection {

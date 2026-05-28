@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Check, Pencil, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScoreBreakdown, type ScoreBreakdownData } from '@/components/score-breakdown';
 
 export function SectionFragmentCard({
   candidate,
@@ -37,20 +39,36 @@ export function SectionFragmentCard({
   const displayBody =
     editedBody ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt ?? '';
 
-  const matchTier: 'strong' | 'medium' | 'weak' =
-    candidate.score >= 0.7 ? 'strong' : candidate.score >= 0.55 ? 'medium' : 'weak';
+  // Use vector_score for tier when available — RRF normalized scores compress to 0.91-1.0
+  // making all results appear "strong". Raw cosine has better variance.
+  // Fallback: candidate.score (covers agentic, vector-only, sqlite modes).
+  const scoreForTier = candidate.score_breakdown?.vector_score ?? candidate.score;
+  const displayScore = candidate.score_breakdown?.vector_score ?? candidate.score;
+
+  const matchTier: 'strong' | 'medium' | 'weak' | 'unscored' =
+    scoreForTier == null
+      ? 'unscored'
+      : scoreForTier >= 0.7
+        ? 'strong'
+        : scoreForTier >= 0.55
+          ? 'medium'
+          : 'weak';
   const matchLabel =
     matchTier === 'strong'
       ? t('planGeneration', 'matchStrong')
       : matchTier === 'medium'
         ? t('planGeneration', 'matchMedium')
-        : t('planGeneration', 'matchWeak');
+        : matchTier === 'unscored'
+          ? 'Non scoré'
+          : t('planGeneration', 'matchWeak');
   const matchClass =
     matchTier === 'strong'
       ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
       : matchTier === 'medium'
         ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-        : 'bg-muted text-muted-foreground';
+        : matchTier === 'unscored'
+          ? 'bg-muted text-muted-foreground/60'
+          : 'bg-muted text-muted-foreground';
 
   function approve() {
     onChange({
@@ -89,13 +107,38 @@ export function SectionFragmentCard({
             {candidate.title ?? candidate.fragment_id}
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">{candidate.quality}</Badge>
-            <span
-              className={`text-xs px-2 py-0.5 rounded ${matchClass}`}
-              title={`score ${candidate.score.toFixed(2)}`}
-            >
-              {matchLabel}
-            </span>
+            <Badge variant="secondary">
+              {t('quality', candidate.quality as 'draft' | 'reviewed' | 'approved')}
+            </Badge>
+            {candidate.score_breakdown ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`text-xs px-2 py-0.5 rounded cursor-help ${matchClass}`}>
+                    {matchLabel}
+                    {displayScore != null && (
+                      <span className="ml-1 opacity-75">· {Math.round(displayScore * 100)}%</span>
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="p-0">
+                  <ScoreBreakdown
+                    breakdown={candidate.score_breakdown as ScoreBreakdownData}
+                    score={candidate.score}
+                    justification={candidate.justification}
+                  />
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${matchClass}`}
+                title={displayScore != null ? `cosine ${Math.round(displayScore * 100)}%` : 'non scoré'}
+              >
+                {matchLabel}
+                {displayScore != null && (
+                  <span className="ml-1 opacity-75">· {Math.round(displayScore * 100)}%</span>
+                )}
+              </span>
+            )}
           </div>
         </div>
       </CardHeader>

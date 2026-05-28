@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
 import { useFragmentTypes } from '@/api/hooks/use-fragment-types';
@@ -36,8 +37,21 @@ export default function FragmentsPage() {
   const [quality, setQuality] = useState('');
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(24);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(
+    searchParams.get('fragment') ?? null,
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Keep URL in sync with open drawer
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (selectedId) next.set('fragment', selectedId);
+      else next.delete('fragment');
+      return next;
+    }, { replace: true });
+  }, [selectedId, setSearchParams]);
   const [bulkPending, setBulkPending] = useState(false);
   const { t } = useI18n();
   const { activeCollection } = useCollection();

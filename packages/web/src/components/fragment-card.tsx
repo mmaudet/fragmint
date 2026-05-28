@@ -1,9 +1,20 @@
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { QualityBadge } from './quality-badge';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Fragment } from '@/api/types';
+
+function nearDupBadge(info: NonNullable<Fragment['harvest_near_dup']>) {
+  const score = info.score ?? 0;
+  if (score >= 0.95)
+    return { label: 'Doublon', className: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300' };
+  if (score >= 0.80)
+    return { label: 'Forte sim.', className: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300' };
+  return { label: 'Proche de', className: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300' };
+}
 
 interface FragmentCardProps {
   fragment: Fragment;
@@ -44,7 +55,7 @@ export function FragmentCard({
           </h3>
           <QualityBadge quality={fragment.quality} />
         </div>
-        <div className="flex gap-1.5 mt-2">
+        <div className="flex flex-wrap gap-1.5 mt-2">
           <Badge
             variant="outline"
             className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
@@ -60,10 +71,52 @@ export function FragmentCard({
           <Badge variant="outline" className="text-xs">
             {fragment.lang}
           </Badge>
+          {fragment.harvest_near_dup && (() => {
+            const { label, className } = nearDupBadge(fragment.harvest_near_dup);
+            return (
+              <Badge variant="outline" className={cn('text-xs', className)}>
+                {label}
+                {fragment.harvest_near_dup.score != null && (
+                  <span className="ml-1 opacity-75">
+                    {Math.round(fragment.harvest_near_dup.score * 100)}%
+                  </span>
+                )}
+              </Badge>
+            );
+          })()}
         </div>
         <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
           {fragment.body_excerpt || '—'}
         </p>
+        {fragment.harvest_near_dup && (() => {
+          const score = fragment.harvest_near_dup.score ?? 0;
+          const pct = Math.round(score * 100);
+          const label = score >= 0.95 ? 'Doublon quasi-exact' : score >= 0.80 ? 'Forte similarité' : 'Proche de';
+          const colorCn = score >= 0.95
+            ? 'text-red-600 dark:text-red-400'
+            : score >= 0.80
+            ? 'text-orange-600 dark:text-orange-400'
+            : 'text-blue-600 dark:text-blue-400';
+          return (
+            <div className={cn('flex items-center gap-1 text-xs mt-1.5', colorCn)}>
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              <span>
+                {label} — <strong>{pct}%</strong>
+                {fragment.harvest_near_dup.method && (
+                  <span className="opacity-70"> ({fragment.harvest_near_dup.method})</span>
+                )}
+                {' avec '}
+                <Link
+                  to={`/fragments?fragment=${fragment.harvest_near_dup.fragment_id}`}
+                  className="font-mono underline underline-offset-2 hover:opacity-70"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {fragment.harvest_near_dup.fragment_id.slice(0, 8)}…
+                </Link>
+              </span>
+            </div>
+          );
+        })()}
       </CardContent>
     </Card>
   );

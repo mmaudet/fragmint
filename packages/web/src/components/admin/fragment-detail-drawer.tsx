@@ -9,6 +9,8 @@ import { apiRequest } from '@/api/client';
 import { Sheet, SheetContent, SheetClose, SheetTitle } from '@/components/ui/sheet';
 import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-editor';
+import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
 
 interface FragmentEntity {
   id: number;
@@ -44,6 +46,11 @@ interface FragmentDetail {
     approved_by?: string | null;
     [key: string]: unknown;
   };
+  harvest_near_dup?: {
+    fragment_id: string;
+    score: number | null;
+    method: string | null;
+  } | null;
 }
 
 interface Props {
@@ -105,13 +112,23 @@ function EntityPicker({ onAdd }: { onAdd: (entity: FragmentEntity) => void }) {
   );
 }
 
+const EMPTY_EDITS: MetaEdits = { type: '', domain: '', lang: '', tags: [], body: '' };
+
 export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ domain: '', type: '', lang: '', tags: '', body: '' });
+  const [form, setForm] = useState<MetaEdits>(EMPTY_EDITS);
   const [editEntities, setEditEntities] = useState<FragmentEntity[]>([]);
   const [open, setOpen] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Taxonomy data for dropdowns / autocomplete
+  const { data: domainsData } = useDomains();
+  const { data: typesData } = useTypes();
+  const { data: tagsData } = useTags();
+  const domains = (domainsData ?? []).map((d) => d.slug);
+  const types = (typesData ?? []).map((t) => t.slug);
+  const availableTags = (tagsData ?? []).map((t) => t.slug);
 
   const {
     data: frag,
@@ -125,10 +142,10 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
   useEffect(() => {
     if (frag) {
       setForm({
-        domain: frag.domain,
         type: frag.type,
+        domain: frag.domain,
         lang: frag.lang,
-        tags: (frag.tags ?? []).join(', '),
+        tags: frag.tags ?? [],
         body: frag.body ?? frag.body_excerpt ?? '',
       });
     }
@@ -136,7 +153,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
 
   useEffect(() => {
     setEditing(false);
-    setForm({ domain: '', type: '', lang: '', tags: '', body: '' });
+    setForm(EMPTY_EDITS);
     setEditEntities([]);
     setConfirmDelete(false);
   }, [fragmentId]);
@@ -160,16 +177,12 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const tags = form.tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
       await Promise.all([
         apiRequest('PUT', `/v1/fragments/${fragmentId}`, {
           domain: form.domain,
           type: form.type,
           lang: form.lang,
-          tags,
+          tags: form.tags,
           body: form.body || undefined,
         }),
         apiRequest('PUT', `/v1/fragments/${fragmentId}/entities`, {
@@ -290,90 +303,70 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 {frag.title || <em className="text-muted-foreground font-normal">Sans titre</em>}
               </h2>
 
-              {/* Core metadata grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Domaine</label>
-                  {editing ? (
-                    <input
-                      value={form.domain}
-                      onChange={(e) => setForm({ ...form, domain: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background"
-                    />
-                  ) : (
-                    <code className="text-sm">{frag.domain}</code>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Type</label>
-                  {editing ? (
-                    <input
-                      value={form.type}
-                      onChange={(e) => setForm({ ...form, type: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm font-mono bg-background"
-                    />
-                  ) : (
-                    <code className="text-sm">{frag.type}</code>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Langue</label>
-                  {editing ? (
-                    <select
-                      value={form.lang}
-                      onChange={(e) => setForm({ ...form, lang: e.target.value })}
-                      className="w-full px-2 py-1 border rounded text-sm bg-background"
-                    >
-                      <option value="fr">fr</option>
-                      <option value="en">en</option>
-                      <option value="es">es</option>
-                      <option value="pt">pt</option>
-                    </select>
-                  ) : (
-                    <span className="text-sm">{frag.lang}</span>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Utilisations</label>
-                  <span className="text-sm">{frag.uses}</span>
-                </div>
-                {frag.collection_slug && (
-                  <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Collection</label>
-                    <code className="text-sm">{frag.collection_slug}</code>
-                  </div>
-                )}
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Tags</label>
-                {editing ? (
-                  <input
-                    value={form.tags}
-                    onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                    placeholder="tag1, tag2, tag3"
-                    className="w-full px-2 py-1 border rounded text-sm bg-background"
-                  />
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {(frag.tags ?? []).length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Aucun tag</span>
-                    ) : (
-                      (frag.tags ?? []).map((t) => (
-                        <span
-                          key={t}
-                          className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded dark:bg-blue-900/30 dark:text-blue-300"
-                        >
-                          #{t}
-                        </span>
-                      ))
+              {editing ? (
+                /* ── Edit mode: unified meta + body editor ── */
+                <FragmentMetaEditor
+                  edits={form}
+                  onChange={setForm}
+                  types={types}
+                  domains={domains}
+                  availableTags={availableTags}
+                />
+              ) : (
+                /* ── Read mode: metadata grid + tags + body ── */
+                <>
+                  {/* Core metadata grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Domaine</label>
+                      <code className="text-sm">{frag.domain}</code>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Type</label>
+                      <code className="text-sm">{frag.type}</code>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Langue</label>
+                      <span className="text-sm">{frag.lang}</span>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">
+                        Utilisations
+                      </label>
+                      <span className="text-sm">{frag.uses}</span>
+                    </div>
+                    {frag.collection_slug && (
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Collection
+                        </label>
+                        <code className="text-sm">{frag.collection_slug}</code>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Entities */}
+                  {/* Tags */}
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">Tags</label>
+                    <div className="flex flex-wrap gap-1">
+                      {(frag.tags ?? []).length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Aucun tag</span>
+                      ) : (
+                        (frag.tags ?? []).map((t) => (
+                          <span
+                            key={t}
+                            className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded dark:bg-blue-900/30 dark:text-blue-300"
+                          >
+                            #{t}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Entities — shown in both modes */}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Entités</label>
                 {editing ? (
@@ -475,22 +468,15 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                 </div>
               )}
 
-              {/* Body */}
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Contenu</label>
-                {editing ? (
-                  <textarea
-                    value={form.body}
-                    onChange={(e) => setForm({ ...form, body: e.target.value })}
-                    rows={12}
-                    className="w-full px-2 py-1.5 border rounded text-xs font-sans bg-background resize-y"
-                  />
-                ) : (
+              {/* Body — read-only view only (editing uses FragmentMetaEditor above) */}
+              {!editing && (
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">Contenu</label>
                   <pre className="text-xs whitespace-pre-wrap font-sans bg-muted/40 rounded p-3 max-h-80 overflow-y-auto border">
                     {frag.body ?? frag.body_excerpt ?? '(vide)'}
                   </pre>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* System info */}
               <div className="border-t pt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -560,7 +546,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                   <button
                     onClick={() => deleteMutation.mutate()}
                     disabled={deleteMutation.isPending}
-                    className="px-2 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
+                    className="px-2 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/50 disabled:opacity-50"
                   >
                     {deleteMutation.isPending ? '…' : 'Supprimer'}
                   </button>

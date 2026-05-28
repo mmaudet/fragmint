@@ -90,10 +90,17 @@ export function adminFragmentRoutes(
       if (row.quality in byStatus) byStatus[row.quality as keyof typeof byStatus] = row.cnt;
     }
 
-    const items = rows.map((r) => ({
-      ...r,
-      tags: r.tags ? (JSON.parse(r.tags) as string[]) : [],
-    }));
+    const items = rows.map((r) => {
+      let tags: string[] = [];
+      if (r.tags) {
+        try {
+          tags = JSON.parse(r.tags) as string[];
+        } catch {
+          console.error(`[admin/fragments] malformed tags for fragment ${r.id}:`, r.tags);
+        }
+      }
+      return { ...r, tags };
+    });
 
     return reply.send({
       data: {

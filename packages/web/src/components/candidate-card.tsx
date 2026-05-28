@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ const SIMILARITY_BADGE: Record<
     className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   },
   high: {
-    label: 'Mise à jour ?',
+    label: 'Forte sim.',
     className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
   },
   moderate: {
@@ -54,13 +55,24 @@ export function CandidateCard({
   const pct =
     candidate.duplicate_score != null ? Math.round(candidate.duplicate_score * 100) : null;
 
+  const methodLabel =
+    candidate.duplicate_method === 'hash'
+      ? 'hash exact'
+      : candidate.duplicate_method === 'shingles'
+        ? `Jaccard shingles (${pct}%)`
+        : candidate.duplicate_method === 'cosine'
+          ? `similarité sémantique (${pct}%)`
+          : pct != null
+            ? `similarité ${pct}%`
+            : null;
+
   const tooltip =
     simLevel && candidate.duplicate_of && pct != null
       ? simLevel === 'exact'
-        ? `Doublon quasi-exact de ${candidate.duplicate_of} (${pct}%)`
+        ? `Doublon quasi-exact de ${candidate.duplicate_of}${methodLabel ? ` — ${methodLabel}` : ''}`
         : simLevel === 'high'
-          ? `Forte similarité avec ${candidate.duplicate_of} (${pct}%) — possible mise à jour`
-          : `Similarité modérée avec ${candidate.duplicate_of} (${pct}%)`
+          ? `Forte similarité avec ${candidate.duplicate_of}${methodLabel ? ` — ${methodLabel}` : ''}`
+          : `Similarité modérée avec ${candidate.duplicate_of}${methodLabel ? ` — ${methodLabel}` : ''}`
       : undefined;
 
   return (
@@ -79,9 +91,8 @@ export function CandidateCard({
           {simLevel ? (
             <Badge
               className={cn('text-xs shrink-0', SIMILARITY_BADGE[simLevel].className)}
-              title={tooltip}
             >
-              {SIMILARITY_BADGE[simLevel].label}
+              {SIMILARITY_BADGE[simLevel].label}{pct != null ? ` ${pct}%` : ''}
             </Badge>
           ) : (
             <Badge
@@ -122,7 +133,7 @@ export function CandidateCard({
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
 
-        {simLevel && tooltip && (
+        {simLevel && candidate.duplicate_of && pct != null && (
           <div
             className={cn(
               'flex items-center gap-1 text-xs',
@@ -138,7 +149,19 @@ export function CandidateCard({
             ) : (
               <AlertTriangle className="h-3 w-3 shrink-0" />
             )}
-            <span className="truncate">{tooltip}</span>
+            <span className="truncate">
+              {simLevel === 'exact' ? 'Doublon quasi-exact' : simLevel === 'high' ? 'Forte similarité' : 'Proche de'}
+              {' — '}<strong>{pct}%</strong>
+              {candidate.duplicate_method && <span className="opacity-70"> ({candidate.duplicate_method})</span>}
+              {' avec '}
+              <Link
+                to={`/fragments?fragment=${candidate.duplicate_of}`}
+                className="font-mono underline underline-offset-2 hover:opacity-80"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {candidate.duplicate_of.slice(0, 8)}…
+              </Link>
+            </span>
           </div>
         )}
 

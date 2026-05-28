@@ -8,6 +8,7 @@ import {
   useDeleteFragment,
 } from '@/api/hooks/use-fragments';
 import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
+import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { useCurrentUser, canDelete } from '@/api/hooks/use-current-user';
@@ -26,7 +27,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, Save, Trash2 } from 'lucide-react';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
@@ -243,6 +244,38 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   </div>
                 </SheetDescription>
               </SheetHeader>
+
+              {fragment.harvest_near_dup && (() => {
+                const score = fragment.harvest_near_dup.score ?? 0;
+                const level = score >= 0.95 ? 'exact' : score >= 0.80 ? 'high' : 'moderate';
+                const labelText = level === 'exact' ? 'Doublon quasi-exact' : level === 'high' ? 'Forte similarité' : 'Proche de';
+                const bannerCn = level === 'exact'
+                  ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
+                  : level === 'high'
+                  ? 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200'
+                  : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200';
+                return (
+                  <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${bannerCn}`}>
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>{labelText}</strong> lors du harvest —{' '}
+                      {fragment.harvest_near_dup!.score != null && (
+                        <strong>{Math.round(fragment.harvest_near_dup!.score * 100)}%</strong>
+                      )}
+                      {fragment.harvest_near_dup!.method && (
+                        <span className="opacity-70"> ({fragment.harvest_near_dup!.method})</span>
+                      )}{' '}
+                      avec{' '}
+                      <Link
+                        to={`/fragments?fragment=${fragment.harvest_near_dup!.fragment_id}`}
+                        className="font-mono text-xs underline underline-offset-2 hover:opacity-70"
+                      >
+                        {fragment.harvest_near_dup!.fragment_id.slice(0, 8)}…
+                      </Link>
+                    </span>
+                  </div>
+                );
+              })()}
 
               <FragmentMetaEditor
                 edits={{
