@@ -599,7 +599,7 @@ export class ComposerService {
             id: full.id,
             body: full.body,
             quality: full.quality,
-            score: result.score,
+            score: result.score ?? 0,
             tags: full.frontmatter?.tags ?? [],
           });
         }

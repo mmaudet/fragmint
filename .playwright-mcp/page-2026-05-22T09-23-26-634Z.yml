@@ -1,8 +1,0 @@
-- generic [ref=e2]:
-  - generic [ref=e4]:
-    - generic [ref=e6]: Fragmint
-    - generic [ref=e8]:
-      - textbox "Nom d'utilisateur" [active] [ref=e9]
-      - textbox "Mot de passe" [ref=e10]
-      - button "Se connecter" [ref=e11] [cursor=pointer]
-  - region "Notifications alt+T"
