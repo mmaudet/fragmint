@@ -257,6 +257,26 @@ await llmClient.complete([
 
 ---
 
+## Scoring Architecture
+
+Three scoring systems — each has a specific algorithm:
+
+| System | File | Algorithm |
+|--------|------|-----------|
+| Retrieval hybrid | `retrieval/hybrid-retriever.ts` | RRF (Cormack 2009), k=60 |
+| Retrieval vector-only | `retrieval/vector-retriever.ts` | Milvus cosine + quality re-rank |
+| Duplicate detection | `services/harvester-pipeline.ts` | Cascade: hash → shingles (0.70, configurable) → cosine (0.65) |
+| Supersedure pre-filter | `services/supersedure-detector.ts` | Jaccard shingles k=3, threshold 0.20 |
+
+Key invariants:
+- SQLite LIKE fallback → `score: null` (never a fake constant)
+- Vector scores capped at 1.0 (re-ranking can exceed 1.0)
+- `score_breakdown` is always optional — old plan state JSON without it is backward-compat
+- Shingles utility lives in `services/dedupe/shingles.ts` (zero npm deps)
+- Full docs: `docs/scoring.md`
+
+---
+
 ## Template Syntax (docx-templates)
 
 **NOT Handlebars.** Use docx-templates syntax in Word files:

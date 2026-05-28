@@ -30,3 +30,12 @@ e2e/demo/output/
 *.db-journal
 # Personal notes and learning references (local only)
 .claude/notes/
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# Local test/scratch files
+docs/test-*.txt
+docs/test-retrieval/
+test_output.txt
+/tmp/
