@@ -64,7 +64,7 @@ describe('Admin retrieval mode routes', () => {
     const res = await api('POST', '/v1/admin/retrieval/mode', { mode: 'turbo-mode' });
     expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body);
-    expect(body.error).toContain('mode must be one of');
+    expect(body.error).toContain('Invalid enum value');
   });
 
   // Test 5: GET with admin token returns current mode

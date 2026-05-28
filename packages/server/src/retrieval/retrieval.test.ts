@@ -260,18 +260,16 @@ function fakeFragmentService(bodies: Record<string, string> = {}): FragmentServi
 }
 
 describe('AgenticRetriever', () => {
-  it('judgeFragmentWithTemp passes no temperature override by default (options=undefined)', async () => {
+  it('phase2 batch uses no temperature override by default', async () => {
     let callCount = 0;
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       callCount++;
       if (callCount === 1) {
-        // Phase 1 — return array
+        // Phase 1 — return array of IDs
         return '["frag-uuid-1"]';
       } else {
-        // Phase 2 — return object
-        return opts?.temperature === 0.4
-          ? '{"score": 6, "reason": "temp-0.4"}'
-          : '{"score": 8, "reason": "default"}';
+        // Phase 2 — return batch array
+        return '[{"id":"frag-uuid-1","score":8,"reason":"default"}]';
       }
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
@@ -284,9 +282,9 @@ describe('AgenticRetriever', () => {
 
     await retriever.searchForSection({ text: 'test', filters: {}, collectionSlug: null });
 
-    // Phase1 call (returns array) + Phase2 call (returns object) = 2 total
+    // Phase1 call (returns ID array) + Phase2 batch call (returns score array) = 2 total
     expect(llmSpy.mock.calls).toHaveLength(2);
-    // Phase2 call has no temperature override
+    // Phase2 batch call has no temperature override
     const phase2Call = llmSpy.mock.calls[1];
     expect(phase2Call?.[1]).toBeUndefined();
   });
@@ -294,8 +292,8 @@ describe('AgenticRetriever', () => {
   it('phase1 parses the LLM JSON array of UUIDs', async () => {
     const llm = fakeLlmClient([
       '["frag-uuid-1", "frag-uuid-2"]', // phase 1
-      '{"score": 8, "reason": "relevant"}', // phase 2 — frag-uuid-1
-      '{"score": 4, "reason": "partial"}', // phase 2 — frag-uuid-2
+      // phase 2 batch — scores both fragments in one call
+      '[{"id":"frag-uuid-1","score":8,"reason":"relevant"},{"id":"frag-uuid-2","score":4,"reason":"partial"}]',
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexService(),
@@ -344,7 +342,7 @@ describe('AgenticRetriever', () => {
   it('filters out fragments with score below 0.3 after normalization', async () => {
     const llm = fakeLlmClient([
       '["frag-low"]',
-      '{"score": 2, "reason": "poor match"}', // 2/10 = 0.2 < threshold
+      '[{"id":"frag-low","score":2,"reason":"poor match"}]', // 2/10 = 0.2 < threshold
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexService(),
@@ -390,7 +388,7 @@ describe('AgenticRetriever — readable_id → UUID mapping', () => {
   it('translates readable_id returned by LLM to UUID before judging', async () => {
     const llm = fakeLlmClient([
       '["LC-arg-001"]', // phase1 — readable_id
-      '{"score": 8, "reason": "relevant"}', // phase2
+      '[{"id":"frag-uuid-1","score":8,"reason":"relevant"}]', // phase2 batch
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexService(),
@@ -412,7 +410,7 @@ describe('AgenticRetriever — readable_id → UUID mapping', () => {
   it('passthroughs UUID strings not in the idMap', async () => {
     const llm = fakeLlmClient([
       '["frag-uuid-1"]', // phase1 — raw UUID
-      '{"score": 7, "reason": "ok"}',
+      '[{"id":"frag-uuid-1","score":7,"reason":"ok"}]', // phase2 batch
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexService(),
@@ -430,7 +428,7 @@ describe('AgenticRetriever — readable_id → UUID mapping', () => {
 
 describe('AgenticRetriever — Phase 0 TOC filtering', () => {
   it('skips phase0 when domain filter is set (regardless of index size)', async () => {
-    const llm = fakeLlmClient(['["LC-arg-001"]', '{"score": 8, "reason": "ok"}']);
+    const llm = fakeLlmClient(['["LC-arg-001"]', '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]']);
     const retriever = new AgenticRetriever(
       fakeIndexServiceLarge(),
       llm,
@@ -446,7 +444,7 @@ describe('AgenticRetriever — Phase 0 TOC filtering', () => {
   });
 
   it('skips phase0 when index is small (total <= 200)', async () => {
-    const llm = fakeLlmClient(['["LC-arg-001"]', '{"score": 8, "reason": "ok"}']);
+    const llm = fakeLlmClient(['["LC-arg-001"]', '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]']);
     const retriever = new AgenticRetriever(
       fakeIndexService(), // total=1
       llm,
@@ -460,7 +458,7 @@ describe('AgenticRetriever — Phase 0 TOC filtering', () => {
     const llm = fakeLlmClient([
       '["cloud:argument"]', // phase0
       '["LC-arg-001"]', // phase1
-      '{"score": 8, "reason": "ok"}', // phase2
+      '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]', // phase2 batch
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexServiceLarge(),
@@ -475,7 +473,7 @@ describe('AgenticRetriever — Phase 0 TOC filtering', () => {
     const llm = fakeLlmClient([
       'not json at all', // phase0 → fallback
       '["LC-arg-001"]', // phase1 on full index
-      '{"score": 8, "reason": "ok"}',
+      '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]', // phase2 batch
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexServiceLarge(),
@@ -494,7 +492,7 @@ describe('AgenticRetriever — Phase 0 TOC filtering', () => {
     const llm = fakeLlmClient([
       '["nonexistent:argument"]', // phase0 → invalid combination → null → fallback
       '["LC-arg-001"]',
-      '{"score": 7, "reason": "ok"}',
+      '[{"id":"frag-uuid-1","score":7,"reason":"ok"}]', // phase2 batch
     ]);
     const retriever = new AgenticRetriever(
       fakeIndexServiceLarge(),
@@ -556,12 +554,12 @@ describe('HybridRetriever (RRF)', () => {
       { text: 'x', filters: {}, collectionSlug: null },
       2,
     );
-    // f1: rank 1 vector + rank 3 LLM = 1/61 + 1/63 ≈ 0.0321
-    // f3: rank 3 vector + rank 1 LLM = 1/63 + 1/61 ≈ 0.0321 (symmetric — very close)
-    // Both should appear in top 2
+    // f3: rank 3 vector + rank 1 LLM → promoted by RRF
+    // f1: rank 1 vector + rank 3 LLM, but llm_score=1 < llmFloor=3 → dropped by floor
+    // f2: rank 2 vector + rank 2 LLM → survives floor (score=5 >= 3)
     const ids = results.map((r) => r.fragment_id);
-    expect(ids).toContain('f3');
-    expect(ids).toContain('f1');
+    expect(ids).toContain('f3'); // RRF promotion confirmed
+    expect(ids).toContain('f2'); // f1 dropped by floor, f2 fills top 2
   });
 
   it('falls back to neutral LLM score when LLM returns unparseable response', async () => {
@@ -608,12 +606,12 @@ describe('HybridRetriever (RRF)', () => {
 describe('AgenticRetriever — self-consistency (Phase 2)', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('calls judgeFragmentWithTemp twice with different temperatures (0.2 and 0.4)', async () => {
+  it('calls batch judge twice with different temperatures (0.2 and 0.4)', async () => {
     const temperatures: number[] = [];
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
+      if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
       if (opts?.temperature !== undefined) temperatures.push(opts.temperature);
-      if (temperatures.length === 0) return '["frag-uuid-1"]'; // phase1
-      return '{"score": 8, "reason": "ok"}'; // phase2 agents
+      return '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]'; // phase2 batch agents
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -633,9 +631,9 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
   it('uses minimum of 2 agent scores as final score', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
-      if (opts?.temperature === undefined) return '["frag-uuid-1"]'; // phase1 (no temp override)
-      if (opts.temperature === 0.2) return '{"score": 8, "reason": "agent1"}'; // SELF_CONSISTENCY_AGENT1_TEMP → 0.8
-      return '{"score": 3, "reason": "agent2"}'; // SELF_CONSISTENCY_AGENT2_TEMP (0.4) → 0.3
+      if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
+      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
+      return '[{"id":"frag-uuid-1","score":3,"reason":"agent2"}]'; // 0.3
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -655,9 +653,9 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
   it('drops fragment when min score is below threshold (0.3)', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
-      if (opts?.temperature === undefined) return '["frag-uuid-1"]'; // phase1
-      if (opts.temperature === 0.2) return '{"score": 8, "reason": "agent1"}'; // 0.8
-      return '{"score": 2, "reason": "agent2"}'; // 0.2 < threshold
+      if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
+      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
+      return '[{"id":"frag-uuid-1","score":2,"reason":"agent2"}]'; // 0.2 < threshold
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -676,9 +674,9 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
   it('logs STRONG_DISAGREEMENT when agents differ by > 0.3', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
-      if (opts?.temperature === undefined) return '["frag-uuid-1"]';
-      if (opts.temperature === 0.2) return '{"score": 9, "reason": "agent1"}'; // 0.9
-      return '{"score": 4, "reason": "agent2"}'; // 0.4 → diff = 0.5 > 0.3
+      if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
+      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":9,"reason":"agent1"}]'; // 0.9
+      return '[{"id":"frag-uuid-1","score":4,"reason":"agent2"}]'; // 0.4 → diff=0.5 > 0.3
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -709,7 +707,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
     const llmSpy = vi.fn(async () => {
       callCount++;
       if (callCount === 1) return '["frag-uuid-1"]';
-      return '{"score": 7, "reason": "ok"}';
+      return '[{"id":"frag-uuid-1","score":7,"reason":"ok"}]'; // single batch call
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -837,9 +835,9 @@ describe('factory', () => {
 
   it('agentic-only retriever has selfConsistency enabled (3 LLM calls: phase1 + 2x phase2)', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
-      if (opts?.temperature === undefined) return '["frag-uuid-1"]'; // phase1
-      if (opts.temperature === 0.2) return '{"score": 8, "reason": "ok"}'; // agent1
-      return '{"score": 7, "reason": "ok"}'; // agent2
+      if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
+      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"ok"}]'; // agent1
+      return '[{"id":"frag-uuid-1","score":7,"reason":"ok"}]'; // agent2
     });
 
     const deps: RetrieverDeps = {
