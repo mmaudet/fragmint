@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TrustBadge } from '@/components/admin/harvest/trust-badge';
+import { MultiAutocompleteSelect } from './multi-autocomplete-select';
 import { useI18n } from '@/lib/i18n';
 import type { HarvestCandidate } from '@/api/types';
 
@@ -38,7 +39,7 @@ export function CandidateSheet({
   const [type, setType] = useState('');
   const [domain, setDomain] = useState('');
   const [lang, setLang] = useState('');
-  const [tagsStr, setTagsStr] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (candidate) {
@@ -47,7 +48,7 @@ export function CandidateSheet({
       setType(candidate.type ?? '');
       setDomain(candidate.domain ?? '');
       setLang(candidate.lang ?? '');
-      setTagsStr((candidate.tags ?? []).join(', '));
+      setTags(candidate.tags ?? []);
     }
   }, [candidate?.id]);
 
@@ -55,27 +56,19 @@ export function CandidateSheet({
 
   if (!candidate) return null;
 
+  const candidateTags = candidate.tags ?? [];
   const isModified =
     title !== candidate.title ||
     body !== candidate.body ||
     type !== candidate.type ||
     domain !== candidate.domain ||
     lang !== candidate.lang ||
-    tagsStr !== (candidate.tags ?? []).join(', ');
+    tags.length !== candidateTags.length ||
+    tags.some((t, i) => t !== candidateTags[i]);
 
   const buildMod = (): CandidateMod | undefined => {
     if (!isModified) return undefined;
-    return {
-      title,
-      body,
-      type,
-      domain,
-      lang,
-      tags: tagsStr
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-    };
+    return { title, body, type, domain, lang, tags };
   };
 
   return (
@@ -137,13 +130,13 @@ export function CandidateSheet({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              Tags (séparés par des virgules)
-            </label>
-            <input
-              className="w-full text-sm border rounded px-2 py-1.5 bg-background"
-              value={tagsStr}
-              onChange={(e) => setTagsStr(e.target.value)}
+            <label className="text-xs font-medium text-muted-foreground">Tags</label>
+            <MultiAutocompleteSelect
+              kind="tag"
+              values={tags}
+              onChange={setTags}
+              placeholder="Ajouter un tag…"
+              allowCreate
             />
           </div>
 

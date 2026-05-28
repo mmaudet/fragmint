@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { Plan } from '@/api/types';
 import { useGeneratePlan, useUpdatePlan, useValidatePlan } from '@/api/hooks/use-plans';
 import { useFacets } from '@/api/hooks/use-facets';
@@ -20,9 +19,8 @@ import { toast } from 'sonner';
 import { Loader2, Info } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
-export function SpecStep({ plan }: { plan: Plan }) {
+export function SpecStep({ plan, onValidated }: { plan: Plan; onValidated?: () => void }) {
   const { t } = useI18n();
-  const nav = useNavigate();
   const update = useUpdatePlan(plan.id);
   const generate = useGeneratePlan(plan.id);
   const validate = useValidatePlan(plan.id);
@@ -69,8 +67,7 @@ export function SpecStep({ plan }: { plan: Plan }) {
   async function handleValidate() {
     try {
       await validate.mutateAsync();
-      nav(`/plan-generation?id=${plan.id}`, { replace: true });
-      // Workspace will switch to step 2 once status is plan_validated
+      onValidated?.();
     } catch (e: any) {
       toast.error(`Validation failed: ${e.message ?? e}`);
     }

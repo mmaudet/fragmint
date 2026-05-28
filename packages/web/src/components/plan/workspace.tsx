@@ -160,7 +160,7 @@ export function Workspace({ planId }: { planId: string }) {
       )}
 
       <div className="flex-1 overflow-y-auto">
-        {activeStep === 0 && <SpecStep plan={plan} />}
+        {activeStep === 0 && <SpecStep plan={plan} onValidated={() => setStep(1)} />}
         {activeStep === 1 && <FragmentsStep plan={plan} onValidated={() => setStep(2)} />}
         {activeStep === 2 && <DraftsStep plan={plan} onAssembled={() => setStep(3)} />}
         {activeStep === 3 && <ExportStep plan={plan} />}

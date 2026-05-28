@@ -26,6 +26,7 @@ import {
   Sparkles,
   Tags,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
@@ -320,10 +321,18 @@ export default function HarvestPage() {
             {files.map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <span>{f.name}</span>
+                <span className="flex-1">{f.name}</span>
                 <Badge variant="outline" className="text-xs">
                   {(f.size / 1024).toFixed(0)} KB
                 </Badge>
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={`Retirer ${f.name}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
           </div>

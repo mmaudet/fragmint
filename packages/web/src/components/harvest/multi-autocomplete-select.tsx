@@ -25,6 +25,7 @@ export function MultiAutocompleteSelect({
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debouncedQuery = useDebouncedValue(query, 300);
   const { data = [] } = useReferenceLookup(kind, debouncedQuery);
   const ref = useRef<HTMLDivElement>(null);
@@ -36,6 +37,11 @@ export function MultiAutocompleteSelect({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Reset highlight when suggestions change
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [data]);
 
   const add = (item: ReferenceItem) => {
     if (!values.includes(item.slug)) onChange([...values, item.slug]);
@@ -63,6 +69,37 @@ export function MultiAutocompleteSelect({
 
   const isKnown = (v: string) => !knownSlugs || knownSlugs.includes(v);
 
+  const totalItems = filteredItems.length + (showCreate ? 1 : 0);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || totalItems === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (allowCreate && query.trim()) addFreeText();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i + 1) % totalItems);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((i) => (i - 1 + totalItems) % totalItems);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredItems.length) {
+        add(filteredItems[highlightedIndex]);
+      } else if (highlightedIndex === filteredItems.length && showCreate) {
+        addFreeText();
+      } else if (allowCreate && query.trim()) {
+        addFreeText();
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
   return (
     <div ref={ref} className="relative">
       <div className="flex flex-wrap gap-1 mb-1">
@@ -86,22 +123,17 @@ export function MultiAutocompleteSelect({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            if (allowCreate && query.trim()) addFreeText();
-          }
-        }}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="text-sm"
       />
       {open && (filteredItems.length > 0 || showCreate) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
-          {filteredItems.map((item) => (
+          {filteredItems.map((item, idx) => (
             <button
               key={item.slug}
               type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent ${highlightedIndex === idx ? 'bg-accent' : ''}`}
               onMouseDown={() => add(item)}
             >
               {item.label}
@@ -110,7 +142,7 @@ export function MultiAutocompleteSelect({
           {showCreate && (
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic"
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-blue-600 dark:text-blue-400 italic ${highlightedIndex === filteredItems.length ? 'bg-accent' : ''}`}
               onMouseDown={addFreeText}
             >
               Créer &ldquo;{query.trim()}&rdquo;
