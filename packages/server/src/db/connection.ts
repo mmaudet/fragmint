@@ -470,6 +470,13 @@ export function createDb(path: string | ':memory:') {
     // json_each may not be available in very old SQLite — skip silently
   }
 
+  // Migration 016 — harvest_candidates: duplicate_method column
+  try {
+    sqlite.exec(
+      "ALTER TABLE harvest_candidates ADD COLUMN duplicate_method TEXT",
+    );
+  } catch (_) {}
+
   const db = drizzle(sqlite, { schema });
   return db;
 }

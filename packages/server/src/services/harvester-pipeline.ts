@@ -18,7 +18,9 @@ import {
   fragments,
   entities,
 } from '../db/schema.js';
-import { detectExactDuplicate, computeQualitySignals } from './quality-signals.js';
+import { computeQualitySignals } from './quality-signals.js';
+import { generateShingles } from './dedupe/shingles.js';
+import { detectDuplicate } from './dedupe/duplicate-detector.js';
 import { shouldRunJudge, runQualityJudge } from './quality-judge.js';
 import type { JudgeResult } from './quality-judge.js';
 import type { LlmClient, CombinedBlock } from './llm-client.js';
@@ -51,10 +53,8 @@ export async function runPipeline(
   filenames: string[],
   _minConfidence: number,
   uploadHints: UploadHints = {},
+  dupeShinglesThreshold = 0.70,
 ): Promise<void> {
-  // ── SENTINEL: confirms new code is running ──────────────────────────────
-  console.log(`[dup-detect] ▶ runPipeline START jobId=${jobId} files=${files.length}`);
-  // ───────────────────────────────────────────────────────────────────────
   try {
     const existingTypes = (await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map(
       (r) => r.slug,
@@ -96,12 +96,32 @@ export async function runPipeline(
     // body_excerpt stores first 200 chars — sufficient for normalizeForComparison (truncates to 200)
     const existingFragmentRows = (
       await db
-        .select({ id: fragments.id, type: fragments.type, body_excerpt: fragments.body_excerpt })
+        .select({
+          id: fragments.id,
+          type: fragments.type,
+          domain: fragments.domain,
+          lang: fragments.lang,
+          body_excerpt: fragments.body_excerpt,
+        })
         .from(fragments)
         .where(inArray(fragments.quality, ['reviewed', 'approved']))
     )
       .filter((r) => r.body_excerpt != null)
-      .map((r) => ({ id: r.id, type: r.type, body: r.body_excerpt! }));
+      .map((r) => ({
+        id: r.id,
+        type: r.type,
+        domain: r.domain,
+        lang: r.lang,
+        body: r.body_excerpt!,
+      }));
+
+    // Threshold for shingles Jaccard similarity — wired from config via caller.
+    const SHINGLES_THRESHOLD = dupeShinglesThreshold;
+    // Pre-calculate shingles for ALL existing fragments once, before the file loop.
+    // Avoids recomputing shingle sets for every candidate across multiple files.
+    const existingShinglesMap = new Map<string, Set<string>>(
+      existingFragmentRows.map((r) => [r.id, generateShingles(r.body, 3)]),
+    );
 
     let totalCandidates = 0;
     let duplicatesCount = 0;
@@ -185,69 +205,20 @@ export async function runPipeline(
       const t1 = Date.now();
       console.log(`[dup-detect] ── starting detection for ${blocks.length} candidate(s) ──`);
       const dupeChecks = await Promise.all(
-        blocks.map(async (block, bi) => {
+        blocks.map(async (block) => {
           const title = (block.title || 'untitled').slice(0, 50);
-
-          // ── header ──────────────────────────────────────────────────────
           console.log(`[dup-detect] candidate "${title}" — checking duplicates`);
           console.log(
             `[dup-detect]   filters: domain=${block.domain}, type=${block.type}, lang=${block.lang}`,
           );
-
-          // 1. Exact match — always runs, Milvus-independent
           console.log(`[dup-detect]   exact-match pool size: ${existingFragmentRows.length}`);
-          const exactDup = detectExactDuplicate(block, existingFragmentRows);
-          if (exactDup) {
-            console.log(`[dup-detect]   exact-match result: HIT ${exactDup.id}`);
-            console.log(`[dup-detect]   final verdict: DOUBLON (exact hash match, score=1.0)`);
-            return exactDup;
-          }
-          console.log(`[dup-detect]   exact-match result: MISS`);
-
-          // 2. Near match via Milvus vector similarity — searchVector() returns null if Milvus
-          //    is disabled or unavailable, never falls back to SQLite (SQLite LIKE scores are
-          //    a constant ~0.65 and would produce false near-duplicates).
-          //    Filter by domain/type/lang to prevent cross-domain false matches.
-          const milvusFilters = { domain: [block.domain], type: [block.type], lang: block.lang };
-          console.log(
-            `[dup-detect]   near-match Milvus call with filters=${JSON.stringify(milvusFilters)}`,
+          return detectDuplicate(
+            block,
+            existingFragmentRows,
+            existingShinglesMap,
+            SHINGLES_THRESHOLD,
+            searchService,
           );
-          const vectorResults = await searchService.searchVector(block.body, milvusFilters, 1);
-          if (vectorResults === null) {
-            console.log(`[dup-detect]   near-match score: no match (Milvus disabled)`);
-            console.log(`[dup-detect]   final verdict: OK (Milvus unavailable — exact-hash only)`);
-            return null;
-          }
-          if (vectorResults.length === 0) {
-            console.log(`[dup-detect]   near-match score: no match (0 Milvus results)`);
-            console.log(`[dup-detect]   final verdict: OK (no Milvus results)`);
-            return null;
-          }
-          // Cap at 1.0: re-ranking boosts on some paths can push cosine above 1.0
-          const raw = vectorResults[0].score;
-          const nearMatchScore = Math.min(raw, 1.0);
-          const pct = Math.round(nearMatchScore * 100);
-          console.log(
-            `[dup-detect]   near-match score: ${nearMatchScore.toFixed(4)} (${pct}%) — fragment id=${vectorResults[0].id} raw=${raw.toFixed(4)}`,
-          );
-          if (nearMatchScore > 0.7) {
-            const reason =
-              nearMatchScore >= 0.95
-                ? 'quasi-exact duplicate'
-                : nearMatchScore >= 0.8
-                  ? 'strong similarity — possible update'
-                  : 'moderate similarity';
-            const verdict =
-              nearMatchScore >= 0.95
-                ? 'DOUBLON'
-                : nearMatchScore >= 0.8
-                  ? 'MISE-A-JOUR?'
-                  : 'PROCHE';
-            console.log(`[dup-detect]   final verdict: ${verdict} (${reason}, score=${pct}%)`);
-            return { id: vectorResults[0].id, score: nearMatchScore };
-          }
-          console.log(`[dup-detect]   final verdict: OK (score ${pct}% below 70% threshold)`);
-          return null;
         }),
       );
       // ── summary ──────────────────────────────────────────────────────────
@@ -358,6 +329,7 @@ export async function runPipeline(
             origin_page: null,
             duplicate_of: dupeChecks[j]?.id ?? null,
             duplicate_score: dupeChecks[j]?.score ?? null,
+            duplicate_method: dupeChecks[j]?.method ?? null,
             status: 'pending',
           })),
         );

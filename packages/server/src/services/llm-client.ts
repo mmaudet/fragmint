@@ -208,6 +208,23 @@ Extract reusable content blocks from the document and classify each one using st
 ## type — the content type. MUST be one of:
   ${JSON.stringify(validTypes)}
 
+  Type disambiguation (use these definitions to pick the right type):
+  - "introduction": general product/company/service overview
+  - "argument": commercial or technical argument, competitive advantage
+  - "use-case": generic usage scenario WITHOUT naming a specific client or organization
+  - "reference": named organization's deployment with specific context or measurable results (référence client)
+  - "testimonial": direct quote or explicit endorsement from a named client
+  - "methodology": technical approach, architecture, process description
+  - "pricing": pricing, offers, licensing models
+  - "faq": questions and answers format
+  - "clause": contractual clause, SLA, legal commitment
+  - "engagement": service commitment, guarantee, support level
+  - "conclusion": synthesis, closing statement
+  - "bio": person or organization profile
+  KEY DISTINCTION — "use-case" vs "reference":
+    → "reference" if: a named organization is cited + specific deployment details OR measurable results
+    → "use-case" if: describes a generic scenario or workflow without naming a real client
+
 ## audience — who this block targets. JSON array with 1-3 values from:
   ["technical", "decision-maker", "user", "legal"]
 

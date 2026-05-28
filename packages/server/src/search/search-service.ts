@@ -36,7 +36,7 @@ export interface SearchFilters {
 
 export interface SearchResult {
   id: string;
-  score: number;
+  score: number | null;
   title: string | null;
   body_excerpt: string | null;
   type: string;
@@ -64,6 +64,9 @@ export function reRankResults(results: SearchResult[]): SearchResult[] {
 
   return results
     .map((r) => {
+      // SQLite fallback results have null scores — pass through unchanged
+      if (r.score == null) return r;
+
       let adjustedScore = r.score;
 
       // Quality boost
@@ -88,7 +91,13 @@ export function reRankResults(results: SearchResult[]): SearchResult[] {
 
       return { ...r, score: adjustedScore };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      // null scores sort to the bottom
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return b.score - a.score;
+    });
 }
 
 /**
@@ -239,7 +248,7 @@ export class SearchService {
 
       const rowMap = new Map(rows.map((r) => [r.id, r]));
       return milvusResults
-        .map((mr) => {
+        .map((mr): SearchResult | null => {
           const row = rowMap.get(mr.id);
           if (!row) return null;
           return {
@@ -317,7 +326,7 @@ export class SearchService {
 
           const rowMap = new Map(rows.map((r) => [r.id, r]));
           const enriched = milvusResults
-            .map((mr) => {
+            .map((mr): SearchResult | null => {
               const row = rowMap.get(mr.id);
               if (!row) return null;
               return {
@@ -459,7 +468,7 @@ export class SearchService {
 
     const results = rows.map((row) => ({
       id: row.id,
-      score: 0.6, // no vector score in SQLite fallback — treat any LIKE match as relevant
+      score: null as null,  // SQLite LIKE has no ranking signal — consumers must handle null
       title: row.title,
       body_excerpt: row.body_excerpt,
       type: row.type,
@@ -470,6 +479,8 @@ export class SearchService {
       uses: row.uses,
       updated_at: row.updated_at,
     }));
-    return reRankResults(results);
+    // Do NOT call reRankResults — it multiplies score and null * number = NaN
+    // Order by uses desc is already applied in the SQL query above
+    return results;
   }
 }

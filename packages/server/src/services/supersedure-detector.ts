@@ -8,8 +8,9 @@ import {
   entities as entitiesTable,
 } from '../db/schema.js';
 import type { LlmClient } from './llm-client.js';
+import { generateShingles, jaccardSimilarity } from './dedupe/shingles.js';
 
-const JACCARD_THRESHOLD = 0.25;
+const JACCARD_THRESHOLD = 0.20;  // lowered from 0.25: shingles k=3 are more precise
 const LLM_CONFIDENCE_MIN = 0.65;
 
 const SYSTEM_PROMPT = `You are a document supersedure judge. Given two knowledge fragments A (older) and B (newer), decide whether B supersedes A.
@@ -26,26 +27,6 @@ Return ONLY valid JSON with no surrounding text:
 - COEXIST: Both fragments contain useful, complementary knowledge. Keep both.
 - DIFFERENT_TOPIC: The fragments are about different subjects despite surface similarity.
 - elements_lost_in_b: important facts present in A but missing from B (only when SUPERSEDE).`;
-
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .split(/\W+/)
-      .filter((t) => t.length > 2),
-  );
-}
-
-function jaccard(a: string, b: string): number {
-  const setA = tokenize(a);
-  const setB = tokenize(b);
-  if (setA.size === 0 || setB.size === 0) return 0;
-  let intersection = 0;
-  for (const token of setA) {
-    if (setB.has(token)) intersection++;
-  }
-  return intersection / (setA.size + setB.size - intersection);
-}
 
 interface LlmJudgment {
   recommendation: 'SUPERSEDE' | 'COEXIST' | 'DIFFERENT_TOPIC';
@@ -152,7 +133,10 @@ export async function detectAndPropose(
     const oldBody = candidate.body_excerpt ?? '';
     if (!oldBody) continue;
 
-    const score = jaccard(newFrag.body_excerpt, oldBody);
+    const score = jaccardSimilarity(
+      generateShingles(newFrag.body_excerpt, 3),
+      generateShingles(oldBody, 3),
+    );
     if (score < JACCARD_THRESHOLD) continue;
 
     const existing = await db

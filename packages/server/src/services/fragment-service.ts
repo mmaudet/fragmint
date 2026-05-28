@@ -11,6 +11,7 @@ import {
   fragmentEntities,
   entities as entitiesTable,
   fragmentTagLinks,
+  harvestCandidates,
 } from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
@@ -202,9 +203,40 @@ export class FragmentService {
       .innerJoin(entitiesTable, eq(entitiesTable.id, fragmentEntities.entity_id))
       .where(eq(fragmentEntities.fragment_id, id));
 
+    // If the fragment came from harvest, surface near-dup detection info for the validation UI
+    let harvest_near_dup: {
+      fragment_id: string;
+      score: number | null;
+      method: string | null;
+    } | null = null;
+    if (row.origin === 'harvested') {
+      const dupRows = await this.db
+        .select({
+          duplicate_of: harvestCandidates.duplicate_of,
+          duplicate_score: harvestCandidates.duplicate_score,
+          duplicate_method: harvestCandidates.duplicate_method,
+        })
+        .from(harvestCandidates)
+        .where(
+          and(
+            eq(harvestCandidates.fragment_id, id),
+            // only when a near-dup was actually detected
+          ),
+        )
+        .limit(1);
+      const dup = dupRows[0];
+      if (dup?.duplicate_of) {
+        harvest_near_dup = {
+          fragment_id: dup.duplicate_of,
+          score: dup.duplicate_score,
+          method: dup.duplicate_method,
+        };
+      }
+    }
+
     try {
       const { frontmatter, body } = readFragment(filePath);
-      return { ...row, frontmatter, body, entities: entityRows };
+      return { ...row, frontmatter, body, entities: entityRows, harvest_near_dup };
     } catch (e: any) {
       if (e?.code === 'ENOENT') return null; // fichier manquant → 404 propre
       throw e;
@@ -297,7 +329,39 @@ export class FragmentService {
       this.db.select({ total: count() }).from(fragments).where(where),
     ]);
 
-    return { rows, total };
+    // Batch-enrich harvest_near_dup for harvested fragments (single extra query per page)
+    const harvestedIds = rows.filter((r) => r.origin === 'harvested').map((r) => r.id);
+    const nearDupMap = new Map<
+      string,
+      { fragment_id: string; score: number | null; method: string | null }
+    >();
+    if (harvestedIds.length > 0) {
+      const dupRows = await this.db
+        .select({
+          frag_id: harvestCandidates.fragment_id,
+          duplicate_of: harvestCandidates.duplicate_of,
+          duplicate_score: harvestCandidates.duplicate_score,
+          duplicate_method: harvestCandidates.duplicate_method,
+        })
+        .from(harvestCandidates)
+        .where(inArray(harvestCandidates.fragment_id, harvestedIds));
+      for (const d of dupRows) {
+        if (d.frag_id && d.duplicate_of) {
+          nearDupMap.set(d.frag_id, {
+            fragment_id: d.duplicate_of,
+            score: d.duplicate_score,
+            method: d.duplicate_method,
+          });
+        }
+      }
+    }
+
+    const enrichedRows = rows.map((r) => ({
+      ...r,
+      harvest_near_dup: nearDupMap.get(r.id) ?? null,
+    }));
+
+    return { rows: enrichedRows, total };
   }
 
   async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]) {

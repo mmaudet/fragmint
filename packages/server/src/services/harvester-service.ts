@@ -52,6 +52,7 @@ export interface HarvestCandidate {
   origin_page: number | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
+  duplicate_method: string | null;
   status: string;
   fragment_id: string | null;
   trust_sources_json: string | null;
@@ -83,6 +84,7 @@ export class HarvesterService {
     private searchService: SearchService,
     private fragmentService: FragmentBulkService,
     private storePath: string,
+    private options: { dupeShinglesThreshold?: number } = {},
   ) {}
 
   async harvest(
@@ -137,6 +139,7 @@ export class HarvesterService {
       filenames,
       minConfidence,
       uploadHints,
+      this.options.dupeShinglesThreshold,
     );
   }
 
@@ -184,6 +187,7 @@ export class HarvesterService {
         origin_page: c.origin_page,
         duplicate_of: c.duplicate_of,
         duplicate_score: c.duplicate_score,
+        duplicate_method: c.duplicate_method ?? null,
         status: c.status,
         fragment_id: c.fragment_id,
         trust_sources_json: c.trust_sources_json ?? null,
