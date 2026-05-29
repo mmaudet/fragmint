@@ -41,9 +41,13 @@ export async function renderMarp(
     const { createRequire } = await import('node:module');
     const execFileAsync = promisify(execFile);
 
-    // Resolve local marp-cli binary — avoids npx / network dependency in Docker
+    // Resolve the CLI binary entry (marp-cli.js), not the library entry point (lib/index.js).
+    // require.resolve('@marp-team/marp-cli') returns the library; the argv-driven CLI lives at
+    // <pkg-root>/marp-cli.js — get there via the package.json manifest.
+    const { dirname, join: pathJoin } = await import('node:path');
     const require = createRequire(import.meta.url);
-    const marpCliMain = require.resolve('@marp-team/marp-cli');
+    const marpPkgDir = dirname(require.resolve('@marp-team/marp-cli/package.json'));
+    const marpCliMain = pathJoin(marpPkgDir, 'marp-cli.js');
 
     const tmpMd = join(tmpdir(), `marp-${randomUUID()}.md`);
     const tmpPptx = tmpMd.replace('.md', '.pptx');

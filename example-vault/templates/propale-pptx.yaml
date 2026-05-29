@@ -13,7 +13,7 @@ fragments:
     lang: fr
     count: 3
     required: false
-    fallback: empty
+    fallback: skip
     quality_min: approved
 
 context_schema:
@@ -58,4 +58,7 @@ context_schema:
     type: string
   total_ttc:
     label: Total TTC (€)
+    type: string
+  lines:
+    label: "Lignes tarifaires (tableau : description, qty, unit_price, total)"
     type: string
