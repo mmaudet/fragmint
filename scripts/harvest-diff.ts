@@ -192,7 +192,7 @@ function computeMetrics(db: ReturnType<typeof Database>, jobId: string): JobMetr
   // Dup pairs via title shingles (Jaccard >= 0.7) — need title from DB
   interface WithTitle { id: string; title: string; }
   const withTitles = (db
-    .prepare('SELECT id, title FROM harvest_candidates WHERE job_id = ? AND title IS NOT NULL AND title != ""')
+    .prepare("SELECT id, title FROM harvest_candidates WHERE job_id = ? AND title IS NOT NULL AND title != ''")
     .all(jobId) as WithTitle[]);
 
   let dupSuspectPairs = 0;
