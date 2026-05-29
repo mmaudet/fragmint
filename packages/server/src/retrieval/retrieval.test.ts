@@ -632,7 +632,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
   it('uses minimum of 2 agent scores as final score', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
-      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
+      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
       return '[{"id":"frag-uuid-1","score":3,"reason":"agent2"}]'; // 0.3
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
@@ -654,7 +654,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
   it('drops fragment when min score is below threshold (0.3)', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
-      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
+      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
       return '[{"id":"frag-uuid-1","score":2,"reason":"agent2"}]'; // 0.2 < threshold
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
@@ -675,7 +675,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
   it('logs STRONG_DISAGREEMENT when agents differ by > 0.3', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
-      if (opts.temperature === 0.2) return '[{"id":"frag-uuid-1","score":9,"reason":"agent1"}]'; // 0.9
+      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":9,"reason":"agent1"}]'; // 0.9
       return '[{"id":"frag-uuid-1","score":4,"reason":"agent2"}]'; // 0.4 → diff=0.5 > 0.3
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;

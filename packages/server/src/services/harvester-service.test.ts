@@ -47,9 +47,9 @@ Thank you for reading this document.`;
     });
 
     it('splits long text into overlapping chunks', () => {
-      // Create text longer than MAX_CHUNK_CHARS (6000)
+      // Create text longer than MAX_CHUNK_CHARS (12000)
       const sentence = 'This is a sentence that repeats. ';
-      const long = sentence.repeat(250); // ~8000 chars
+      const long = sentence.repeat(400); // ~13200 chars
       const chunks = HarvesterService.chunkMarkdown(long);
       expect(chunks.length).toBeGreaterThan(1);
 
@@ -59,8 +59,9 @@ Thank you for reading this document.`;
     });
 
     it('breaks at paragraph boundaries when possible', () => {
-      // Build text with a paragraph break in the second half of the max range
-      const partA = 'A'.repeat(4000);
+      // Build text with a paragraph break in the second half of the max range (>50% of MAX_CHUNK_CHARS=12000)
+      // Total must exceed 12000; paragraph break at ~9002 falls in the valid [6000, 12000] range.
+      const partA = 'A'.repeat(9000);
       const partB = 'B'.repeat(1500);
       const partC = 'C'.repeat(3000);
       const text = partA + '\n\n' + partB + '\n\n' + partC;

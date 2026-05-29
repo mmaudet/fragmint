@@ -71,11 +71,11 @@ describe('Plan routes', () => {
     expect(sectionGen.statusCode).toBe(200);
 
     const assembled = await api('POST', `/v1/plans/${id}/assemble`);
-    expect(JSON.parse(assembled.body).data.state.draft_markdown).toContain('# IT plan');
+    expect(JSON.parse(assembled.body).data.state.draft_markdown).toContain('title: "IT plan"');
 
     const exported = await api('POST', `/v1/plans/${id}/export`, { format: 'md' });
     expect(exported.statusCode).toBe(200);
-    expect(exported.body).toContain('# IT plan');
+    expect(exported.body).toContain('title: "IT plan"');
   });
 
   it('returns 404 on unknown plan id', async () => {

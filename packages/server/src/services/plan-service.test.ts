@@ -137,7 +137,7 @@ describe('PlanService.validatePlan', () => {
     ]);
     const svc = makeServiceFull({ llm, search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB' });
+    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB', status: 'plan_generated' });
 
     const out = await svc.validatePlan(p.id);
     expect(out!.status).toBe('plan_validated');
@@ -153,7 +153,7 @@ describe('PlanService.validatePlan', () => {
     ]);
     const svc = makeServiceFull({ llm, search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## Keep\n\nDesc' });
+    await svc.update(p.id, { plan_markdown: '## Keep\n\nDesc', status: 'plan_generated' });
     const v1 = await svc.validatePlan(p.id);
     await svc.update(p.id, {
       sections: v1!.state.sections.map((s) => ({
@@ -176,7 +176,7 @@ describe('PlanService.searchSection', () => {
     ]);
     const svc = makeServiceFull({ search, llm: fakeLlm([]) });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## S\n\nD' });
+    await svc.update(p.id, { plan_markdown: '## S\n\nD', status: 'plan_generated' });
     const v = await svc.validatePlan(p.id);
     const sid = v!.state.sections[0].id;
     const out = await svc.searchSection(p.id, sid, {});
@@ -192,7 +192,7 @@ describe('PlanService.validateFragments', () => {
     const fragments = fakeFragments('frag_proposed');
     const svc = makeServiceFull({ llm: fakeLlm([]), search, fragments });
     const p = await svc.create({ owner: 'alice', collection_slug: 'common', spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## S\n\nD' });
+    await svc.update(p.id, { plan_markdown: '## S\n\nD', status: 'plan_generated' });
     const v = await svc.validatePlan(p.id);
     const sid = v!.state.sections[0].id;
     await svc.update(p.id, {
@@ -300,10 +300,10 @@ describe('PlanService.assemble', () => {
       status: 'fragments_validated',
     });
     const out = await svc.assemble(p.id);
-    expect(out!.state.draft_markdown).toContain('# Doc');
-    expect(out!.state.draft_markdown).toContain('## A');
+    expect(out!.state.draft_markdown).toContain('title: "Doc"');
+    expect(out!.state.draft_markdown).toContain('# A');
     expect(out!.state.draft_markdown).toContain('Body A.');
-    expect(out!.state.draft_markdown).toContain('## B');
+    expect(out!.state.draft_markdown).toContain('# B');
   });
 });
 
@@ -428,7 +428,7 @@ describe('PlanService.validatePlan — error tolerance', () => {
     } as unknown as SearchService;
     const svc = makeServiceFull({ llm: fakeLlm([]), search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB' });
+    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB', status: 'plan_generated' });
 
     const out = await svc.validatePlan(p.id);
     expect(out!.status).toBe('plan_validated');

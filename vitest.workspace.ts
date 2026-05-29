@@ -14,6 +14,13 @@ export default defineWorkspace([
       name: 'server-integration',
       root: './packages/server',
       include: ['src/**/*.integration.test.ts'],
+      server: {
+        deps: {
+          // form-data is a CJS package installed in packages/server/node_modules;
+          // inline it so Vite can bundle it rather than failing to resolve as ESM external
+          inline: ['form-data'],
+        },
+      },
     },
   },
   {
