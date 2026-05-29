@@ -141,11 +141,15 @@ export function useAssemble(id: string) {
   });
 }
 
-// Export returns a blob directly (markdown text or docx binary). Caller handles download.
+// Export returns a blob directly (markdown text, docx binary, or presentation file). Caller handles download.
 export async function exportPlan(
   id: string,
-  format: 'md' | 'docx',
-  style_template_id?: string,
+  format: 'md' | 'docx' | 'pptx' | 'slides' | 'reveal',
+  opts?: {
+    style_template_id?: string;
+    marp_theme?: 'linagora' | 'default' | 'gaia' | 'uncover';
+    reveal_theme?: 'linagora' | 'white' | 'black' | 'moon' | 'sky' | 'beige' | 'simple' | 'solarized';
+  },
 ): Promise<Blob> {
   const token = getToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -153,8 +157,15 @@ export async function exportPlan(
   const res = await fetch(`/v1/plans/${id}/export`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ format, style_template_id }),
+    body: JSON.stringify({ format, ...opts }),
   });
-  if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+  if (!res.ok) {
+    let msg = `Export failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = body.error;
+    } catch { /* non-JSON response */ }
+    throw new Error(msg);
+  }
   return await res.blob();
 }

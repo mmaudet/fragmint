@@ -3,6 +3,7 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 import { fragmentUrl } from '../url-helpers.js';
+import { cache, TTL } from '../cache/cache-manager.js';
 
 export const lineageDefinition: ToolDefinition = {
   name: 'fragment_lineage',
@@ -26,14 +27,22 @@ export const lineageDefinition: ToolDefinition = {
 export function lineageHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
+      const slug = args.collection_slug as string | undefined;
+      const id = args.id as string;
+      const cacheKey = `lineage:${slug ?? 'common'}:${id}`;
+
+      const cached = cache.get(cacheKey);
+      if (cached) return toolSuccess(JSON.parse(cached));
+
       const result = await client.get(
-        fragmentUrl(args.collection_slug as string | undefined, `/fragments/${args.id}/lineage`),
+        fragmentUrl(slug, `/fragments/${id}/lineage`),
       );
       // Add community_cluster (null until Phase 6 Leiden clustering)
       const enriched = { ...(result as Record<string, unknown>), community_cluster: null };
+      cache.set(cacheKey, enriched, TTL.LINEAGE);
       return toolSuccess(enriched);
     } catch (err) {
-      return toolError(`Lineage failed: ${(err as Error).message}`);
+      return toolError(`Lineage failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 }

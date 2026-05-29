@@ -357,6 +357,7 @@ export async function createServer(options?: {
     fragmentService,
     authenticate,
     searchService,
+    templateService,
   );
   templateRoutes(app, templateService, composerService, authenticate, {
     defaultReferenceDocPath: config.plan_docx_reference_path,

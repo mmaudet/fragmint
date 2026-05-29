@@ -3,6 +3,7 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 import { fragmentUrl } from '../url-helpers.js';
+import { cache, hashKey, TTL } from '../cache/cache-manager.js';
 
 export const inventoryDefinition: ToolDefinition = {
   name: 'fragment_inventory',
@@ -28,16 +29,21 @@ export const inventoryDefinition: ToolDefinition = {
 export function inventoryHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
+      const slug = args.collection_slug as string | undefined;
+      const body = { topic: args.topic, lang: args.lang };
+      const cacheKey = `inventory:${slug ?? 'common'}:${hashKey(body)}`;
+
+      const cached = cache.get(cacheKey);
+      if (cached) return toolSuccess(JSON.parse(cached));
+
       const result = await client.post(
-        fragmentUrl(args.collection_slug as string | undefined, '/fragments/inventory'),
-        {
-          topic: args.topic,
-          lang: args.lang,
-        },
+        fragmentUrl(slug, '/fragments/inventory'),
+        body,
       );
+      cache.set(cacheKey, result, TTL.INVENTORY);
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`Inventory failed: ${(err as Error).message}`);
+      return toolError(`Inventory failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 }

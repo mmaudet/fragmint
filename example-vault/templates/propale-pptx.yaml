@@ -59,6 +59,13 @@ context_schema:
   total_ttc:
     label: Total TTC (€)
     type: string
+
+structured_data:
   lines:
-    label: "Lignes tarifaires (tableau : description, qty, unit_price, total)"
-    type: string
+    label: "Lignes tarifaires (tableau de prestations)"
+    type: array
+    items:
+      description: string
+      qty: string
+      unit_price: string
+      total: string

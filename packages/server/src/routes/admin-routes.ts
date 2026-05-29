@@ -6,6 +6,7 @@ import { TokenService } from '../services/token-service.js';
 import { AuditService } from '../services/audit-service.js';
 import { FragmentService } from '../services/fragment-service.js';
 import { SearchService } from '../search/search-service.js';
+import { TemplateService } from '../services/template-service.js';
 import { z } from 'zod';
 import { createUserSchema, createTokenSchema } from '../schema/api.js';
 import { setRetrievalMode, getCurrentMode, getCurrentWeightsPreset, type RetrievalMode } from '../retrieval/factory.js';
@@ -24,6 +25,7 @@ export function adminRoutes(
   fragmentService: FragmentService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
   searchService?: SearchService,
+  templateService?: TemplateService,
 ) {
   // Users
   app.get('/v1/users', { preHandler: [authenticate, requireRole('admin')] }, async () => {
@@ -180,6 +182,19 @@ export function adminRoutes(
         meta: null,
         error: null,
       });
+    },
+  );
+
+  // Templates sync
+  app.post(
+    '/v1/admin/templates/sync',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (_req, reply) => {
+      if (!templateService) {
+        return reply.status(503).send({ data: null, meta: null, error: 'Template service not available' });
+      }
+      const synced = await templateService.syncFromVault();
+      return reply.send({ data: { synced }, meta: null, error: null });
     },
   );
 }

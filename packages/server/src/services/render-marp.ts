@@ -29,7 +29,7 @@ async function runMarpCli(marpCliMain: string, inputMd: string, outputPptx: stri
   try {
     result = await execFileAsync(
       process.execPath,
-      [marpCliMain, inputMd, '--pptx', '-o', outputPptx],
+      [marpCliMain, '--no-stdin', inputMd, '--pptx', '-o', outputPptx],
       { timeout: 60_000 },
     );
   } catch (err) {
@@ -67,12 +67,14 @@ export async function renderMarp(
   }
 
   if (outputType === 'pptx') {
-    // Resolve the CLI binary entry (marp-cli.js), not the library entry point (lib/index.js).
-    // require.resolve('@marp-team/marp-cli') returns the library; the argv-driven CLI lives at
-    // <pkg-root>/marp-cli.js — get there via the package.json manifest.
     const require = createRequire(import.meta.url);
-    const marpPkgDir = dirname(require.resolve('@marp-team/marp-cli/package.json'));
-    const marpCliMain = join(marpPkgDir, 'marp-cli.js');
+    let marpCliMain: string;
+    try {
+      const marpPkgDir = dirname(require.resolve('@marp-team/marp-cli/package.json'));
+      marpCliMain = join(marpPkgDir, 'marp-cli.js');
+    } catch {
+      throw new Error('PPTX export unavailable: @marp-team/marp-cli not installed. Rebuild the Docker image with: docker compose -f docker/docker-compose.dev.yml build --no-cache');
+    }
 
     const tmpMd = join(tmpdir(), `marp-${randomUUID()}.md`);
     const tmpPptx = tmpMd.replace('.md', '.pptx');
@@ -98,3 +100,54 @@ export async function renderMarp(
 
   throw new Error(`Unsupported Marp output type: ${outputType}`);
 }
+
+/**
+ * Render an in-memory Markdown string via Marp, without a template file on disk.
+ * Used by plan export (draft_markdown has no Marp template file to reference).
+ */
+export async function renderMarpFromString(
+  mdContent: string,
+  outputType: 'html' | 'pptx',
+): Promise<RenderResult> {
+  if (outputType === 'html') {
+    const marp = new Marp();
+    const { html, css } = marp.render(mdContent);
+    const fullHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>${css}</style></head>
+<body>${html}</body>
+</html>`;
+    return { buffer: Buffer.from(fullHtml), format: 'slides' };
+  }
+
+  if (outputType === 'pptx') {
+    const require = createRequire(import.meta.url);
+    let marpCliMain: string;
+    try {
+      const marpPkgDir = dirname(require.resolve('@marp-team/marp-cli/package.json'));
+      marpCliMain = join(marpPkgDir, 'marp-cli.js');
+    } catch {
+      throw new Error('PPTX export unavailable: @marp-team/marp-cli not installed. Rebuild the Docker image with: docker compose -f docker/docker-compose.dev.yml build --no-cache');
+    }
+
+    const tmpMd = join(tmpdir(), `marp-plan-${randomUUID()}.md`);
+    const tmpPptx = tmpMd.replace('.md', '.pptx');
+    writeFileSync(tmpMd, mdContent);
+
+    try {
+      await runMarpCli(marpCliMain, tmpMd, tmpPptx);
+      if (!existsSync(tmpPptx)) {
+        throw new Error('PPTX export failed: Marp CLI produced no output file.');
+      }
+      const buffer = readFileSync(tmpPptx);
+      return { buffer, format: 'pptx' };
+    } finally {
+      for (const f of [tmpMd, tmpPptx]) {
+        try { unlinkSync(f); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  throw new Error(`Unsupported Marp output type: ${outputType}`);
+}
+

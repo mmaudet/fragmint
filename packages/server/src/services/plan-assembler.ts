@@ -5,7 +5,28 @@ import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js'
 import { buildSectionMessages } from './plan-prompts.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx } from './pandoc-render.js';
+import { renderMarpFromString } from './render-marp.js';
 import { PlanService, type PlanRecord } from './plan-service.js';
+
+// Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
+const LINAGORA_MARP_STYLE = `
+  section { font-family: "Calibri", sans-serif; font-size: 24px; }
+  h1 { color: #2B579A; }
+  h2 { color: #2B579A; }
+  a { color: #2B579A; }
+`.trim();
+
+function buildMarpContent(
+  draftMarkdown: string,
+  theme: 'default' | 'gaia' | 'uncover' | 'linagora' = 'default',
+): string {
+  if (draftMarkdown.trimStart().startsWith('---')) return draftMarkdown;
+  // 'linagora' is not a Marp built-in theme — use 'default' + inject custom style
+  const marpTheme = theme === 'linagora' ? 'default' : theme;
+  const styleBlock = theme === 'linagora' ? `style: |\n  ${LINAGORA_MARP_STYLE.replace(/\n/g, '\n  ')}\n` : '';
+  const frontmatter = `---\nmarp: true\ntheme: ${marpTheme}\npaginate: true\n${styleBlock}---\n\n`;
+  return frontmatter + draftMarkdown;
+}
 
 export class PlanAssembler extends PlanService {
   async validateFragments(id: string): Promise<PlanRecord | null> {
@@ -183,5 +204,103 @@ export class PlanAssembler extends PlanService {
     const buf = await renderMarkdownToDocx(p.state.draft_markdown, reference);
     await this.update(id, { status: 'completed' });
     return { content: buf, filename: `${slugify(p.title)}.docx` };
+  }
+
+  async exportPptx(
+    id: string,
+    opts: { marpTheme?: 'default' | 'gaia' | 'uncover' | 'linagora' } = {},
+  ): Promise<{ content: Buffer; filename: string }> {
+    const p = await this.get(id);
+    if (!p) throw new Error('Plan not found');
+    if (!p.state.draft_markdown?.trim()) {
+      throw new Error('No assembled draft to export — call /assemble first');
+    }
+    const mdContent = buildMarpContent(p.state.draft_markdown, opts.marpTheme);
+    const { buffer } = await renderMarpFromString(mdContent, 'pptx');
+    await this.update(id, { status: 'completed' });
+    return { content: buffer, filename: `${slugify(p.title)}.pptx` };
+  }
+
+  async exportSlides(
+    id: string,
+    opts: { marpTheme?: 'default' | 'gaia' | 'uncover' | 'linagora' } = {},
+  ): Promise<{ content: Buffer; filename: string }> {
+    const p = await this.get(id);
+    if (!p) throw new Error('Plan not found');
+    if (!p.state.draft_markdown?.trim()) {
+      throw new Error('No assembled draft to export — call /assemble first');
+    }
+    const mdContent = buildMarpContent(p.state.draft_markdown, opts.marpTheme);
+    const { buffer } = await renderMarpFromString(mdContent, 'html');
+    await this.update(id, { status: 'completed' });
+    return { content: buffer, filename: `${slugify(p.title)}.html` };
+  }
+
+  async exportReveal(
+    id: string,
+    opts: { revealTheme?: string } = {},
+  ): Promise<{ content: Buffer; filename: string }> {
+    const p = await this.get(id);
+    if (!p) throw new Error('Plan not found');
+    if (!p.state.draft_markdown?.trim()) {
+      throw new Error('No assembled draft to export — call /assemble first');
+    }
+    // Convert markdown headings into reveal.js <section> slides.
+    // Each `## ` or `# ` heading starts a new slide.
+    const raw = p.state.draft_markdown;
+    const slideBlocks = raw
+      .split(/(?=^#{1,2} )/m)
+      .map((block) => block.trim())
+      .filter(Boolean);
+
+    const sectionsHtml = slideBlocks
+      .map((block) => {
+        // Convert basic markdown: bold, inline code, lists (enough for slide bullets)
+        const html = block
+          .replace(/^#{1,2} (.+)$/m, '<h2>$1</h2>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/`(.+?)`/g, '<code>$1</code>')
+          .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+          .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        return `<section>${html}</section>`;
+      })
+      .join('\n');
+
+    const revealTheme = opts.revealTheme ?? 'white';
+    const isLinagora = revealTheme === 'linagora';
+    const themeLink = isLinagora
+      ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css">`
+      : `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${revealTheme}.css">`;
+    const customStyle = isLinagora
+      ? `
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; color: #2B579A; }
+    .reveal { font-family: "Calibri", sans-serif; font-size: 28px; }
+    .reveal ul { text-align: left; }
+    .reveal .slides section { border-top: 3px solid #2B579A; padding-top: 10px; }`
+      : `
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    .reveal { font-size: 28px; }
+    .reveal ul { text-align: left; }`;
+    const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${p.title}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  ${themeLink}
+  <style>${customStyle}
+  </style>
+</head>
+<body>
+  <div class="reveal"><div class="slides">
+${sectionsHtml}
+  </div></div>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+  <script>Reveal.initialize({ hash: true, transition: 'slide' });</script>
+</body>
+</html>`;
+    await this.update(id, { status: 'completed' });
+    return { content: Buffer.from(fullHtml), filename: `${slugify(p.title)}.html` };
   }
 }

@@ -232,6 +232,37 @@ export function planRoutes(
           .send(content);
       }
 
+      if (parsed.data.format === 'pptx') {
+        const { content, filename } = await planService.exportPptx(id, {
+          marpTheme: parsed.data.marp_theme,
+        });
+        return reply
+          .type('application/vnd.openxmlformats-officedocument.presentationml.presentation')
+          .header('Content-Disposition', `attachment; filename="${filename}"`)
+          .send(content);
+      }
+
+      if (parsed.data.format === 'slides') {
+        const { content, filename } = await planService.exportSlides(id, {
+          marpTheme: parsed.data.marp_theme,
+        });
+        return reply
+          .type('text/html; charset=utf-8')
+          .header('Content-Disposition', `attachment; filename="${filename}"`)
+          .send(content);
+      }
+
+      if (parsed.data.format === 'reveal') {
+        const { content, filename } = await planService.exportReveal(id, {
+          revealTheme: parsed.data.reveal_theme,
+        });
+        return reply
+          .type('text/html; charset=utf-8')
+          .header('Content-Disposition', `attachment; filename="${filename}"`)
+          .send(content);
+      }
+
+      // docx — resolve optional style template
       const styleId = parsed.data.style_template_id ?? plan.state.export_style_template_id;
       let stylePath: string | undefined;
       if (styleId) {

@@ -3,11 +3,12 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 import { fragmentUrl } from '../url-helpers.js';
+import { cache, hashKey, TTL } from '../cache/cache-manager.js';
 
 export const searchDefinition: ToolDefinition = {
   name: 'fragment_search',
   description:
-    'Search fragments by semantic similarity and structured filters. Returns ranked results with scores.',
+    'Search fragments by semantic similarity and structured filters. Returns ranked results with scores. Results cached locally for 5 minutes.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -45,17 +46,22 @@ export function searchHandler(client: FragmintApiClient): ToolHandler {
       if (args.quality_min) filters.quality_min = args.quality_min;
       if (Object.keys(filters).length > 0) body.filters = filters;
 
-      // Determine collection slug for URL; default to 'common' when not specified
       const slugs = args.collection_slugs;
       const collectionSlug =
         slugs === 'all' || slugs === undefined ? 'common' : Array.isArray(slugs) ? slugs[0] : slugs;
+
+      const cacheKey = `search:${collectionSlug}:${hashKey({ ...body, collectionSlug })}`;
+      const cached = cache.get(cacheKey);
+      if (cached) return toolSuccess(JSON.parse(cached));
+
       const result = await client.post(
         fragmentUrl(collectionSlug as string, '/fragments/search'),
         body,
       );
+      cache.set(cacheKey, result, TTL.SEARCH);
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`Search failed: ${(err as Error).message}`);
+      return toolError(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 }

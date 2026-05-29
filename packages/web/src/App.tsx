@@ -12,7 +12,6 @@ import AdminLayout from '@/layouts/admin-layout';
 import LoginPage from '@/pages/login';
 import FragmentsPage from '@/pages/fragments';
 import InventoryPage from '@/pages/inventory';
-import ComposePage from '@/pages/compose';
 import ValidationPage from '@/pages/validation';
 import HarvestPage from '@/pages/harvest';
 import HarvestDebriefPage from '@/pages/harvest-debrief';
@@ -85,7 +84,6 @@ export default function App() {
                         <Route path="/home" element={<HomePage />} />
                         <Route path="/fragments" element={<FragmentsPage />} />
                         <Route path="/inventory" element={<InventoryPage />} />
-                        <Route path="/compose" element={<ComposePage />} />
                         <Route path="/validation" element={<ValidationPage />} />
                         <Route path="/harvest" element={<HarvestPage />} />
                         <Route path="/harvest/:jobId/debrief" element={<HarvestDebriefPage />} />

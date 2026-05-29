@@ -1,5 +1,12 @@
 // packages/mcp/src/tools/tools.test.ts
 import { describe, it, expect, vi } from 'vitest';
+
+// Mock the cache module so singleton state doesn't leak between tests
+vi.mock('../cache/cache-manager.js', () => ({
+  cache: { get: vi.fn().mockReturnValue(undefined), set: vi.fn(), invalidate: vi.fn() },
+  hashKey: (obj: unknown) => JSON.stringify(obj).slice(0, 12),
+  TTL: { SEARCH: 300, INVENTORY: 300, INDEX: 300, FRAGMENT: 1800, LINEAGE: 1800, REFERENCES: 3600, COLLECTIONS: 3600 },
+}));
 import { FragmintApiClient } from '../client.js';
 import { inventoryHandler, inventoryDefinition } from './fragment-inventory.js';
 import { searchHandler, searchDefinition } from './fragment-search.js';

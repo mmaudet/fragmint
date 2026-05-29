@@ -3,6 +3,7 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 import { fragmentUrl } from '../url-helpers.js';
+import { cache } from '../cache/cache-manager.js';
 
 export const createDefinition: ToolDefinition = {
   name: 'fragment_create',
@@ -37,6 +38,7 @@ export const createDefinition: ToolDefinition = {
 export function createHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     try {
+      const slug = (args.collection_slug as string | undefined) ?? 'common';
       const result = await client.post(
         fragmentUrl(args.collection_slug as string | undefined, '/fragments'),
         {
@@ -48,9 +50,13 @@ export function createHandler(client: FragmintApiClient): ToolHandler {
           parent_id: args.parent_id ?? null,
         },
       );
+      // Invalidate search, inventory, and index caches for this collection
+      cache.invalidate(`search:${slug}:`);
+      cache.invalidate(`inventory:${slug}:`);
+      cache.invalidate(`index:${slug}:`);
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`Create fragment failed: ${(err as Error).message}`);
+      return toolError(`Create fragment failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 }

@@ -86,6 +86,31 @@ Readable IDs like `TM-arg-001` (prefix-type-number) are stable human-readable re
 - **Fragments quality**: prefer `approved` > `reviewed` > `draft`. The search service re-ranks by quality automatically.
 - **Plan status flow**: draft → plan_generated (after plan_generate). Export is callable at any status.
 
+## Local Cache
+
+Results from read tools are cached locally in `~/.fragmint/cache.db` (SQLite). This eliminates repeated round-trips during a session.
+
+**Check cache status:**
+```tool
+cache_status()
+```
+→ Hit rate, entry count, expiry info.
+
+**Force refresh a scope:**
+```tool
+cache_sync({ scope: "index", collection_slug: "common" })
+// scope: "index" | "fragments" | "references" | "all"
+```
+
+**Clear everything** (use when the backend corpus has changed significantly):
+```tool
+cache_clear()
+```
+
+TTLs: index/search/inventory = 5 min · individual fragments/lineage = 30 min · references/collections = 1 hour.
+
+---
+
 ## Template-Based Composition (alternative to plan workflow)
 
 For quick one-shot composition using a predefined template:

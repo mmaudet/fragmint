@@ -38,6 +38,14 @@ import {
   planExportDefinition,
   planExportHandler,
 } from './tools/plan-tools.js';
+import {
+  cacheStatusDefinition,
+  cacheStatusHandler,
+  cacheSyncDefinition,
+  cacheSyncHandler,
+  cacheClearDefinition,
+  cacheClearHandler,
+} from './tools/cache-tools.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -71,6 +79,9 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: planGenerateDefinition, handler: planGenerateHandler(client) },
   { definition: planSectionSearchDefinition, handler: planSectionSearchHandler(client) },
   { definition: planExportDefinition, handler: planExportHandler(client) },
+  { definition: cacheStatusDefinition, handler: cacheStatusHandler(client) },
+  { definition: cacheSyncDefinition, handler: cacheSyncHandler(client) },
+  { definition: cacheClearDefinition, handler: cacheClearHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));

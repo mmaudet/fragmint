@@ -14,25 +14,25 @@ style: |
   table { font-size: 22px; }
 ---
 
-# +++INS title+++
+# +++INS metadata.title+++
 
 <br/>
 
-**Préparé pour :** +++INS client+++
-**Date :** +++INS date+++
-**Référence :** +++INS reference+++
+**Préparé pour :** +++INS metadata.client+++
+**Date :** +++INS metadata.date+++
+**Référence :** +++INS metadata.reference+++
 
 ---
 
 ## Contexte & Enjeux
 
-+++INS context+++
++++INS metadata.context+++
 
 ---
 
 ## Notre approche
 
-+++INS approach+++
++++INS metadata.approach+++
 
 ---
 
@@ -48,13 +48,13 @@ style: |
 
 ## Équipe & Références
 
-+++INS team+++
++++INS metadata.team+++
 
 ---
 
 ## Planning
 
-+++INS planning+++
++++INS metadata.planning+++
 
 ---
 
@@ -66,19 +66,19 @@ style: |
 | +++INS $line.description+++ | +++INS $line.qty+++ | +++INS $line.unit_price+++ € | +++INS $line.total+++ € |
 +++END-FOR line+++
 
-**Total HT : +++INS total_ht+++ €**
-**TVA (20%) : +++INS tva+++ €**
-**Total TTC : +++INS total_ttc+++ €**
+**Total HT : +++INS metadata.total_ht+++ €**
+**TVA (20%) : +++INS metadata.tva+++ €**
+**Total TTC : +++INS metadata.total_ttc+++ €**
 
 ---
 
 ## Prochaines étapes
 
-+++INS next_steps+++
++++INS metadata.next_steps+++
 
 ---
 
 # Merci
 
-**+++INS company_name+++**
-+++INS contact_email+++
+**+++INS metadata.company_name+++**
++++INS metadata.contact_email+++

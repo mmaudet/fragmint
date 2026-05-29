@@ -101,8 +101,10 @@ export const SectionSearchSchema = z.object({
 });
 
 export const ExportPlanSchema = z.object({
-  format: z.enum(['md', 'docx']),
+  format: z.enum(['md', 'docx', 'pptx', 'slides', 'reveal']),
   style_template_id: z.string().optional(),
+  marp_theme: z.enum(['default', 'gaia', 'uncover', 'linagora']).optional(),
+  reveal_theme: z.enum(['white', 'black', 'moon', 'sky', 'beige', 'simple', 'solarized', 'linagora']).optional(),
 });
 
 export const AddFragmentToSectionSchema = z
