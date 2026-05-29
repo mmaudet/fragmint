@@ -27,22 +27,15 @@ export class FragmintApiClient {
   }
 
   async postText(path: string, body?: unknown): Promise<string> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.token}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`HTTP ${res.status}: ${text}`);
-    }
-    return res.text();
+    return (await this.postRaw(path, body)).text();
   }
 
   async postBinary(path: string, body?: unknown): Promise<string> {
+    const buffer = await (await this.postRaw(path, body)).arrayBuffer();
+    return Buffer.from(buffer).toString('base64');
+  }
+
+  private async postRaw(path: string, body?: unknown): Promise<Response> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: {
@@ -55,8 +48,7 @@ export class FragmintApiClient {
       const text = await res.text();
       throw new Error(`HTTP ${res.status}: ${text}`);
     }
-    const buffer = await res.arrayBuffer();
-    return Buffer.from(buffer).toString('base64');
+    return res;
   }
 
   async postMultipart<T>(path: string, form: FormData): Promise<T> {

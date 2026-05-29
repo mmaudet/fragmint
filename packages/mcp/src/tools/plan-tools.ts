@@ -27,6 +27,7 @@ export const planCreateDefinition: ToolDefinition = {
           'Optional fragment filters: { lang?: "fr"|"en", domain?: string|string[], type?: string, tags?: string[] }',
       },
     },
+    required: ['spec_prompt'],
   },
 };
 
@@ -206,16 +207,12 @@ export function planExportHandler(client: FragmintApiClient): ToolHandler {
     const styleTemplateId = args.style_template_id as string | undefined;
     try {
       if (format === 'md') {
-        const content = await client.postText(`/v1/plans/${id}/export`, {
-          format: 'md',
-          style_template_id: styleTemplateId,
-        });
+        const content = await client.postText(`/v1/plans/${id}/export`, { format: 'md' });
         return toolSuccess({ format: 'md', content });
       } else {
-        const content_base64 = await client.postBinary(`/v1/plans/${id}/export`, {
-          format: 'docx',
-          style_template_id: styleTemplateId,
-        });
+        const exportBody: Record<string, unknown> = { format: 'docx' };
+        if (styleTemplateId) exportBody.style_template_id = styleTemplateId;
+        const content_base64 = await client.postBinary(`/v1/plans/${id}/export`, exportBody);
         return toolSuccess({
           format: 'docx',
           content_base64,
