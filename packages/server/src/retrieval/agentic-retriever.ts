@@ -60,7 +60,7 @@ export class AgenticRetriever implements FragmentRetriever {
     const idMap = buildReadableIdMap(activeData);
 
     const phase1Cap = Math.max(limit * PHASE1_MULTIPLIER, 8);
-    const candidateIds = await this.selectCandidates(query, indexMd, idMap, phase1Cap);
+    const candidateIds = await this.selectCandidates(query, indexMd, idMap, phase1Cap, limit);
     console.info(
       `[retrieval][agentic-only][phase1] section "${query.text.slice(0, 50)}" → ${candidateIds.length} candidates (cap=${phase1Cap})`,
     );
@@ -260,9 +260,12 @@ Return ONLY a JSON array: ["domain:type", ...] (e.g. ["twake-mail:argument", "li
     indexMd: string,
     idMap: Map<string, string>,
     phase1Cap = 20,
+    targetCount = 5,
   ): Promise<string[]> {
     const filtersLine = buildFiltersDesc(query.filters);
     const collectionLine = query.collectionSlug ? `Collection: ${query.collectionSlug}` : '';
+    const minCount = Math.max(targetCount, 3);
+    const maxCount = phase1Cap;
     const prompt = `You are a document composition assistant with access to a fragment library.
 
 Section to populate: "${query.text}"
@@ -274,8 +277,9 @@ Fragment library index (organized by domain → type, with \`type:\` explicit on
 ${indexMd}
 
 Rank the most relevant fragment IDs for this section, from most to least relevant.
-Return between 8 and 15 IDs — your choice based on how many are genuinely useful.
-Do not pad with weak fragments to reach 15. Do not truncate good ones to stay under 8.
+The goal is to surface ${targetCount} high-quality fragments for this section.
+Return between ${minCount} and ${maxCount} IDs — your choice based on how many are genuinely useful.
+Do not pad with weak fragments. Do not truncate good ones.
 Instructions:
 - Each fragment has a \`type:\` field — use it to match the section's purpose:
   - "références clients" / "client references" → prefer type: reference or type: testimonial
