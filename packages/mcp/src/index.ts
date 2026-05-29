@@ -46,6 +46,7 @@ import {
   cacheClearDefinition,
   cacheClearHandler,
 } from './tools/cache-tools.js';
+import { templateUploadDefinition, templateUploadHandler } from './tools/template-upload.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -82,6 +83,7 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: cacheStatusDefinition, handler: cacheStatusHandler(client) },
   { definition: cacheSyncDefinition, handler: cacheSyncHandler(client) },
   { definition: cacheClearDefinition, handler: cacheClearHandler(client) },
+  { definition: templateUploadDefinition, handler: templateUploadHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));
