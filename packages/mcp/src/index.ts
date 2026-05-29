@@ -24,6 +24,20 @@ import {
   listTagsDefinition,
   listTagsHandler,
 } from './tools/references-list.js';
+import {
+  planCreateDefinition,
+  planCreateHandler,
+  planListDefinition,
+  planListHandler,
+  planGetDefinition,
+  planGetHandler,
+  planGenerateDefinition,
+  planGenerateHandler,
+  planSectionSearchDefinition,
+  planSectionSearchHandler,
+  planExportDefinition,
+  planExportHandler,
+} from './tools/plan-tools.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -51,6 +65,12 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: listSubjectsDefinition, handler: listSubjectsHandler(client) },
   { definition: listEntitiesDefinition, handler: listEntitiesHandler(client) },
   { definition: listTagsDefinition, handler: listTagsHandler(client) },
+  { definition: planCreateDefinition, handler: planCreateHandler(client) },
+  { definition: planListDefinition, handler: planListHandler(client) },
+  { definition: planGetDefinition, handler: planGetHandler(client) },
+  { definition: planGenerateDefinition, handler: planGenerateHandler(client) },
+  { definition: planSectionSearchDefinition, handler: planSectionSearchHandler(client) },
+  { definition: planExportDefinition, handler: planExportHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));
