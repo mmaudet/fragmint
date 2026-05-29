@@ -300,3 +300,77 @@ describe('FragmintApiClient.postText / postBinary', () => {
     vi.unstubAllGlobals();
   });
 });
+
+import {
+  planCreateDefinition,
+  planCreateHandler,
+  planListDefinition,
+  planListHandler,
+  planGetDefinition,
+  planGetHandler,
+} from './plan-tools.js';
+
+describe('plan_create', () => {
+  it('has correct definition', () => {
+    expect(planCreateDefinition.name).toBe('plan_create');
+    expect(planCreateDefinition.inputSchema.required).toBeUndefined();
+  });
+
+  it('calls POST /v1/plans with body', async () => {
+    const client = { post: vi.fn().mockResolvedValue({ id: 'plan-abc', title: 'My Plan', status: 'draft' }) };
+    const result = await planCreateHandler(client as any)({
+      title: 'My Plan',
+      spec_prompt: 'Proposal for client X',
+    });
+    expect(client.post).toHaveBeenCalledWith('/v1/plans', {
+      title: 'My Plan',
+      spec_prompt: 'Proposal for client X',
+      filters: {},
+    });
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.id).toBe('plan-abc');
+  });
+
+  it('returns error on API failure', async () => {
+    const client = { post: vi.fn().mockRejectedValue(new Error('Unauthorized')) };
+    const result = await planCreateHandler(client as any)({});
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Unauthorized');
+  });
+});
+
+describe('plan_list', () => {
+  it('has correct definition', () => {
+    expect(planListDefinition.name).toBe('plan_list');
+  });
+
+  it('calls GET /v1/plans', async () => {
+    const client = { get: vi.fn().mockResolvedValue([{ id: 'plan-1', title: 'Plan A', status: 'draft' }]) };
+    const result = await planListHandler(client as any)({});
+    expect(client.get).toHaveBeenCalledWith('/v1/plans');
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(1);
+  });
+});
+
+describe('plan_get', () => {
+  it('has id in required', () => {
+    expect(planGetDefinition.inputSchema.required).toContain('id');
+  });
+
+  it('calls GET /v1/plans/:id', async () => {
+    const client = { get: vi.fn().mockResolvedValue({ id: 'plan-1', title: 'Plan A', state: {} }) };
+    const result = await planGetHandler(client as any)({ id: 'plan-1' });
+    expect(client.get).toHaveBeenCalledWith('/v1/plans/plan-1');
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('returns error when id is missing', async () => {
+    const client = { get: vi.fn() };
+    const result = await planGetHandler(client as any)({});
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('id is required');
+  });
+});
