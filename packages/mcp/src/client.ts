@@ -22,7 +22,10 @@ export class FragmintApiClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       headers: { Authorization: `Bearer ${this.token}` },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
     return res.text();
   }
 
@@ -58,7 +61,12 @@ export class FragmintApiClient {
       body: form,
     });
 
-    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
+    let json: { data: T; meta: unknown; error: string | null };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new Error(`HTTP ${res.status}: response was not valid JSON`);
+    }
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }
@@ -77,7 +85,12 @@ export class FragmintApiClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
+    let json: { data: T; meta: unknown; error: string | null };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new Error(`HTTP ${res.status}: response was not valid JSON`);
+    }
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }

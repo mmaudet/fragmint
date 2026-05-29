@@ -84,7 +84,7 @@ Readable IDs like `TM-arg-001` (prefix-type-number) are stable human-readable re
 - **Collections**: default is `common`. Use `collection_list` to discover team collections.
 - **plan_export docx** returns base64 — always give the user the decode command.
 - **Fragments quality**: prefer `approved` > `reviewed` > `draft`. The search service re-ranks by quality automatically.
-- **Plan status flow**: draft → plan_generated (after plan_generate) → export is callable at any status.
+- **Plan status flow**: draft → plan_generated (after plan_generate). Export is callable at any status.
 
 ## Template-Based Composition (alternative to plan workflow)
 

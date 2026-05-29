@@ -95,7 +95,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
       content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
     } as Record<string, unknown>;
   }
-  return handler(args ?? {}) as unknown as Record<string, unknown>;
+  try {
+    return handler(args ?? {}) as unknown as Record<string, unknown>;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[mcp] Unhandled exception in tool "${name}":`, err);
+    return {
+      isError: true,
+      content: [{ type: 'text' as const, text: `Tool "${name}" crashed: ${msg}` }],
+    } as Record<string, unknown>;
+  }
 });
 
 // Start

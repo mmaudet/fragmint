@@ -3,6 +3,12 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 
+/** Safe error message extraction — handles non-Error throws (strings, plain objects). */
+function errMsg(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 // ── plan_create ──────────────────────────────────────────────────────────────
 
 export const planCreateDefinition: ToolDefinition = {
@@ -33,16 +39,17 @@ export const planCreateDefinition: ToolDefinition = {
 
 export function planCreateHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
+    const spec_prompt = args.spec_prompt as string | undefined;
+    if (!spec_prompt) return toolError('plan_create: spec_prompt is required');
     try {
-      const { title, spec_prompt, filters } = args;
       const result = await client.post('/v1/plans', {
-        title: title as string | undefined,
-        spec_prompt: (spec_prompt as string) ?? '',
-        filters: (filters as object) ?? {},
+        title: args.title as string | undefined,
+        spec_prompt,
+        filters: (args.filters as object) ?? {},
       });
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`plan_create failed: ${(err as Error).message}`);
+      return toolError(`plan_create failed: ${errMsg(err)}`);
     }
   };
 }
@@ -65,7 +72,7 @@ export function planListHandler(client: FragmintApiClient): ToolHandler {
       const result = await client.get('/v1/plans');
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`plan_list failed: ${(err as Error).message}`);
+      return toolError(`plan_list failed: ${errMsg(err)}`);
     }
   };
 }
@@ -96,7 +103,7 @@ export function planGetHandler(client: FragmintApiClient): ToolHandler {
       const result = await client.get(`/v1/plans/${id}`);
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`plan_get failed: ${(err as Error).message}`);
+      return toolError(`plan_get failed: ${errMsg(err)}`);
     }
   };
 }
@@ -130,7 +137,7 @@ export function planGenerateHandler(client: FragmintApiClient): ToolHandler {
       });
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`plan_generate failed: ${(err as Error).message}`);
+      return toolError(`plan_generate failed: ${errMsg(err)}`);
     }
   };
 }
@@ -163,12 +170,11 @@ export function planSectionSearchHandler(client: FragmintApiClient): ToolHandler
     if (!id) return toolError('plan_section_search: id is required');
     if (!sectionId) return toolError('plan_section_search: section_id is required');
     try {
-      const body: Record<string, unknown> = {};
-      if (args.filters_override) body.filters_override = args.filters_override;
+      const body = args.filters_override ? { filters_override: args.filters_override } : {};
       const result = await client.post(`/v1/plans/${id}/sections/${sectionId}/search`, body);
       return toolSuccess(result);
     } catch (err) {
-      return toolError(`plan_section_search failed: ${(err as Error).message}`);
+      return toolError(`plan_section_search failed: ${errMsg(err)}`);
     }
   };
 }
@@ -210,8 +216,10 @@ export function planExportHandler(client: FragmintApiClient): ToolHandler {
         const content = await client.postText(`/v1/plans/${id}/export`, { format: 'md' });
         return toolSuccess({ format: 'md', content });
       } else {
-        const exportBody: Record<string, unknown> = { format: 'docx' };
-        if (styleTemplateId) exportBody.style_template_id = styleTemplateId;
+        const exportBody = {
+          format: 'docx',
+          ...(styleTemplateId && { style_template_id: styleTemplateId }),
+        };
         const content_base64 = await client.postBinary(`/v1/plans/${id}/export`, exportBody);
         return toolSuccess({
           format: 'docx',
@@ -220,7 +228,7 @@ export function planExportHandler(client: FragmintApiClient): ToolHandler {
         });
       }
     } catch (err) {
-      return toolError(`plan_export failed: ${(err as Error).message}`);
+      return toolError(`plan_export (format=${format}) failed: ${errMsg(err)}`);
     }
   };
 }

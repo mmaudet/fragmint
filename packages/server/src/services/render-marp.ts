@@ -7,17 +7,52 @@
  *
  * Placeholders in the Markdown template are resolved before rendering.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createRequire } from 'node:module';
 import { Marp } from '@marp-team/marp-core';
 import { resolvePlaceholders } from './render-placeholder.js';
 import type { RenderResult } from './render-engine.js';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Invoke Marp CLI to convert a Markdown file to PPTX.
+ * Throws with a human-readable message on timeout or non-zero exit.
+ */
+async function runMarpCli(marpCliMain: string, inputMd: string, outputPptx: string): Promise<void> {
+  let result: { stderr: string };
+  try {
+    result = await execFileAsync(
+      process.execPath,
+      [marpCliMain, inputMd, '--pptx', '-o', outputPptx],
+      { timeout: 60_000 },
+    );
+  } catch (err) {
+    const execErr = err as NodeJS.ErrnoException & { killed?: boolean };
+    if (execErr.killed) {
+      throw new Error('PPTX export timed out after 60s — slide deck may be too large.');
+    }
+    throw new Error(`PPTX export failed (Marp CLI error): ${execErr.message}`);
+  }
+  if (result.stderr) console.warn('render-marp pptx stderr:', result.stderr);
+}
 
 export async function renderMarp(
   templatePath: string,
   data: Record<string, any>,
   outputType: 'html' | 'pptx',
 ): Promise<RenderResult> {
-  const templateMd = readFileSync(templatePath, 'utf-8');
+  let templateMd: string;
+  try {
+    templateMd = readFileSync(templatePath, 'utf-8');
+  } catch {
+    throw new Error(`Marp template not found or unreadable: ${templatePath}`);
+  }
   const resolvedMd = resolvePlaceholders(templateMd, data);
 
   if (outputType === 'html') {
@@ -32,15 +67,6 @@ export async function renderMarp(
   }
 
   if (outputType === 'pptx') {
-    const { writeFileSync, unlinkSync } = await import('node:fs');
-    const { join, dirname } = await import('node:path');
-    const { tmpdir } = await import('node:os');
-    const { randomUUID } = await import('node:crypto');
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const { createRequire } = await import('node:module');
-    const execFileAsync = promisify(execFile);
-
     // Resolve the CLI binary entry (marp-cli.js), not the library entry point (lib/index.js).
     // require.resolve('@marp-team/marp-cli') returns the library; the argv-driven CLI lives at
     // <pkg-root>/marp-cli.js — get there via the package.json manifest.
@@ -53,14 +79,20 @@ export async function renderMarp(
     writeFileSync(tmpMd, resolvedMd);
 
     try {
-      await execFileAsync(process.execPath, [marpCliMain, tmpMd, '--pptx', '-o', tmpPptx], {
-        timeout: 60_000,
-      });
+      await runMarpCli(marpCliMain, tmpMd, tmpPptx);
+      if (!existsSync(tmpPptx)) {
+        throw new Error('PPTX export failed: Marp CLI produced no output file.');
+      }
       const buffer = readFileSync(tmpPptx);
       return { buffer, format: 'pptx' };
     } finally {
-      try { unlinkSync(tmpMd); } catch { /* ignore */ }
-      try { unlinkSync(tmpPptx); } catch { /* ignore */ }
+      for (const f of [tmpMd, tmpPptx]) {
+        try {
+          unlinkSync(f);
+        } catch (cleanupErr) {
+          console.warn(`render-marp: failed to clean up temp file ${f}:`, cleanupErr);
+        }
+      }
     }
   }
 
