@@ -173,6 +173,7 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       uploadHints.tags?.length ||
       uploadHints.entities?.length
     );
+    const hasClientTag = uploadHints.tags?.some((t) => t.startsWith('client:')) ?? false;
     const hintsBlock = hasAnyHint
       ? `\n# Operator hints (orientation — apply where relevant, not systematically to every block)\n${
           uploadHints.domain ? `- domain (suggested): ${uploadHints.domain}\n` : ''
@@ -183,6 +184,10 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
         }${
           uploadHints.entities?.length
             ? `- entities (suggested): ${uploadHints.entities.join(', ')}\n`
+            : ''
+        }${
+          hasClientTag
+            ? `RULE — named-reference hints (client:*, produit:*, entities): apply these ONLY if the fragment body explicitly names or directly discusses that specific client, product, or organization. Generic contractual clauses, SLA commitments, methodology sections, and capability descriptions do NOT qualify unless the named reference appears in the text. Domain and general thematic tags (open-source, sovereignty, etc.) may be inferred from context — named references may not.\n`
             : ''
         }`
       : '';
