@@ -1,7 +1,7 @@
 // packages/server/src/services/index-service.ts
-import { eq, inArray, and, type SQL } from 'drizzle-orm';
+import { eq, and, type SQL } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, entities, fragmentEntities } from '../db/schema.js';
+import { fragments } from '../db/schema.js';
 
 const SUBJECT_PREFIX: Record<string, string> = {
   'twake-mail': 'TM',
@@ -51,7 +51,6 @@ export interface IndexFragment {
   title: string;
   lang: string;
   tags: string[];
-  entities: string[];
 }
 
 export interface IndexSubject {
@@ -123,7 +122,6 @@ export class IndexService {
       .from(fragments)
       .where(conditions.length === 1 ? conditions[0] : and(...conditions));
 
-    const entityMap = await this.loadEntities(rows.map((r) => r.id));
     const subjects: Record<string, IndexSubject> = {};
 
     for (const row of rows) {
@@ -146,7 +144,6 @@ export class IndexService {
         title: row.title ?? row.id,
         lang: row.lang,
         tags: parseJsonArray(row.tags),
-        entities: entityMap.get(row.id) ?? [],
       });
       subjects[domain].count++;
     }
@@ -176,26 +173,6 @@ export class IndexService {
     return { generated_at: new Date().toISOString(), total: rows.length, subjects };
   }
 
-  private async loadEntities(fragmentIds: string[]): Promise<Map<string, string[]>> {
-    const map = new Map<string, string[]>();
-    if (fragmentIds.length === 0) return map;
-
-    const rows = await this.db
-      .select({
-        fragment_id: fragmentEntities.fragment_id,
-        name: entities.canonicalName,
-      })
-      .from(fragmentEntities)
-      .innerJoin(entities, eq(entities.id, fragmentEntities.entity_id))
-      .where(inArray(fragmentEntities.fragment_id, fragmentIds));
-
-    for (const row of rows) {
-      const list = map.get(row.fragment_id) ?? [];
-      list.push(row.name);
-      map.set(row.fragment_id, list);
-    }
-    return map;
-  }
 }
 
 export function buildReadableIdMap(data: IndexData): Map<string, string> {
@@ -267,7 +244,6 @@ export function renderMarkdown(data: IndexData): string {
         lines.push(`- **[${f.readable_id}]** ${f.title}`);
         const meta: string[] = [];
         meta.push(`\`type: ${type}\``);
-        if (f.entities.length > 0) meta.push(`\`entities: ${f.entities.join(', ')}\``);
         if (f.tags.length > 0) meta.push(`\`tags: ${f.tags.join(', ')}\``);
         meta.push(`\`lang: ${f.lang}\``);
         lines.push(`  - ${meta.join(' ')}`);

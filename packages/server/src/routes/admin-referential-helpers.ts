@@ -6,21 +6,18 @@ import {
   fragmentTagLinks,
   fragmentTypes,
   fragmentFunctions,
-  entities,
   fragments,
   harvestCandidates,
-  fragmentEntities,
   users,
 } from '../db/schema.js';
 
-export type ReferentialType = 'domain' | 'tag' | 'entity' | 'type' | 'function';
+export type ReferentialType = 'domain' | 'tag' | 'type' | 'function';
 
 export const TABLE_MAP = {
   domain: fragmentDomains,
   tag: fragmentTags,
   type: fragmentTypes,
   function: fragmentFunctions,
-  entity: entities,
 } as const;
 
 export const TABLE_NAME_MAP: Record<ReferentialType, string> = {
@@ -28,10 +25,9 @@ export const TABLE_NAME_MAP: Record<ReferentialType, string> = {
   tag: 'fragment_tags',
   type: 'fragment_types',
   function: 'fragment_functions',
-  entity: 'entities',
 };
 
-export const VALID_TYPES: ReferentialType[] = ['domain', 'tag', 'entity', 'type', 'function'];
+export const VALID_TYPES: ReferentialType[] = ['domain', 'tag', 'type', 'function'];
 
 export const FRAGMENT_FIELDS = {
   id: fragments.id,
@@ -64,16 +60,6 @@ export function formatItem(row: any, type: ReferentialType) {
     createdAt: row.created_at ?? row.createdAt,
     proposedBy: row.proposedBy ?? row.proposed_by,
   };
-  if (type === 'entity') {
-    return {
-      ...base,
-      id: row.id,
-      label: row.canonicalName,
-      canonicalName: row.canonicalName,
-      category: row.type,
-      aliases: JSON.parse(row.aliases ?? '[]'),
-    };
-  }
   return {
     ...base,
     id: row.slug,
@@ -107,13 +93,6 @@ export async function getFragmentsForItem(
         .from(fragmentTagLinks)
         .innerJoin(fragments, eq(fragmentTagLinks.fragment_id, fragments.id))
         .where(eq(fragmentTagLinks.tag_slug, id as string))
-        .limit(100);
-    case 'entity':
-      return db
-        .select(FRAGMENT_FIELDS)
-        .from(fragmentEntities)
-        .innerJoin(fragments, eq(fragmentEntities.fragment_id, fragments.id))
-        .where(eq(fragmentEntities.entity_id, id as number))
         .limit(100);
     default:
       return [];
@@ -153,13 +132,12 @@ export async function getCandidatesForItem(
 }
 
 export function resolveId(
-  refType: ReferentialType,
   table: any,
   id: string,
 ): { idField: any; lookupValue: string | number } {
   return {
-    idField: refType === 'entity' ? entities.id : table.slug,
-    lookupValue: refType === 'entity' ? parseInt(id, 10) : id,
+    idField: (table as any).slug,
+    lookupValue: id,
   };
 }
 

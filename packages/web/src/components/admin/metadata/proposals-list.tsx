@@ -1,28 +1,16 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { useMetadataProposals } from '@/api/hooks/use-metadata-proposals';
 import { useI18n } from '@/lib/i18n';
 import { ProposalCard } from './proposal-card';
-import type { ProposalKind, EntityType } from '@/types/admin-metadata';
+import type { ProposalKind } from '@/types/admin-metadata';
 import type { TrustSource } from '@/types/trust-source';
-
-const ENTITY_TYPES: EntityType[] = [
-  'client',
-  'product',
-  'technology',
-  'partner',
-  'certification',
-  'regulation',
-  'metric',
-];
 
 interface Props {
   kind: ProposalKind;
   selectedIds: Set<string | number>;
   onToggle: (id: string | number) => void;
   onAvailableIds?: (ids: Array<string | number>) => void;
-  countsByType?: Record<EntityType, number>;
 }
 
 export function ProposalsList({
@@ -30,18 +18,15 @@ export function ProposalsList({
   selectedIds,
   onToggle,
   onAvailableIds,
-  countsByType,
 }: Props) {
   const [search, setSearch] = useState('');
   const [authorFilter, setAuthorFilter] = useState('');
-  const [entityType, setEntityType] = useState<EntityType | undefined>(undefined);
   const [trustFilter, setTrustFilter] = useState<TrustSource | 'all'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'usage' | 'name'>('date');
   const { t } = useI18n();
 
   const { data, isLoading } = useMetadataProposals({
     kind,
-    entity_type: kind === 'entity' ? entityType : undefined,
     search: search || undefined,
     trust_source: trustFilter !== 'all' ? trustFilter : undefined,
     sort: sortBy,
@@ -112,30 +97,6 @@ export function ProposalsList({
           <option value="usage">{t('admin', 'sortUsage')}</option>
         </select>
       </div>
-
-      {kind === 'entity' && (
-        <div className="flex gap-1 mb-3 flex-wrap">
-          <Button
-            variant={entityType === undefined ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setEntityType(undefined)}
-            className="text-xs"
-          >
-            {t('admin', 'filterAll')}
-          </Button>
-          {ENTITY_TYPES.map((et) => (
-            <Button
-              key={et}
-              variant={entityType === et ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setEntityType(et)}
-              className="text-xs capitalize"
-            >
-              {et}s <span className="ml-1.5 opacity-70">({countsByType?.[et] ?? 0})</span>
-            </Button>
-          ))}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="flex justify-center py-8">

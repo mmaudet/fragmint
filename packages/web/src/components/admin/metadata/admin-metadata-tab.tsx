@@ -13,7 +13,7 @@ export function AdminMetadataTab() {
   const { t } = useI18n();
 
   const { data } = useMetadataProposals({ limit: 0 });
-  const counts = data?.counts ?? { tags: 0, entities: 0, domains: 0, entities_by_type: {} as any };
+  const counts = data?.counts ?? { tags: 0, domains: 0 };
   const bulkAction = useBulkAction();
 
   const handleBulk = (action: 'approve' | 'reject') => {
@@ -34,7 +34,6 @@ export function AdminMetadataTab() {
 
   const kinds: Array<{ key: ProposalKind; label: string; count: number }> = [
     { key: 'tag', label: t('admin', 'kindTags'), count: counts.tags },
-    { key: 'entity', label: t('admin', 'kindEntities'), count: counts.entities },
     { key: 'domain', label: t('admin', 'kindDomains'), count: counts.domains },
   ];
 
@@ -108,7 +107,6 @@ export function AdminMetadataTab() {
         selectedIds={selectedIds}
         onToggle={toggleSelection}
         onAvailableIds={setAvailableIds}
-        countsByType={activeKind === 'entity' ? counts.entities_by_type : undefined}
       />
     </div>
   );

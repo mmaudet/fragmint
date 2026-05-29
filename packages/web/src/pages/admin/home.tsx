@@ -38,11 +38,11 @@ const TABS: TabCard[] = [
   },
   {
     icon: Tag,
-    title: 'Metadata',
+    title: 'Référentiel',
     subtitle: 'Validation et maintenance du référentiel',
     description:
-      'Gère le vocabulaire du système : sujets, entités, tags. "À valider" traite les nouvelles propositions du LLM. "Référentiel" permet la maintenance du catalogue actif.',
-    cta: 'Gérer les métadonnées',
+      'Gère le vocabulaire du système : domaines, tags et types. "À valider" traite les nouvelles propositions du LLM. "Référentiel" permet la maintenance du catalogue actif.',
+    cta: 'Gérer le référentiel',
     link: '/admin/metadata',
     available: true,
   },
@@ -145,7 +145,7 @@ const QUICK_START = [
   {
     label: 'Vérifiez le référentiel',
     detail:
-      'Metadata > Référentiel — vérifiez que sujets, entités et tags correspondent à votre contexte métier.',
+      'Référentiel — vérifiez que domaines et tags correspondent à votre contexte métier.',
   },
   {
     label: 'Testez une ingestion',
@@ -202,14 +202,6 @@ const METADATA_GLOSSARY = [
     question: 'Quels concepts transverses ce fragment illustre-t-il ?',
     values: 'Libres — proposés par le LLM, validés dans Metadata > À valider',
     example: 'open-source · sovereignty · on-premise · cloud-native',
-  },
-  {
-    field: 'Entités',
-    code: 'entities',
-    question: 'Quels acteurs réels sont mentionnés dans ce fragment ?',
-    values:
-      'clients · products · technologies · partners · certifications · regulations — référentiel validé',
-    example: 'SecNumCloud (certification) · CNB (client) · Apache James (technology)',
   },
   {
     field: 'Statut workflow',

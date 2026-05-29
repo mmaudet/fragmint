@@ -3,12 +3,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Check, X, Edit, Combine, ArrowRight, AlertTriangle, Info } from 'lucide-react';
+import { Check, X, Edit, Combine, AlertTriangle, Info } from 'lucide-react';
 import { useApproveProposal, useRejectProposal } from '@/api/hooks/use-metadata-proposals';
 import { useI18n } from '@/lib/i18n';
 import { RenameDialog } from './rename-dialog';
 import { MergeDialog } from './merge-dialog';
-import { ConvertToEntityDialog } from './convert-to-entity-dialog';
 import { ReferentialItemSheet } from '@/components/admin/referential-item-sheet';
 import type { MetadataProposal } from '@/types/admin-metadata';
 import type { TrustSource } from '@/types/trust-source';
@@ -37,15 +36,13 @@ const ROLE_KEYS: Record<
   manager: 'roleManager',
 };
 
-const FLAG_LABEL_KEYS: Record<string, 'flagLowUsage' | 'flagPossiblyEntity'> = {
+const FLAG_LABEL_KEYS: Record<string, 'flagLowUsage'> = {
   'Low usage': 'flagLowUsage',
-  'Possibly entity': 'flagPossiblyEntity',
 };
 
 export function ProposalCard({ proposal, selected, onToggle }: Props) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
-  const [convertOpen, setConvertOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const approve = useApproveProposal();
   const reject = useRejectProposal();
@@ -68,7 +65,6 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
             </code>
             {proposal.usage_count > 0 && (
               <Badge variant="secondary">
-                {proposal.entity_type && <span className="mr-1">{proposal.entity_type} ·</span>}
                 {proposal.usage_count} {proposal.usage_count === 1 ? 'fragment' : 'fragments'}
               </Badge>
             )}
@@ -112,12 +108,6 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
           <Check className="h-3.5 w-3.5 mr-1.5" />
           {t('admin', 'approve')}
         </Button>
-        {proposal.flags.some((f) => f.label === 'Possibly entity') && proposal.kind === 'tag' && (
-          <Button size="sm" variant="outline" onClick={() => setConvertOpen(true)}>
-            <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-            {t('admin', 'convertToEntity')}
-          </Button>
-        )}
         <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
           <Edit className="h-3.5 w-3.5 mr-1.5" />
           {t('admin', 'rename')}
@@ -139,9 +129,6 @@ export function ProposalCard({ proposal, selected, onToggle }: Props) {
       </div>
       {renameOpen && <RenameDialog proposal={proposal} open onOpenChange={setRenameOpen} />}
       {mergeOpen && <MergeDialog proposal={proposal} open onOpenChange={setMergeOpen} />}
-      {convertOpen && (
-        <ConvertToEntityDialog proposal={proposal} open onOpenChange={setConvertOpen} />
-      )}
       <ReferentialItemSheet
         type={proposal.kind}
         id={proposal.id}

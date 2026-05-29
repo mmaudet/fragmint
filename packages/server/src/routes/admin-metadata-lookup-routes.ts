@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and, or, like } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragmentDomains, fragmentTags, fragmentFunctions, entities } from '../db/schema.js';
+import { fragmentDomains, fragmentTags, fragmentFunctions } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
 
 export function adminMetadataLookupRoutes(
@@ -81,21 +81,6 @@ export function adminMetadataLookupRoutes(
           .limit(maxResults);
         return reply.send({
           data: rows.map((r) => ({ slug: r.slug, label: r.label })),
-          meta: null,
-          error: null,
-        });
-      }
-
-      if (kind === 'entity') {
-        const conditions: any[] = [eq(entities.validated, 1)];
-        if (search) conditions.push(like(entities.name, `%${search}%`));
-        const rows = await db
-          .select({ id: entities.id, name: entities.name, type: entities.type })
-          .from(entities)
-          .where(and(...conditions))
-          .limit(maxResults);
-        return reply.send({
-          data: rows.map((r) => ({ slug: String(r.id), label: r.name, type: r.type })),
           meta: null,
           error: null,
         });

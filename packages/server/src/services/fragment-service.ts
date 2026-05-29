@@ -8,8 +8,6 @@ import {
   collections,
   fragmentDomains,
   fragmentTags,
-  fragmentEntities,
-  entities as entitiesTable,
   fragmentTagLinks,
   harvestCandidates,
 } from '../db/schema.js';
@@ -207,16 +205,6 @@ export class FragmentService {
     const row = rows[0];
     const filePath = join(this.storePath, row.file_path);
 
-    const entityRows = await this.db
-      .select({
-        id: entitiesTable.id,
-        canonicalName: entitiesTable.canonicalName,
-        type: entitiesTable.type,
-      })
-      .from(fragmentEntities)
-      .innerJoin(entitiesTable, eq(entitiesTable.id, fragmentEntities.entity_id))
-      .where(eq(fragmentEntities.fragment_id, id));
-
     // If the fragment came from harvest, surface near-dup detection info for the validation UI
     let harvest_near_dup: {
       fragment_id: string;
@@ -250,7 +238,7 @@ export class FragmentService {
 
     try {
       const { frontmatter, body } = readFragment(filePath);
-      return { ...row, frontmatter, body, entities: entityRows, harvest_near_dup };
+      return { ...row, frontmatter, body, harvest_near_dup };
     } catch (e: any) {
       if (e?.code === 'ENOENT') return null; // fichier manquant → 404 propre
       throw e;
@@ -265,27 +253,6 @@ export class FragmentService {
       .limit(1);
     if (rows.length === 0) return null;
     return this.getById(rows[0].id);
-  }
-
-  /** Replace the full set of entity links for a fragment. Only links to validated entities. */
-  async updateEntities(fragmentId: string, entityIds: number[]): Promise<void> {
-    // Verify all requested IDs are validated entities
-    const valid =
-      entityIds.length > 0
-        ? await this.db
-            .select({ id: entitiesTable.id })
-            .from(entitiesTable)
-            .where(and(inArray(entitiesTable.id, entityIds), eq(entitiesTable.validated, 1)))
-        : [];
-    const validIds = valid.map((r) => r.id);
-
-    await this.db.delete(fragmentEntities).where(eq(fragmentEntities.fragment_id, fragmentId));
-    if (validIds.length > 0) {
-      await this.db
-        .insert(fragmentEntities)
-        .values(validIds.map((entity_id) => ({ fragment_id: fragmentId, entity_id })))
-        .onConflictDoNothing();
-    }
   }
 
   async list(filters?: {

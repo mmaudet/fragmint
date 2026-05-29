@@ -20,7 +20,6 @@ export interface CoherenceFlag {
   type:
     | 'subject_coherence'
     | 'entity_coverage'
-    | 'hint_entity_coverage'
     | 'duplicate_check'
     | 'prototype_distance';
   level: 'ok' | 'warning' | 'error' | 'info';
@@ -64,34 +63,37 @@ export function checkSubjectCoherence(block: { domain: string; body: string }): 
   };
 }
 
-const ENTITY_EXPECTATIONS: Record<string, string[]> = {
-  technical: ['technologies', 'products'],
-  commercial: ['products'],
-  reference: ['clients'],
-  legal: ['regulations', 'certifications'],
+// Prefixes expected in tags for each function_type
+const TAG_PREFIX_EXPECTATIONS: Record<string, string[]> = {
+  technical: ['tech:', 'produit:'],
+  commercial: ['produit:'],
+  reference: ['client:'],
+  legal: ['reg:', 'cert:'],
 };
 
-export function checkEntityCoverage(block: {
+export function checkTagCoverage(block: {
   function_type: string | null | undefined;
-  entities: Record<string, string[]>;
+  tags: string[];
 }): CoherenceFlag {
-  const expected = ENTITY_EXPECTATIONS[block.function_type ?? ''] ?? [];
+  const expected = TAG_PREFIX_EXPECTATIONS[block.function_type ?? ''] ?? [];
   if (expected.length === 0) {
     return {
-      type: 'entity_coverage',
+      type: 'entity_coverage',   // keep same type string for backward compat with stored signals
       level: 'info',
-      message: 'No entity expectations for this function',
+      message: 'No entity tag expectations for this function',
     };
   }
-  const missing = expected.filter((t) => !block.entities[t] || block.entities[t].length === 0);
+  const missing = expected.filter(
+    (prefix) => !block.tags.some((t) => t.startsWith(prefix)),
+  );
   if (missing.length > 0) {
     return {
       type: 'entity_coverage',
       level: 'warning',
-      message: `Missing expected entities: ${missing.join(', ')}`,
+      message: `Missing expected entity tags: ${missing.join(', ')}`,
     };
   }
-  return { type: 'entity_coverage', level: 'ok', message: 'Expected entities present' };
+  return { type: 'entity_coverage', level: 'ok', message: 'Expected entity tags present' };
 }
 
 function duplicateSignal(dupResult: { id: string; score: number } | null): CoherenceFlag {
@@ -121,41 +123,20 @@ function duplicateSignal(dupResult: { id: string; score: number } | null): Coher
   };
 }
 
-/** Check that hint entities from upload hints are present in the fragment body. */
-export function checkHintEntityCoverage(
-  body: string,
-  hintEntities: string[],
-): CoherenceFlag | null {
-  if (hintEntities.length === 0) return null;
-  const missing = hintEntities.filter((name) => {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return !new RegExp(`\\b${escaped}\\b`, 'i').test(body);
-  });
-  if (missing.length === 0) return null;
-  return {
-    type: 'hint_entity_coverage',
-    level: 'info',
-    message: `Entité(s) hint non trouvée(s) dans ce fragment : ${missing.join(', ')}`,
-  };
-}
-
 export function computeQualitySignals(
   block: {
     type: string;
     body: string;
     domain: string;
     function_type?: string | null;
-    entities?: Record<string, string[]>;
+    tags?: string[];
   },
   dupResult: { id: string; score: number } | null,
-  hintEntities: string[] = [],
 ): CoherenceFlag[] {
   const signals: CoherenceFlag[] = [
     checkSubjectCoherence({ domain: block.domain, body: block.body }),
-    checkEntityCoverage({ function_type: block.function_type, entities: block.entities ?? {} }),
+    checkTagCoverage({ function_type: block.function_type, tags: block.tags ?? [] }),
     duplicateSignal(dupResult),
   ];
-  const hintSignal = checkHintEntityCoverage(block.body, hintEntities);
-  if (hintSignal) signals.push(hintSignal);
   return signals;
 }

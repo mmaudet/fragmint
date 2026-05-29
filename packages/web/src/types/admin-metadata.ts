@@ -1,22 +1,12 @@
 import type { TrustSource } from './trust-source';
 
-export type ProposalKind = 'tag' | 'domain' | 'entity' | 'type';
-
-export type EntityType =
-  | 'client'
-  | 'product'
-  | 'technology'
-  | 'partner'
-  | 'certification'
-  | 'regulation'
-  | 'metric';
+export type ProposalKind = 'tag' | 'domain' | 'type';
 
 export interface ProposalFlag {
   type: 'warning' | 'info';
   label: string;
   suggestion?: string;
   merge_target?: string;
-  reclassify_to?: EntityType;
 }
 
 export interface MetadataProposal {
@@ -24,7 +14,6 @@ export interface MetadataProposal {
   kind: ProposalKind;
   name: string;
   label?: string;
-  entity_type?: EntityType;
   usage_count: number;
   validated: boolean;
   proposed_by: string;
@@ -38,9 +27,14 @@ export interface MetadataProposal {
 
 export interface ProposalCounts {
   tags: number;
-  entities: number;
   domains: number;
-  entities_by_type: Record<EntityType, number>;
+}
+
+export interface PendingCounts {
+  tags: number;
+  domains: number;
+  types: number;
+  total: number;
 }
 
 export interface ProposalsResponse {
@@ -71,7 +65,5 @@ export interface ValidatedReferenceValue {
   slug?: string;
   name?: string;
   label: string;
-  type?: EntityType;
-  canonical_name?: string;
   usage_count: number;
 }

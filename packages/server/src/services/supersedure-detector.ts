@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { eq, ne, and, isNull, or, inArray } from 'drizzle-orm';
+import { eq, ne, and, isNull, or } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import {
-  fragments,
-  supersedureProposals,
-  fragmentEntities,
-  entities as entitiesTable,
-} from '../db/schema.js';
+import { fragments, supersedureProposals } from '../db/schema.js';
 import type { LlmClient } from './llm-client.js';
 import { generateShingles, jaccardSimilarity } from './dedupe/shingles.js';
 
@@ -37,22 +32,7 @@ interface LlmJudgment {
 
 type FragmentRow = typeof fragments.$inferSelect;
 
-async function loadEntityMeta(
-  db: FragmintDb,
-  fragmentId: string,
-): Promise<{ entityNames: string[]; entityIds: number[] }> {
-  const rows = await db
-    .select({ id: entitiesTable.id, name: entitiesTable.canonicalName })
-    .from(fragmentEntities)
-    .innerJoin(entitiesTable, eq(entitiesTable.id, fragmentEntities.entity_id))
-    .where(eq(fragmentEntities.fragment_id, fragmentId));
-  return {
-    entityNames: rows.map((r) => r.name),
-    entityIds: rows.map((r) => r.id),
-  };
-}
-
-function formatFragmentContext(frag: FragmentRow, entityNames: string[]): string {
+function formatFragmentContext(frag: FragmentRow): string {
   const tags = frag.tags ? (JSON.parse(frag.tags) as string[]) : [];
   const lines = [
     `domain: ${frag.domain}`,
@@ -62,7 +42,6 @@ function formatFragmentContext(frag: FragmentRow, entityNames: string[]): string
     frag.audience ? `audience: ${frag.audience}` : null,
     frag.maturity ? `maturity: ${frag.maturity}` : null,
     tags.length > 0 ? `tags: ${tags.join(', ')}` : null,
-    entityNames.length > 0 ? `entities: ${entityNames.join(', ')}` : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -81,8 +60,6 @@ export async function detectAndPropose(
     .limit(1);
   if (!newFrag || !newFrag.body_excerpt) return;
 
-  const newEntityMeta = await loadEntityMeta(db, newFragmentId);
-
   const candidates = await db
     .select()
     .from(fragments)
@@ -98,38 +75,7 @@ export async function detectAndPropose(
     )
     .limit(50);
 
-  // Entity pre-filter: keep candidates that share at least one entity with the new fragment,
-  // OR that have no entities at all (older fragments never had entity extraction — let Jaccard decide).
-  // Candidates WITH entities but zero overlap are excluded (different-topic signal).
-  let filteredCandidates = candidates;
-  if (newEntityMeta.entityIds.length > 0 && candidates.length > 0) {
-    const candidateIds = candidates.map((c) => c.id);
-
-    const [sharedRows, anyEntityRows] = await Promise.all([
-      db
-        .select({ fragment_id: fragmentEntities.fragment_id })
-        .from(fragmentEntities)
-        .where(
-          and(
-            inArray(fragmentEntities.fragment_id, candidateIds),
-            inArray(fragmentEntities.entity_id, newEntityMeta.entityIds),
-          ),
-        ),
-      db
-        .select({ fragment_id: fragmentEntities.fragment_id })
-        .from(fragmentEntities)
-        .where(inArray(fragmentEntities.fragment_id, candidateIds)),
-    ]);
-
-    const withShared = new Set(sharedRows.map((r) => r.fragment_id));
-    const hasAnyEntities = new Set(anyEntityRows.map((r) => r.fragment_id));
-
-    filteredCandidates = candidates.filter(
-      (c) => withShared.has(c.id) || !hasAnyEntities.has(c.id),
-    );
-  }
-
-  for (const candidate of filteredCandidates) {
+  for (const candidate of candidates) {
     const oldBody = candidate.body_excerpt ?? '';
     if (!oldBody) continue;
 
@@ -152,15 +98,13 @@ export async function detectAndPropose(
       .limit(1);
     if (existing.length > 0) continue;
 
-    const candidateEntityMeta = await loadEntityMeta(db, candidate.id);
-
     let judgment: LlmJudgment;
     try {
       const raw = await llmClient.chatMessages([
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `Fragment A (older):\n${formatFragmentContext(candidate, candidateEntityMeta.entityNames)}\n\nFragment B (newer):\n${formatFragmentContext(newFrag, newEntityMeta.entityNames)}`,
+          content: `Fragment A (older):\n${formatFragmentContext(candidate)}\n\nFragment B (newer):\n${formatFragmentContext(newFrag)}`,
         },
       ]);
       const parsed = JSON.parse(raw.trim()) as LlmJudgment;

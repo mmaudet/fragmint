@@ -1,21 +1,6 @@
-import { eq, and, like, count } from 'drizzle-orm';
+import { eq, like, count } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import {
-  fragments,
-  fragmentTags,
-  fragmentDomains,
-  entities,
-  fragmentEntities,
-} from '../db/schema.js';
-
-export function normalizeForComparison(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+import { fragments, fragmentTags, fragmentDomains } from '../db/schema.js';
 
 function similarityRatio(a: string, b: string): number {
   const longer = a.length > b.length ? a : b;
@@ -49,16 +34,6 @@ export async function getPreviewForTag(db: FragmintDb, slug: string): Promise<st
   return truncateAtWord(row?.bodyExcerpt ?? '', 200);
 }
 
-export async function getPreviewForEntity(db: FragmintDb, entityId: number): Promise<string> {
-  const [row] = await db
-    .select({ bodyExcerpt: fragments.body_excerpt })
-    .from(fragments)
-    .innerJoin(fragmentEntities, eq(fragmentEntities.fragment_id, fragments.id))
-    .where(eq(fragmentEntities.entity_id, entityId))
-    .limit(1);
-  return truncateAtWord(row?.bodyExcerpt ?? '', 200);
-}
-
 export async function computeFlagsForTag(
   db: FragmintDb,
   tag: { slug: string; usageCount: number; label: string },
@@ -66,9 +41,6 @@ export async function computeFlagsForTag(
 ): Promise<any[]> {
   const flags = [];
   if ((tag.usageCount ?? 0) < 3) flags.push({ type: 'info', label: 'Low usage' });
-  const entityKeywords = ['cert', 'iso', 'rgpd', 'cnb', 'james', 'jmap', 'secnum'];
-  if (entityKeywords.some((kw) => tag.slug.toLowerCase().includes(kw)))
-    flags.push({ type: 'warning', label: 'Possibly entity', suggestion: 'Convert to entity' });
   const validatedTags =
     cachedValidatedTags ??
     (await db
@@ -86,72 +58,13 @@ export async function computeFlagsForTag(
   return flags;
 }
 
-export async function computeFlagsForEntity(
-  db: FragmintDb,
-  ent: { id: number; type: string; name: string; normalizedName: string },
-  cachedValidatedEntities?: Array<{ type: string; normalizedName: string; canonicalName: string }>,
-): Promise<any[]> {
-  const flags = [];
-  const validatedEntities =
-    cachedValidatedEntities?.filter((e) => e.type === ent.type) ??
-    (await db
-      .select({
-        type: entities.type,
-        normalizedName: entities.normalizedName,
-        canonicalName: entities.canonicalName,
-      })
-      .from(entities)
-      .where(and(eq(entities.type, ent.type), eq(entities.validated, 1))));
-  for (const ve of validatedEntities) {
-    if (similarityRatio(ent.normalizedName, ve.normalizedName) > 0.6) {
-      flags.push({
-        type: 'warning',
-        label: `Canonical: ${ve.canonicalName}`,
-        suggestion: `Set as alias of ${ve.canonicalName}`,
-      });
-      break;
-    }
-  }
-  const typeKeywords: Record<string, string[]> = {
-    technology: ['protocol', 'api', 'sdk', 'framework', 'james', 'jmap'],
-    certification: ['cert', 'iso', 'rgpd', 'secnumcloud', 'hds'],
-  };
-  for (const [correctType, kws] of Object.entries(typeKeywords)) {
-    if (ent.type !== correctType && kws.some((kw) => ent.name.toLowerCase().includes(kw))) {
-      flags.push({
-        type: 'warning',
-        label: 'Wrong type?',
-        suggestion: `Reclassify as ${correctType}`,
-        reclassify_to: correctType,
-      });
-      break;
-    }
-  }
-  return flags;
-}
-
 export async function computeCounts(db: FragmintDb) {
-  const tagCount = await db
-    .select({ value: count() })
-    .from(fragmentTags)
-    .where(eq(fragmentTags.validated, 0));
-  const entityCount = await db
-    .select({ value: count() })
-    .from(entities)
-    .where(eq(entities.validated, 0));
-  const domainCount = await db
-    .select({ value: count() })
-    .from(fragmentDomains)
-    .where(eq(fragmentDomains.validated, 0));
-  const entitiesByType = await db
-    .select({ type: entities.type, value: count() })
-    .from(entities)
-    .where(eq(entities.validated, 0))
-    .groupBy(entities.type);
+  const [tagCount, domainCount] = await Promise.all([
+    db.select({ value: count() }).from(fragmentTags).where(eq(fragmentTags.validated, 0)),
+    db.select({ value: count() }).from(fragmentDomains).where(eq(fragmentDomains.validated, 0)),
+  ]);
   return {
     tags: tagCount[0]?.value ?? 0,
-    entities: entityCount[0]?.value ?? 0,
     domains: domainCount[0]?.value ?? 0,
-    entities_by_type: entitiesByType.reduce((acc: any, r) => ({ ...acc, [r.type]: r.value }), {}),
   };
 }

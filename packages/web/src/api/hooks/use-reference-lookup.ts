@@ -7,7 +7,7 @@ export interface ReferenceItem {
   type?: string;
 }
 
-export function useReferenceLookup(kind: 'domain' | 'tag' | 'function' | 'entity', q: string) {
+export function useReferenceLookup(kind: 'domain' | 'tag' | 'function', q: string) {
   return useQuery<ReferenceItem[]>({
     queryKey: ['reference-lookup', kind, q],
     queryFn: () => {

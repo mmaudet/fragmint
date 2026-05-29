@@ -244,26 +244,6 @@ export function fragmentRoutes(
     return { data: result, meta: null, error: null };
   });
 
-  // Update entity links
-  app.put(
-    `${prefix}/fragments/:id/entities`,
-    { preHandler: writeHandlers },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const { entity_ids } = request.body as { entity_ids?: unknown };
-      if (!Array.isArray(entity_ids) || entity_ids.some((x) => typeof x !== 'number')) {
-        return reply
-          .status(400)
-          .send({ data: null, meta: null, error: 'entity_ids must be an array of numbers' });
-      }
-      const frag = await fragmentService.getById(id);
-      if (!frag)
-        return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
-      await fragmentService.updateEntities(id, entity_ids as number[]);
-      return { data: { updated: entity_ids.length }, meta: null, error: null };
-    },
-  );
-
   // Review
   app.post(`${prefix}/fragments/:id/review`, { preHandler: writeHandlers }, async (request) => {
     const { id } = request.params as { id: string };

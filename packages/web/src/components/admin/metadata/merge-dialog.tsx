@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import {
   useMergeProposal,
-  useSetAsAlias,
   useValidatedReferenceValues,
 } from '@/api/hooks/use-metadata-proposals';
 import type { MetadataProposal } from '@/types/admin-metadata';
@@ -27,46 +26,30 @@ interface Props {
 export function MergeDialog({ proposal, open, onOpenChange }: Props) {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
-  const { data: validated } = useValidatedReferenceValues(proposal.kind, proposal.entity_type);
+  const { data: validated } = useValidatedReferenceValues(proposal.kind);
   const merge = useMergeProposal();
-  const setAlias = useSetAsAlias();
   const { t } = useI18n();
 
   const cleanName = (proposal.name ?? '').replace(/^NEW:\s*/i, '');
 
-  const isAliasMode =
-    proposal.kind === 'entity' && proposal.flags.some((f) => f.label.startsWith('Canonical:'));
   const filtered = (validated ?? []).filter(
     (v) =>
-      (v.canonical_name || v.label || v.name || '').toLowerCase().includes(search.toLowerCase()) &&
+      (v.label || v.name || '').toLowerCase().includes(search.toLowerCase()) &&
       v.id !== proposal.id,
   );
 
   const handleAction = () => {
     if (!selectedId) return;
-    if (isAliasMode) {
-      setAlias.mutate(
-        { id: Number(proposal.id), canonical_entity_id: Number(selectedId) },
-        {
-          onSuccess: () => {
-            toast.success('Alias défini');
-            onOpenChange(false);
-          },
-          onError: (e: any) => toast.error(`Erreur : ${e.message ?? 'Fusion impossible'}`),
+    merge.mutate(
+      { id: proposal.id, kind: proposal.kind, target_id: selectedId },
+      {
+        onSuccess: () => {
+          toast.success('Fusion effectuée');
+          onOpenChange(false);
         },
-      );
-    } else {
-      merge.mutate(
-        { id: proposal.id, kind: proposal.kind, target_id: selectedId },
-        {
-          onSuccess: () => {
-            toast.success('Fusion effectuée');
-            onOpenChange(false);
-          },
-          onError: (e: any) => toast.error(`Erreur : ${e.message ?? 'Fusion impossible'}`),
-        },
-      );
-    }
+        onError: (e: any) => toast.error(`Erreur : ${e.message ?? 'Fusion impossible'}`),
+      },
+    );
   };
 
   return (
@@ -75,7 +58,7 @@ export function MergeDialog({ proposal, open, onOpenChange }: Props) {
       <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>
-            {isAliasMode ? 'Set as alias of...' : `Fusionner "${cleanName}" avec...`}
+            {`Fusionner "${cleanName}" avec...`}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -89,7 +72,7 @@ export function MergeDialog({ proposal, open, onOpenChange }: Props) {
               <p className="text-sm text-muted-foreground p-2">Aucun résultat.</p>
             ) : (
               filtered.map((v) => {
-                const label = v.canonical_name || v.label || v.name || String(v.id);
+                const label = v.label || v.name || String(v.id);
                 const count = v.usage_count ?? 0;
                 const viewHref = `/ui/admin/referential?item=${proposal.kind}/${v.id}`;
                 return (
@@ -133,9 +116,9 @@ export function MergeDialog({ proposal, open, onOpenChange }: Props) {
           </Button>
           <Button
             onClick={handleAction}
-            disabled={!selectedId || merge.isPending || setAlias.isPending}
+            disabled={!selectedId || merge.isPending}
           >
-            {isAliasMode ? 'Set as alias' : 'Fusionner'}
+            Fusionner
           </Button>
         </DialogFooter>
       </DialogContent>

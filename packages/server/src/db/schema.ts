@@ -264,24 +264,6 @@ export const fragmentFunctions = sqliteTable('fragment_functions', {
     .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
 });
 
-export const entities = sqliteTable('entities', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  type: text('type').notNull(),
-  name: text('name').notNull(),
-  canonicalName: text('canonical_name').notNull(),
-  normalizedName: text('normalized_name').notNull(),
-  aliases: text('aliases'),
-  validated: integer('validated').notNull().default(0),
-  usageCount: integer('usage_count').notNull().default(0),
-  proposedBy: text('proposed_by').notNull().default('admin'),
-  createdAt: text('created_at').notNull(),
-  trustSource: text('trust_source').notNull().default('human-direct'),
-  status: text('status')
-    .notNull()
-    .default('active')
-    .$type<'pending' | 'active' | 'rejected' | 'archived'>(),
-});
-
 export const referentialRenames = sqliteTable('referential_renames', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   table_name: text('table_name').notNull(),
@@ -292,15 +274,6 @@ export const referentialRenames = sqliteTable('referential_renames', {
   renamed_at: text('renamed_at').notNull(),
   recalculation_job_id: text('recalculation_job_id'),
 });
-
-export const fragmentEntities = sqliteTable(
-  'fragment_entities',
-  {
-    fragment_id: text('fragment_id').notNull(),
-    entity_id: integer('entity_id').notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.fragment_id, t.entity_id] })],
-);
 
 export const supersedureProposals = sqliteTable('supersedure_proposals', {
   id: text('id').primaryKey(),

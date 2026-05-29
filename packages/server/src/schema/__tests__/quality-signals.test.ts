@@ -3,7 +3,7 @@ import {
   normalizeForComparison,
   detectExactDuplicate,
   checkSubjectCoherence,
-  checkEntityCoverage,
+  checkTagCoverage,
   computeQualitySignals,
 } from '../../services/quality-signals.js';
 
@@ -81,51 +81,53 @@ describe('checkSubjectCoherence', () => {
   });
 });
 
-describe('checkEntityCoverage', () => {
-  it('returns ok when expected entities present for function', () => {
-    const result = checkEntityCoverage({
-      function_type: 'commercial',
-      entities: {
-        products: ['Twake Mail'],
-        clients: [],
-        technologies: [],
-        partners: [],
-        certifications: [],
-        regulations: [],
-      },
+describe('checkTagCoverage', () => {
+  it('returns ok when expected tag prefixes present for function', () => {
+    const result = checkTagCoverage({
+      function_type: 'reference',
+      tags: ['client:dgfip', 'open-source'],
+    });
+    expect(result.level).toBe('ok');
+    expect(result.type).toBe('entity_coverage');
+  });
+
+  it('returns warning when expected tag prefix missing', () => {
+    const result = checkTagCoverage({
+      function_type: 'reference',
+      tags: ['open-source'],
+    });
+    expect(result.level).toBe('warning');
+    expect(result.message).toContain('client:');
+  });
+
+  it('returns info for function types with no expectations', () => {
+    const result = checkTagCoverage({
+      function_type: 'introduction',
+      tags: [],
+    });
+    expect(result.level).toBe('info');
+  });
+
+  it('handles missing tags array gracefully', () => {
+    const result = checkTagCoverage({ function_type: 'commercial', tags: [] });
+    expect(result.level).toBe('warning');
+    expect(result.message).toContain('produit:');
+  });
+
+  it('returns ok for technical with tech: and produit: tags', () => {
+    const result = checkTagCoverage({
+      function_type: 'technical',
+      tags: ['tech:apache-james', 'produit:linshare'],
     });
     expect(result.level).toBe('ok');
   });
 
-  it('returns warning when expected entities missing', () => {
-    const result = checkEntityCoverage({
-      function_type: 'reference',
-      entities: {
-        products: [],
-        clients: [],
-        technologies: [],
-        partners: [],
-        certifications: [],
-        regulations: [],
-      },
+  it('returns warning when only one of two required prefixes present (technical)', () => {
+    const result = checkTagCoverage({
+      function_type: 'technical',
+      tags: ['tech:apache-james'],
     });
     expect(result.level).toBe('warning');
-    expect(result.message).toContain('clients');
-  });
-
-  it('returns info for function with no expectations', () => {
-    const result = checkEntityCoverage({
-      function_type: 'strategic',
-      entities: {
-        products: [],
-        clients: [],
-        technologies: [],
-        partners: [],
-        certifications: [],
-        regulations: [],
-      },
-    });
-    expect(result.level).toBe('info');
   });
 });
 
@@ -137,14 +139,7 @@ describe('computeQualitySignals', () => {
         body: 'Twake Mail est une solution de messagerie souveraine.',
         domain: 'twake-mail',
         function_type: 'commercial',
-        entities: {
-          products: ['Twake Mail'],
-          clients: [],
-          technologies: [],
-          partners: [],
-          certifications: [],
-          regulations: [],
-        },
+        tags: ['produit:twake-mail'],
       },
       null,
     );
@@ -163,7 +158,7 @@ describe('computeQualitySignals', () => {
     expect(dupFlag?.message).toContain('frag-1');
   });
 
-  it('handles missing entities gracefully', () => {
+  it('handles missing tags gracefully', () => {
     const result = computeQualitySignals(
       { type: 'argument', body: 'Contenu quelconque.', domain: 'unknown' },
       null,

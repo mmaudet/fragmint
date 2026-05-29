@@ -7,8 +7,6 @@ import {
   harvestJobs,
   fragmentTags,
   fragmentTagLinks,
-  entities,
-  fragmentEntities,
 } from '../db/schema.js';
 import type { FragmentService } from './fragment-service.js';
 import type { FragmentBulkService } from './fragment-bulk-service.js';
@@ -79,7 +77,6 @@ export async function validate(
         .set({ status: 'accepted', fragment_id: result.id })
         .where(eq(harvestCandidates.id, candidateId)),
       upsertTags(db, tags),
-      linkFragmentEntities(db, result.id, candidate.entities_json),
     ]);
 
     committed++;
@@ -132,7 +129,6 @@ export async function validate(
         .set({ status: 'accepted', fragment_id: result.id })
         .where(eq(harvestCandidates.id, mod.id)),
       upsertTags(db, tags),
-      linkFragmentEntities(db, result.id, mod.entities_json ?? candidate.entities_json),
     ]);
 
     committed++;
@@ -204,7 +200,7 @@ export async function bulkAccept(
   // Single batch: one git commit per collection vault instead of N commits
   const created = await fragmentService.bulkCreateDraftFragments(items, userId);
 
-  // Update candidates and link entities
+  // Update candidates and upsert tags
   const allTags = [...new Set(items.flatMap((i) => i.tags))];
   await upsertTags(db, allTags);
 
@@ -214,7 +210,6 @@ export async function bulkAccept(
       .update(harvestCandidates)
       .set({ status: 'accepted', fragment_id: id })
       .where(eq(harvestCandidates.id, candidate.id));
-    await linkFragmentEntities(db, id, candidate.entities_json);
     const candidateTags = items[idx]?.tags ?? [];
     if (candidateTags.length > 0) {
       await db
@@ -243,38 +238,6 @@ export function tagsFromCandidate(
   const rawProposed: string[] = (proposals.tags as string[] | undefined) ?? [];
   const merged = [...new Set([...rawKnown, ...rawProposed].map(normalizeTagSlug))].filter(Boolean);
   return merged;
-}
-
-export async function linkFragmentEntities(
-  db: FragmintDb,
-  fragmentId: string,
-  entitiesJson: string | null,
-): Promise<void> {
-  if (!entitiesJson) return;
-  let parsed: Record<string, string[]>;
-  try {
-    parsed = JSON.parse(entitiesJson) as Record<string, string[]>;
-  } catch {
-    return;
-  }
-  const allNames = Object.values(parsed).flat();
-  for (const raw of allNames) {
-    const normalized = raw
-      .replace(/^NEW:/i, '')
-      .toLowerCase()
-      .replace(/[\s\-.]+/g, '-');
-    const found = await db
-      .select({ id: entities.id })
-      .from(entities)
-      .where(and(eq(entities.normalizedName, normalized), eq(entities.validated, 1)))
-      .limit(1);
-    if (found.length > 0) {
-      await db
-        .insert(fragmentEntities)
-        .values({ fragment_id: fragmentId, entity_id: found[0].id })
-        .onConflictDoNothing();
-    }
-  }
 }
 
 export async function upsertTags(db: FragmintDb, tags: string[]): Promise<void> {

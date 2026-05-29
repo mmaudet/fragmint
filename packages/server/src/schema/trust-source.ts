@@ -8,7 +8,6 @@ export interface UploadHints {
   audience?: string[];
   maturity?: string;
   tags?: string[];
-  entities?: string[];
 }
 
 export const UploadHintsSchema = z
@@ -18,7 +17,6 @@ export const UploadHintsSchema = z
     audience: z.array(z.string().max(50)).max(4).optional(),
     maturity: z.enum(['production', 'beta', 'roadmap', 'archive']).optional(),
     tags: z.array(z.string().max(80)).max(20).optional(),
-    entities: z.array(z.string().max(100)).max(20).optional(),
   })
   .strict();
 
@@ -91,7 +89,6 @@ export function computeTrustSources(
     'audience',
     'maturity',
     'tags',
-    'entities',
   ];
 
   for (const field of fields) {

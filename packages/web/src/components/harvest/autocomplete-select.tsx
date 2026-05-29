@@ -7,7 +7,7 @@ import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
 import type { ReferenceItem } from '@/api/hooks/use-reference-lookup';
 
 interface Props {
-  kind: 'domain' | 'tag' | 'function' | 'entity';
+  kind: 'domain' | 'tag' | 'function';
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;

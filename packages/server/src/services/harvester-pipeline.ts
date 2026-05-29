@@ -16,7 +16,6 @@ import {
   fragmentTags,
   fragmentFunctions,
   fragments,
-  entities,
 } from '../db/schema.js';
 import { computeQualitySignals } from './quality-signals.js';
 import { generateShingles } from './dedupe/shingles.js';
@@ -28,7 +27,6 @@ import type { LlmClient, CombinedBlock } from './llm-client.js';
 import type { SearchService } from '../search/index.js';
 import { type UploadHints, computeTrustSources } from '../schema/trust-source.js';
 import {
-  setupHintEntities,
   applyUploadHintsInPlace,
   insertNewProposals,
   flushHintReferentials,
@@ -39,9 +37,7 @@ import { isJunky } from './dedupe/junkiness-filter.js';
 const execFileAsync = promisify(execFile);
 
 function getMetadataStatus(block: CombinedBlock): string {
-  const pc =
-    (block.new_proposals?.tags?.length ?? 0) +
-    Object.values(block.new_proposals?.entities ?? {}).flat().length;
+  const pc = block.new_proposals?.tags?.length ?? 0;
   if (block.confidence >= 0.85 && pc === 0) return 'auto-validated';
   if (block.confidence >= 0.6 && pc <= 2) return 'needs-review';
   return 'requires-review';
@@ -82,18 +78,7 @@ export async function runPipeline(
       .where(eq(fragmentFunctions.validated, 1));
     const validFunctions = validFunctionRows.map((r) => r.slug);
 
-    let validEntityRows = await db
-      .select({
-        type: entities.type,
-        canonicalName: entities.canonicalName,
-        normalizedName: entities.normalizedName,
-      })
-      .from(entities)
-      .where(eq(entities.validated, 1));
-
-    // Hint entity setup: create pending entries for unknowns; build name→type map for body-scan
-    const { hintEntityNames, hintEntityMeta, hintEntitiesFound, hintTagsFound } =
-      await setupHintEntities(db, uploadHints, validEntityRows);
+    const hintTagsFound = new Set<string>();
 
     // Load reviewed/approved fragments for exact duplicate detection (Milvus-independent)
     // body_excerpt stores first 200 chars — sufficient for normalizeForComparison (truncates to 200)
@@ -183,7 +168,6 @@ export async function runPipeline(
             knownTags,
             domainHints,
             validFunctions,
-            validEntityRows,
             uploadHints,
           );
           console.log(
@@ -247,31 +231,22 @@ export async function runPipeline(
         else if (b.confidence < 0.7) lowConfidenceCount++;
       });
 
-      // Body-scan: inject hint entities found in block body; track coherent hints
-      applyUploadHintsInPlace(
-        blocks,
-        uploadHints,
-        hintEntityNames,
-        hintEntityMeta,
-        hintEntitiesFound,
-        hintTagsFound,
-      );
+      // Track coherent hint tags
+      applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound);
 
       // Compute quality signals for all blocks
-      const qualitySignalsPerBlock = blocks.map((block, j) => {
-        const blockEntityMap = (block.entities ?? {}) as Record<string, string[]>;
-        return computeQualitySignals(
+      const qualitySignalsPerBlock = blocks.map((block, j) =>
+        computeQualitySignals(
           {
             type: block.type,
             body: block.body,
             domain: block.domain,
             function_type: block.function_type,
-            entities: blockEntityMap,
+            tags: block.tags,
           },
           dupeChecks[j],
-          hintEntityNames,
-        );
-      });
+        ),
+      );
 
       // Run LLM-as-judge on all non-duplicate fragments — provides quality verdict + metadata suggestions
       const judgeTaxonomy = { domains: existingDomains, types: existingTypes, tags: knownTags };
@@ -288,7 +263,6 @@ export async function runPipeline(
               function_type: block.function_type,
               type: block.type,
               audience: block.audience,
-              entities: (block.entities ?? {}) as Record<string, string[]>,
             },
             signals,
             judgeTaxonomy,
@@ -331,7 +305,6 @@ export async function runPipeline(
             function_type: block.function_type ?? null,
             audience: JSON.stringify(block.audience ?? []),
             maturity: block.maturity ?? null,
-            entities_json: JSON.stringify(block.entities ?? {}),
             new_proposals: JSON.stringify(block.new_proposals ?? {}),
             metadata_status: getMetadataStatus(block),
             trust_sources_json: JSON.stringify(trustSourcesPerBlock[j]),
@@ -347,7 +320,7 @@ export async function runPipeline(
           })),
         );
 
-        // Insert LLM NEW: proposals — tags, domains, and entities all go to admin queue
+        // Insert LLM NEW: proposals — tags and domains go to admin queue
         await insertNewProposals(db, blocks, trustSourcesPerBlock);
       }
 
@@ -358,8 +331,6 @@ export async function runPipeline(
     await flushHintReferentials(
       db,
       uploadHints,
-      hintEntityNames,
-      hintEntitiesFound,
       hintTagsFound,
       existingDomains,
     );

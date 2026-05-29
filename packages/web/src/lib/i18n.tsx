@@ -459,7 +459,7 @@ const translations = {
   },
   admin: {
     // Page titles / tabs
-    metadataTitle: { fr: 'Métadonnées', en: 'Metadata' },
+    metadataTitle: { fr: 'Référentiel', en: 'Referential' },
     tabValidation: { fr: 'À valider', en: 'To validate' },
     tabReferential: { fr: 'Référentiel', en: 'Referential' },
     descValidation: {
@@ -470,10 +470,6 @@ const translations = {
     descKindTag: {
       fr: "Tags du référentiel — créés manuellement ou proposés automatiquement lors de l'ingestion. Filtrez par « En attente » pour traiter les termes qui attendent votre validation, quelle que soit leur origine. Le filtre Source vous aide à prioriser : les tags LLM inférés méritent un examen plus attentif que les saisies humaines.",
       en: 'Tags in the referential — created manually or auto-proposed during ingestion. Filter by "Pending" to action terms awaiting your validation, regardless of origin. The Source filter helps you prioritize: LLM-inferred tags deserve closer scrutiny than human entries.',
-    },
-    descKindEntity: {
-      fr: "Entités nommées du référentiel (clients, produits, technologies, partenaires…). Filtrez par « En attente » pour valider celles qui n'ont pas encore été examinées. Les entités en saisie humaine comme en LLM peuvent être en attente — le statut, pas la source, détermine ce qui nécessite votre action.",
-      en: 'Named entities in the referential (clients, products, technologies, partners…). Filter by "Pending" to validate those not yet reviewed. Both human and LLM entries can be pending — status, not source, determines what needs your attention.',
     },
     descKindDomain: {
       fr: "Domaines métier du référentiel (ex : Twake, LinCloud, Linagora, autre…). Filtrez par « En attente » pour approuver les domaines soumis, qu'ils viennent d'un contributeur ou du LLM. Le filtre Source permet de distinguer les domaines stables (saisie humaine) des propositions à confirmer (LLM inféré).",
@@ -489,7 +485,6 @@ const translations = {
     },
     // Proposal kinds
     kindTags: { fr: 'Tags', en: 'Tags' },
-    kindEntities: { fr: 'Entités', en: 'Entities' },
     kindDomains: { fr: 'Domaines', en: 'Domains' },
     kindTypes: { fr: 'Types', en: 'Types' },
     // Referential types
@@ -523,6 +518,13 @@ const translations = {
     filterAll: { fr: 'Tous', en: 'All' },
     filterAllEntities: { fr: 'Tous types', en: 'All types' },
     filterSearch: { fr: 'Rechercher (par nom)...', en: 'Search (by name)...' },
+    filterTagPrefixAll: { fr: 'Tous les types', en: 'All types' },
+    tagPrefixClient: { fr: 'Client', en: 'Client' },
+    tagPrefixProduit: { fr: 'Produit', en: 'Product' },
+    tagPrefixTech: { fr: 'Technologie', en: 'Technology' },
+    tagPrefixPartner: { fr: 'Partenaire', en: 'Partner' },
+    tagPrefixCert: { fr: 'Certification', en: 'Certification' },
+    tagPrefixReg: { fr: 'Règlementation', en: 'Regulation' },
     filterSimilarOnly: { fr: 'Similaires uniquement', en: 'Similar only' },
     filterTrustAll: { fr: 'Toutes les sources', en: 'All sources' },
     filterTrustHuman: { fr: 'Saisie humaine', en: 'Human entry' },

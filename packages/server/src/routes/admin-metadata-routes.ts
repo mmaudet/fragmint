@@ -8,18 +8,13 @@ import {
   fragmentDomains,
   fragmentFunctions,
   fragmentTypes,
-  entities,
-  fragmentEntities,
   fragments,
   users,
 } from '../db/schema.js';
 import { requireRole } from '../auth/middleware.js';
 import {
-  normalizeForComparison,
   getPreviewForTag,
-  getPreviewForEntity,
   computeFlagsForTag,
-  computeFlagsForEntity,
   computeCounts,
 } from './admin-metadata-helpers.js';
 
@@ -35,7 +30,6 @@ export function adminMetadataRoutes(
     async (request) => {
       const {
         kind,
-        entity_type,
         search,
         trust_source,
         sort = 'date',
@@ -43,7 +37,6 @@ export function adminMetadataRoutes(
         offset = 0,
       } = (request.query ?? {}) as {
         kind?: string;
-        entity_type?: string;
         search?: string;
         trust_source?: string;
         sort?: string;
@@ -123,44 +116,6 @@ export function adminMetadataRoutes(
         }
       }
 
-      if (!kind || kind === 'entity') {
-        const conditions: any[] = [eq(entities.validated, 0)];
-        if (entity_type) conditions.push(eq(entities.type, entity_type));
-        if (search) conditions.push(like(entities.name, `%${search}%`));
-        if (trust_source) conditions.push(eq(entities.trustSource, trust_source));
-        const ents = await db
-          .select()
-          .from(entities)
-          .where(and(...conditions))
-          .limit(Number(limit))
-          .offset(Number(offset));
-        const cachedValidatedEntities = await db
-          .select({
-            type: entities.type,
-            normalizedName: entities.normalizedName,
-            canonicalName: entities.canonicalName,
-          })
-          .from(entities)
-          .where(eq(entities.validated, 1));
-        for (const ent of ents) {
-          const preview = await getPreviewForEntity(db, ent.id);
-          const flags = await computeFlagsForEntity(db, ent, cachedValidatedEntities);
-          proposals.push({
-            id: ent.id,
-            kind: 'entity',
-            name: ent.name,
-            entity_type: ent.type,
-            usage_count: ent.usageCount,
-            validated: !!ent.validated,
-            proposed_by: ent.proposedBy,
-            created_at: ent.createdAt,
-            trust_source: ent.trustSource ?? 'llm-inferred',
-            preview,
-            flags,
-          });
-        }
-      }
-
       if (sort === 'usage') {
         proposals.sort((a, b) => (b.usage_count ?? 0) - (a.usage_count ?? 0));
       } else if (sort === 'name') {
@@ -203,9 +158,7 @@ export function adminMetadataRoutes(
     { preHandler: [authenticate, requireRole('admin')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const parsed = z
-        .object({ kind: z.enum(['tag', 'domain', 'entity']) })
-        .safeParse(request.body);
+      const parsed = z.object({ kind: z.enum(['tag', 'domain']) }).safeParse(request.body);
       if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
       const { kind } = parsed.data;
       const stripNew = (s: string) => s.replace(/^NEW:\s*/i, '').trim();
@@ -221,24 +174,6 @@ export function adminMetadataRoutes(
           .update(fragmentDomains)
           .set({ validated: 1, status: 'active', label: cleanLabel })
           .where(eq(fragmentDomains.slug, id));
-      } else {
-        // For entities, fetch the current name and strip NEW: prefix
-        const [ent] = await db
-          .select({ name: entities.name, canonicalName: entities.canonicalName })
-          .from(entities)
-          .where(eq(entities.id, Number(id)))
-          .limit(1);
-        await db
-          .update(entities)
-          .set({
-            validated: 1,
-            status: 'active',
-            ...(ent && {
-              name: stripNew(ent.name),
-              canonicalName: stripNew(ent.canonicalName ?? ent.name),
-            }),
-          })
-          .where(eq(entities.id, Number(id)));
       }
       return { success: true, id, kind };
     },
@@ -250,9 +185,7 @@ export function adminMetadataRoutes(
     { preHandler: [authenticate, requireRole('admin')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const parsed = z
-        .object({ kind: z.enum(['tag', 'domain', 'entity']) })
-        .safeParse(request.body);
+      const parsed = z.object({ kind: z.enum(['tag', 'domain']) }).safeParse(request.body);
       if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
       const { kind } = parsed.data;
       let affectedFragments = 0;
@@ -274,8 +207,6 @@ export function adminMetadataRoutes(
         await db.delete(fragmentTags).where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
         await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, id));
-      } else {
-        await db.delete(entities).where(eq(entities.id, Number(id)));
       }
       return { success: true, rejected_id: id, affected_fragments: affectedFragments };
     },
@@ -289,7 +220,7 @@ export function adminMetadataRoutes(
       const { id } = request.params as { id: string };
       const parsed = z
         .object({
-          kind: z.enum(['tag', 'domain', 'entity']),
+          kind: z.enum(['tag', 'domain']),
           new_name: z.string(),
           new_label: z.string().optional(),
         })
@@ -319,16 +250,6 @@ export function adminMetadataRoutes(
           .update(fragmentDomains)
           .set({ slug: new_name, label: new_label ?? new_name, validated: 1 })
           .where(eq(fragmentDomains.slug, id));
-      } else {
-        await db
-          .update(entities)
-          .set({
-            name: new_name,
-            canonicalName: new_name,
-            normalizedName: normalizeForComparison(new_name),
-            validated: 1,
-          })
-          .where(eq(entities.id, Number(id)));
       }
       return { success: true, updated: { id: new_name, name: new_name } };
     },
@@ -341,7 +262,7 @@ export function adminMetadataRoutes(
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const parsed = z
-        .object({ kind: z.enum(['tag', 'domain', 'entity']), target_id: z.string() })
+        .object({ kind: z.enum(['tag', 'domain']), target_id: z.string() })
         .safeParse(request.body);
       if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
       const { kind, target_id } = parsed.data;
@@ -377,75 +298,8 @@ export function adminMetadataRoutes(
         });
 
         affectedFragments = fragmentsUsing.length;
-      } else if (kind === 'entity') {
-        await db
-          .update(fragmentEntities)
-          .set({ entity_id: Number(target_id) })
-          .where(eq(fragmentEntities.entity_id, Number(id)));
-        await db.delete(entities).where(eq(entities.id, Number(id)));
       }
       return { success: true, merged_into: target_id, affected_fragments: affectedFragments };
-    },
-  );
-
-  // POST /v1/admin/metadata/proposals/:id/set-as-alias
-  app.post(
-    '/v1/admin/metadata/proposals/:id/set-as-alias',
-    { preHandler: [authenticate, requireRole('admin')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const parsed = z.object({ canonical_entity_id: z.number() }).safeParse(request.body);
-      if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
-      const { canonical_entity_id } = parsed.data;
-
-      const [proposal] = await db
-        .select()
-        .from(entities)
-        .where(eq(entities.id, Number(id)));
-      const [canonical] = await db
-        .select()
-        .from(entities)
-        .where(eq(entities.id, canonical_entity_id));
-      if (!proposal || !canonical) {
-        return reply.status(404).send({ data: null, meta: null, error: 'Entity not found' });
-      }
-      const currentAliases = JSON.parse(canonical.aliases ?? '[]');
-      await db
-        .update(entities)
-        .set({ aliases: JSON.stringify([...new Set([...currentAliases, proposal.name])]) })
-        .where(eq(entities.id, canonical_entity_id));
-      await db
-        .update(fragmentEntities)
-        .set({ entity_id: canonical_entity_id })
-        .where(eq(fragmentEntities.entity_id, Number(id)));
-      await db.delete(entities).where(eq(entities.id, Number(id)));
-      return { success: true, canonical_entity: canonical };
-    },
-  );
-
-  // POST /v1/admin/metadata/proposals/:id/reclassify-entity-type
-  app.post(
-    '/v1/admin/metadata/proposals/:id/reclassify-entity-type',
-    { preHandler: [authenticate, requireRole('admin')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const parsed = z.object({ new_type: z.string() }).safeParse(request.body);
-      if (!parsed.success) return reply.status(400).send({ error: parsed.error.message });
-      const [old] = await db
-        .select()
-        .from(entities)
-        .where(eq(entities.id, Number(id)));
-      if (!old) {
-        return reply.status(404).send({ data: null, meta: null, error: 'Entity not found' });
-      }
-      await db
-        .update(entities)
-        .set({ type: parsed.data.new_type })
-        .where(eq(entities.id, Number(id)));
-      return {
-        success: true,
-        updated: { id: Number(id), old_type: old.type, new_type: parsed.data.new_type },
-      };
     },
   );
 
@@ -454,9 +308,8 @@ export function adminMetadataRoutes(
     '/v1/admin/metadata/validated',
     { preHandler: [authenticate, requireRole('admin')] },
     async (request) => {
-      const { kind, entity_type } = (request.query ?? {}) as {
+      const { kind } = (request.query ?? {}) as {
         kind?: string;
-        entity_type?: string;
       };
       let rows: any[];
       if (kind === 'tag') {
@@ -477,13 +330,7 @@ export function adminMetadataRoutes(
         const raw = await db.select().from(fragmentDomains).where(eq(fragmentDomains.validated, 1));
         rows = raw.map((r) => ({ ...r, id: r.slug, usage_count: r.usageCount }));
       } else {
-        const conditions: any[] = [eq(entities.validated, 1)];
-        if (entity_type) conditions.push(eq(entities.type, entity_type));
-        const raw = await db
-          .select()
-          .from(entities)
-          .where(and(...conditions));
-        rows = raw.map((r) => ({ ...r, usage_count: r.usageCount }));
+        rows = [];
       }
       return { data: rows, meta: null, error: null };
     },
@@ -500,15 +347,11 @@ export function adminMetadataRoutes(
     '/v1/admin/metadata/pending-count',
     { preHandler: [authenticate, requireRole('admin')] },
     async () => {
-      const [tagRows, entityRows, domainRows, typeRows] = await Promise.all([
+      const [tagRows, domainRows, typeRows] = await Promise.all([
         db
           .select({ count: sql<number>`count(*)` })
           .from(fragmentTags)
           .where(eq(fragmentTags.status, 'pending')),
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(entities)
-          .where(eq(entities.status, 'pending')),
         db
           .select({ count: sql<number>`count(*)` })
           .from(fragmentDomains)
@@ -519,16 +362,14 @@ export function adminMetadataRoutes(
           .where(eq(fragmentTypes.status, 'pending')),
       ]);
       const tags = tagRows[0]?.count ?? 0;
-      const entitiesCount = entityRows[0]?.count ?? 0;
       const domains = domainRows[0]?.count ?? 0;
       const types = typeRows[0]?.count ?? 0;
       return {
         data: {
           tags,
-          entities: entitiesCount,
           domains,
           types,
-          total: tags + entitiesCount + domains + types,
+          total: tags + domains + types,
         },
         meta: null,
         error: null,

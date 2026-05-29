@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { AutocompleteSelect } from './autocomplete-select';
 import { MultiAutocompleteSelect } from './multi-autocomplete-select';
-import { EntitySelector } from './entity-selector';
 import { useI18n } from '@/lib/i18n';
 import type { UploadHints } from '@/types/trust-source';
 
@@ -18,13 +17,6 @@ export function UploadHintsForm({ hints, onChange }: Props) {
   const set = <K extends keyof UploadHints>(key: K, value: UploadHints[K]) => {
     onChange({ ...hints, [key]: value });
   };
-
-  const entityIdsRef = useRef<Map<string, string>>(new Map());
-  const toStableEntries = (names: string[]) =>
-    names.map((name) => {
-      if (!entityIdsRef.current.has(name)) entityIdsRef.current.set(name, crypto.randomUUID());
-      return { id: entityIdsRef.current.get(name)!, name };
-    });
 
   return (
     <div className="border rounded-md bg-muted/30">
@@ -73,23 +65,6 @@ export function UploadHintsForm({ hints, onChange }: Props) {
             />
           </div>
 
-          <div>
-            <label className="text-sm font-medium mb-0.5 block">
-              {t('harvest', 'hintsEntitiesLabel')}
-            </label>
-            <p className="text-xs text-muted-foreground mb-2">
-              {t('harvest', 'hintsEntitiesDesc')}
-            </p>
-            <EntitySelector
-              values={toStableEntries(hints.entities ?? [])}
-              onChange={(entries) =>
-                set(
-                  'entities',
-                  entries.map((e) => e.name),
-                )
-              }
-            />
-          </div>
         </div>
       )}
     </div>

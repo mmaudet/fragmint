@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/api/client';
 import type {
   ProposalKind,
-  EntityType,
   ProposalsResponse,
   ValidatedReferenceValue,
+  PendingCounts,
 } from '@/types/admin-metadata';
 import type { TrustSource } from '@/types/trust-source';
 
@@ -17,7 +17,6 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
 export function useMetadataProposals(
   params: {
     kind?: ProposalKind;
-    entity_type?: EntityType;
     search?: string;
     limit?: number;
     offset?: number;
@@ -36,12 +35,11 @@ export function useMetadataProposals(
   });
 }
 
-export function useValidatedReferenceValues(kind: ProposalKind, entity_type?: EntityType) {
+export function useValidatedReferenceValues(kind: ProposalKind) {
   return useQuery<ValidatedReferenceValue[]>({
-    queryKey: ['admin', 'metadata', 'validated', kind, entity_type],
+    queryKey: ['admin', 'metadata', 'validated', kind],
     queryFn: () => {
       const p = new URLSearchParams({ kind });
-      if (entity_type) p.set('entity_type', entity_type);
       return apiRequest('GET', `/v1/admin/metadata/validated?${p}`);
     },
   });
@@ -87,39 +85,8 @@ export function useMergeProposal() {
   });
 }
 
-export function useConvertToEntity() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: {
-      id: string;
-      entity_type: EntityType;
-      canonical_name: string;
-      aliases?: string[];
-    }) => apiRequest('POST', `/v1/admin/metadata/proposals/${p.id}/convert-to-entity`, p),
-    onSuccess: () => invalidateAll(qc),
-  });
-}
-
-export function useSetAsAlias() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { id: number; canonical_entity_id: number }) =>
-      apiRequest('POST', `/v1/admin/metadata/proposals/${p.id}/set-as-alias`, p),
-    onSuccess: () => invalidateAll(qc),
-  });
-}
-
-export function useReclassifyEntityType() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { id: number; new_type: EntityType }) =>
-      apiRequest('POST', `/v1/admin/metadata/proposals/${p.id}/reclassify-entity-type`, p),
-    onSuccess: () => invalidateAll(qc),
-  });
-}
-
 export function useMetadataPendingCount() {
-  return useQuery<{ tags: number; entities: number; domains: number; total: number }>({
+  return useQuery<PendingCounts>({
     queryKey: ['admin', 'metadata', 'pending-count'],
     queryFn: () => apiRequest('GET', '/v1/admin/metadata/pending-count'),
     staleTime: 1000 * 60,

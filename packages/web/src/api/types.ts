@@ -167,7 +167,6 @@ export interface HarvestCandidate {
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
   fragment_id: string | null;
   trust_sources_json: string | null;
-  entities_json: string | null;
   quality_signals: CoherenceFlag[];
   judge_result: JudgeResult | null;
 }

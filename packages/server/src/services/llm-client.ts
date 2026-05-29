@@ -38,18 +38,9 @@ export interface CombinedBlock {
   maturity: string;
   lang: string;
   tags: string[];
-  entities: {
-    clients: string[];
-    products: string[];
-    technologies: string[];
-    partners: string[];
-    certifications: string[];
-    regulations: string[];
-  };
   new_proposals: {
     tags: string[];
     domains: string[];
-    entities: Partial<Record<string, string[]>>;
   };
   confidence: number;
 }
@@ -139,7 +130,6 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     knownTags: string[] = [],
     domainHints: Record<string, string> = {},
     validFunctions: string[] = [],
-    validEntities: Array<{ type: string; canonicalName: string }> = [],
     uploadHints: UploadHints = {},
   ): Promise<CombinedBlock[]> {
     const functionList =
@@ -151,15 +141,6 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       .map((d) => (domainHints[d] ? `"${d}": ${domainHints[d]}` : `"${d}"`))
       .join('\n  ');
 
-    const entityListByType = validEntities.reduce<Record<string, string[]>>((acc, e) => {
-      if (!acc[e.type]) acc[e.type] = [];
-      acc[e.type].push(e.canonicalName);
-      return acc;
-    }, {});
-    const entityBlock = Object.entries(entityListByType)
-      .map(([type, names]) => `  ${type}s: ${names.join(', ')}`)
-      .join('\n');
-
     const tagHint =
       knownTags.length > 0
         ? `Use tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. For new tags not in the list, prefix with "NEW:" (e.g. "NEW:edge-computing"). All tags must be English lowercase kebab-case.`
@@ -170,8 +151,7 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       uploadHints.function_type ||
       uploadHints.maturity ||
       uploadHints.audience?.length ||
-      uploadHints.tags?.length ||
-      uploadHints.entities?.length
+      uploadHints.tags?.length
     );
     const hasClientTag = uploadHints.tags?.some((t) => t.startsWith('client:')) ?? false;
     const hintsBlock = hasAnyHint
@@ -182,12 +162,8 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
         }${uploadHints.maturity ? `- maturity (suggested): ${uploadHints.maturity}\n` : ''}${
           uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
         }${
-          uploadHints.entities?.length
-            ? `- entities (suggested): ${uploadHints.entities.join(', ')}\n`
-            : ''
-        }${
           hasClientTag
-            ? `RULE — named-reference hints (client:*, produit:*, entities): apply these ONLY if the fragment body explicitly names or directly discusses that specific client, product, or organization. Generic contractual clauses, SLA commitments, methodology sections, and capability descriptions do NOT qualify unless the named reference appears in the text. Domain and general thematic tags (open-source, sovereignty, etc.) may be inferred from context — named references may not.\n`
+            ? `RULE — named-reference hints (client:*, produit:*, partner:*): apply these ONLY if the fragment body explicitly names or directly discusses that specific client, product, or organization. Generic contractual clauses, SLA commitments, methodology sections, and capability descriptions do NOT qualify unless the named reference appears in the text. Domain and general thematic tags (open-source, sovereignty, etc.) may be inferred from context — named references may not.\n`
             : ''
         }`
       : '';
@@ -236,11 +212,13 @@ Extract reusable content blocks from the document and classify each one using st
 ## maturity — lifecycle stage of the described feature/offer. MUST be one of:
   production | beta | roadmap | archive
 
-## entities — use canonical names from the referential. Use exact spelling.
-${entityBlock || '  (no referential available — use best judgment)'}
-  If you detect an entity NOT in the referential above, add it to new_proposals.entities with "NEW:" prefix.
-
 ## tags — ${tagHint}
+
+  Entity tags — identify named organizations, products, and technologies using prefixed tags:
+  Prefix format: client:name, produit:name, tech:name, partner:name, cert:name, reg:name
+  Use lowercase kebab-case after the colon. Examples: client:dgfip, produit:linshare, tech:apache-james, cert:iso-27001, reg:rgpd
+  Apply entity tags ONLY when the fragment body explicitly names the organization/product/technology.
+  New entity proposals: prefix with NEW: (e.g. NEW:client:some-new-client). These go into new_proposals.tags.
 ${hintsBlock}
 # Document
 ${markdown}
@@ -262,14 +240,9 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
     "maturity": "production",
     "lang": "fr",
     "tags": ["open-source"],
-    "entities": {
-      "clients": [], "products": [], "technologies": [],
-      "partners": [], "certifications": [], "regulations": []
-    },
     "new_proposals": {
       "tags": [],
-      "domains": [],
-      "entities": {}
+      "domains": []
     },
     "confidence": 0.72
   }

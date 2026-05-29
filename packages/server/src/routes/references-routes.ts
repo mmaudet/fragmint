@@ -1,9 +1,9 @@
 // packages/server/src/routes/references-routes.ts
-// Public read-only endpoints for validated referential data (subjects, entities, tags)
+// Public read-only endpoints for validated referential data (subjects, tags)
 import type { FastifyInstance } from 'fastify';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragmentDomains, fragmentTags, entities } from '../db/schema.js';
+import { fragmentDomains, fragmentTags } from '../db/schema.js';
 import type { buildAuthMiddleware } from '../auth/middleware.js';
 
 export function referencesRoutes(
@@ -35,49 +35,6 @@ export function referencesRoutes(
     });
   });
 
-  app.get(
-    '/v1/references/entities',
-    {
-      preHandler: [authenticate],
-      schema: {
-        querystring: {
-          type: 'object',
-          properties: { type: { type: 'string' } },
-        },
-      },
-    },
-    async (req, _reply) => {
-      const { type } = req.query as { type?: string };
-      const where = type
-        ? and(eq(entities.status, 'active'), eq(entities.type, type))
-        : eq(entities.status, 'active');
-
-      const rows = await db
-        .select({
-          id: entities.id,
-          type: entities.type,
-          canonicalName: entities.canonicalName,
-          aliases: entities.aliases,
-          usageCount: entities.usageCount,
-        })
-        .from(entities)
-        .where(where)
-        .orderBy(desc(entities.usageCount));
-
-      return {
-        data: rows.map((r) => ({
-          id: r.id,
-          type: r.type,
-          name: r.canonicalName,
-          aliases: parseJsonArray(r.aliases),
-          usage_count: r.usageCount,
-        })),
-        meta: { count: rows.length },
-        error: null,
-      };
-    },
-  );
-
   app.get('/v1/references/tags', { preHandler: [authenticate] }, async (_req, reply) => {
     const rows = await db
       .select({
@@ -103,13 +60,4 @@ export function referencesRoutes(
       error: null,
     });
   });
-}
-
-function parseJsonArray(value: string | null): string[] {
-  if (!value) return [];
-  try {
-    return JSON.parse(value) as string[];
-  } catch {
-    return [];
-  }
 }

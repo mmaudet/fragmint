@@ -22,7 +22,6 @@ import {
   fragmentDomains,
   fragmentTags,
   fragmentFunctions,
-  entities,
   toMilvusPartition,
 } from './db/schema.js';
 import { FRAGMENT_TYPES } from './schema/fragment.js';
@@ -30,7 +29,6 @@ import {
   HARVESTER_DOMAINS,
   HARVESTER_FUNCTIONS,
   HARVESTER_DOMAINS_GRANULAR,
-  INITIAL_ENTITIES,
   INITIAL_TAGS,
 } from './services/harvester-taxonomy.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
@@ -187,27 +185,6 @@ export async function createServer(options?: {
       .insert(fragmentTags)
       .values({ slug, label, category, created_at: now })
       .onConflictDoNothing();
-  }
-
-  // Seed initial entities (admin-validated)
-  const entityCount = await db.select({ c: count() }).from(entities);
-  if (entityCount[0].c === 0) {
-    for (const e of INITIAL_ENTITIES) {
-      const normalized = e.canonicalName.toLowerCase().replace(/[\s\-.]+/g, '-');
-      await db
-        .insert(entities)
-        .values({
-          type: e.type,
-          name: e.canonicalName,
-          canonicalName: e.canonicalName,
-          normalizedName: normalized,
-          aliases: JSON.stringify(e.aliases),
-          validated: 1,
-          proposedBy: 'admin',
-          createdAt: now,
-        })
-        .onConflictDoNothing();
-    }
   }
 
   // Git init if needed
