@@ -97,6 +97,7 @@ export const GeneratePlanSchema = z.object({
 
 export const SectionSearchSchema = z.object({
   filters_override: PlanFiltersSchema.optional(),
+  top_k: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 export const ExportPlanSchema = z.object({

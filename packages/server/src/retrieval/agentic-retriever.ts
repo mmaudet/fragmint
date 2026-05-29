@@ -6,7 +6,7 @@ import type { PlanFilters } from '../schema/plan.js';
 import type { FragmentRetriever, RetrievedFragment, SectionQuery } from './fragment-retriever.js';
 
 const PHASE2_SCORE_MIN = 0.3;
-const PHASE1_CAP = 20; // hard cap — LLM selects freely, we slice at 20 before phase 2
+const PHASE1_MULTIPLIER = 4; // phase1 cap = limit × PHASE1_MULTIPLIER
 const PHASE0_THRESHOLD = 200; // fragments — below this, full index fits in context window
 const PHASE1_TEMPERATURE = 0.1; // explicit temperature for Phase 1 selection (lower = more deterministic)
 const SELF_CONSISTENCY_AGENT1_TEMP = 0.2;
@@ -59,9 +59,10 @@ export class AgenticRetriever implements FragmentRetriever {
     const indexMd = renderMarkdown(activeData);
     const idMap = buildReadableIdMap(activeData);
 
-    const candidateIds = await this.selectCandidates(query, indexMd, idMap);
+    const phase1Cap = Math.max(limit * PHASE1_MULTIPLIER, 8);
+    const candidateIds = await this.selectCandidates(query, indexMd, idMap, phase1Cap);
     console.info(
-      `[retrieval][agentic-only][phase1] section "${query.text.slice(0, 50)}" → ${candidateIds.length} candidates (cap=${PHASE1_CAP})`,
+      `[retrieval][agentic-only][phase1] section "${query.text.slice(0, 50)}" → ${candidateIds.length} candidates (cap=${phase1Cap})`,
     );
     if (candidateIds.length === 0) return [];
 
@@ -258,6 +259,7 @@ Return ONLY a JSON array: ["domain:type", ...] (e.g. ["twake-mail:argument", "li
     query: SectionQuery,
     indexMd: string,
     idMap: Map<string, string>,
+    phase1Cap = 20,
   ): Promise<string[]> {
     const filtersLine = buildFiltersDesc(query.filters);
     const collectionLine = query.collectionSlug ? `Collection: ${query.collectionSlug}` : '';
@@ -296,7 +298,7 @@ Return ONLY a JSON array of ID strings, best first: ["TM-arg-001", "LC-intro-003
         .filter((id): id is string => typeof id === 'string')
         .map((id) => idMap.get(id) ?? id)
         .filter((id) => id.length > 0)
-        .slice(0, PHASE1_CAP);
+        .slice(0, phase1Cap);
     } catch {
       return [];
     }

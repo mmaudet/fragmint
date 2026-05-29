@@ -337,6 +337,7 @@ export async function createServer(options?: {
     llm: llmClient,
     retriever,
     fragments: fragmentService,
+    sectionTopK: config.section_top_k,
   });
 
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).

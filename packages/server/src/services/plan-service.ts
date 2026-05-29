@@ -38,6 +38,7 @@ export interface PlanServiceConfig {
   search?: SearchService;
   retriever?: FragmentRetriever;
   fragments?: FragmentService;
+  sectionTopK?: number;
 }
 
 export interface PlanRecord {
@@ -194,6 +195,7 @@ export class PlanService {
     filters: PlanFilters,
     collectionSlug: string | null,
     specContext?: string,
+    topK?: number,
   ): Promise<FragmentCandidate[]> {
     const query: SectionQuery = {
       text: `${section.title}\n${section.description}`,
@@ -202,7 +204,8 @@ export class PlanService {
       inferred_type: section.inferred_type,
       spec_context: specContext,
     };
-    const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, 5);
+    const limit = topK ?? this.config.sectionTopK ?? 5;
+    const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, limit);
     const seenIds = new Set<string>();
     return results
       .filter((r) => r.score == null || r.score >= SECTION_SCORE_THRESHOLD)
@@ -313,7 +316,7 @@ export class PlanService {
   async searchSection(
     planId: string,
     sectionId: string,
-    args: { filters_override?: PlanFilters },
+    args: { filters_override?: PlanFilters; top_k?: number },
   ): Promise<PlanRecord | null> {
     const p = await this.get(planId);
     if (!p) return null;
@@ -332,6 +335,7 @@ export class PlanService {
       filters,
       p.collection_slug,
       p.state.spec_prompt, // spec_context — used by LLM retrievers for context-aware ranking
+      args.top_k,
     );
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId

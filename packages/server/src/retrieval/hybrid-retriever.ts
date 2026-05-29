@@ -8,7 +8,7 @@ import type {
   SectionQuery,
 } from './fragment-retriever.js';
 
-const PREFILTER_COUNT = 20;
+const PHASE1_MULTIPLIER = 4; // phase1 candidates = limit × PHASE1_MULTIPLIER
 const LLM_NEUTRAL_SCORE = 5;
 
 function resolveWeights(preset: string): [number, number] {
@@ -38,7 +38,8 @@ export class HybridRetriever implements FragmentRetriever {
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
     const { text, filters, collectionSlug } = query;
 
-    // Step 1 — Vector candidates (20 max), already sorted by cosine desc
+    // Step 1 — Vector candidates (limit × PHASE1_MULTIPLIER), already sorted by cosine desc
+    const phase1Count = Math.max(limit * PHASE1_MULTIPLIER, 8);
     const vectorCandidates = await this.searchService.search(
       text,
       {
@@ -49,7 +50,7 @@ export class HybridRetriever implements FragmentRetriever {
         collectionSlug: collectionSlug ?? undefined,
         quality_min: 'approved',
       },
-      PREFILTER_COUNT,
+      phase1Count,
     );
     console.debug(
       `[retrieval][hybrid] section "${text.slice(0, 50)}" → ${vectorCandidates.length} vector candidates`,
