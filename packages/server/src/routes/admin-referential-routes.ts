@@ -1,14 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { and, eq, like, desc, asc, sql, inArray } from 'drizzle-orm';
+import { and, eq, like, desc, asc, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentDomains,
   fragmentTags,
   fragmentTagLinks,
-  entities,
   fragments,
-  fragmentEntities,
   harvestCandidates,
   referentialRenames,
   auditLog,
@@ -17,12 +15,7 @@ import {
 import { requireRole } from '../auth/middleware.js';
 import type { JobService } from '../services/job-service.js';
 import { runRecalculationJob } from '../services/signal-recalc-service.js';
-import {
-  computeFlagsForTag,
-  computeFlagsForEntity,
-  getPreviewForTag,
-  getPreviewForEntity,
-} from './admin-metadata-helpers.js';
+import { computeFlagsForTag, getPreviewForTag } from './admin-metadata-helpers.js';
 import {
   type ReferentialType,
   TABLE_MAP,
@@ -43,79 +36,6 @@ export function adminReferentialRoutes(
 ) {
   const auth = { preHandler: [authenticate, requireRole('admin')] };
 
-  // GET /v1/admin/referential/cooccurrence — registered BEFORE :type to avoid param conflict
-  app.get('/v1/admin/referential/cooccurrence', auth, async (request, reply) => {
-    const { top_entities = '20', category } = request.query as {
-      top_entities?: string;
-      category?: string;
-    };
-    const topN = Math.min(parseInt(top_entities, 10) || 20, 50);
-
-    const entityConditions: any[] = [eq(entities.status, 'active')];
-    if (category) entityConditions.push(eq(entities.type, category));
-
-    const topEntities = await db
-      .select({
-        id: entities.id,
-        name: entities.canonicalName,
-        category: entities.type,
-        usage_count: entities.usageCount,
-      })
-      .from(entities)
-      .where(and(...entityConditions))
-      .orderBy(desc(entities.usageCount))
-      .limit(topN);
-
-    const domains = await db
-      .select({ slug: fragmentDomains.slug, label: fragmentDomains.label })
-      .from(fragmentDomains)
-      .where(eq(fragmentDomains.status, 'active'))
-      .orderBy(desc(fragmentDomains.usageCount));
-
-    const entityIds = topEntities.map((e) => e.id);
-    const domainSlugs = domains.map((d) => d.slug);
-    const entityById = new Map(topEntities.map((e) => [e.id, e.name]));
-
-    const rawCells =
-      entityIds.length === 0 || domainSlugs.length === 0
-        ? []
-        : await db
-            .select({
-              domain: fragments.domain,
-              entity_id: fragmentEntities.entity_id,
-              count: sql<number>`count(distinct ${fragments.id})`,
-            })
-            .from(fragments)
-            .innerJoin(fragmentEntities, eq(fragmentEntities.fragment_id, fragments.id))
-            .where(
-              and(
-                inArray(fragments.domain, domainSlugs),
-                inArray(fragmentEntities.entity_id, entityIds),
-                eq(fragments.quality, 'approved'),
-              ),
-            )
-            .groupBy(fragments.domain, fragmentEntities.entity_id);
-
-    const cells = rawCells
-      .filter((r) => r.count > 0 && r.domain !== null)
-      .map((r) => ({
-        domain: r.domain as string,
-        entity: entityById.get(r.entity_id) ?? String(r.entity_id),
-        count: r.count,
-      }));
-
-    return {
-      data: {
-        domains: domains.map((d) => d.slug),
-        entities: topEntities,
-        cells,
-        generated_at: new Date().toISOString(),
-      },
-      meta: null,
-      error: null,
-    };
-  });
-
   // GET /v1/admin/referential/:type
   app.get('/v1/admin/referential/:type', auth, async (request, reply) => {
     const { type } = request.params as { type: string };
@@ -133,7 +53,7 @@ export function adminReferentialRoutes(
       status: statusParam,
       trust_source: trustSourceParam,
       search,
-      category,
+      prefix: prefixParam,
       sort = 'usage',
       order = 'desc',
       limit = '100',
@@ -150,12 +70,16 @@ export function adminReferentialRoutes(
         ? eq(table.trustSource, trustSourceParam)
         : undefined;
 
-    const labelField = refType === 'entity' ? entities.canonicalName : (table as any).label;
+    const labelField = (table as any).label;
     const searchFilter = search ? like(labelField, `%${search}%`) : undefined;
-    const categoryFilter =
-      refType === 'entity' && category ? eq(entities.type, category) : undefined;
 
-    const conditions = [statusFilter, trustFilter, searchFilter, categoryFilter].filter(
+    // Prefix filter: only applies to tags (slug format is "prefix:name")
+    const prefixFilter =
+      refType === 'tag' && prefixParam && prefixParam !== 'all'
+        ? like(fragmentTags.slug, `${prefixParam}:%`)
+        : undefined;
+
+    const conditions = [statusFilter, trustFilter, searchFilter, prefixFilter].filter(
       Boolean,
     ) as any[];
 
@@ -225,9 +149,6 @@ export function adminReferentialRoutes(
 
     // Load caches for flag computation — needed for both pending and active items.
     let cachedValidatedTags: Array<{ slug: string; label: string }> | undefined;
-    let cachedValidatedEntities:
-      | Array<{ type: string; normalizedName: string; canonicalName: string }>
-      | undefined;
     const needsFlags = formattedWithUsers.some(
       (i) => i.status === 'pending' || i.status === 'active',
     );
@@ -237,15 +158,6 @@ export function adminReferentialRoutes(
           .select({ slug: fragmentTags.slug, label: fragmentTags.label })
           .from(fragmentTags)
           .where(eq(fragmentTags.validated, 1));
-      } else if (refType === 'entity') {
-        cachedValidatedEntities = await db
-          .select({
-            type: entities.type,
-            normalizedName: entities.normalizedName,
-            canonicalName: entities.canonicalName,
-          })
-          .from(entities)
-          .where(eq(entities.validated, 1));
       }
     }
 
@@ -262,21 +174,6 @@ export function adminReferentialRoutes(
           );
           const preview =
             item.status === 'pending' ? await getPreviewForTag(db, String(item.id)) : '';
-          return { ...item, flags, preview };
-        }
-        if (refType === 'entity') {
-          const flags = await computeFlagsForEntity(
-            db,
-            {
-              id: Number(item.id),
-              type: item.category ?? '',
-              name: item.label,
-              normalizedName: (item.label ?? '').toLowerCase().trim(),
-            },
-            cachedValidatedEntities,
-          );
-          const preview =
-            item.status === 'pending' ? await getPreviewForEntity(db, Number(item.id)) : '';
           return { ...item, flags, preview };
         }
         return { ...item, flags: [], preview: '' };
@@ -328,7 +225,7 @@ export function adminReferentialRoutes(
     }
     const refType = type as ReferentialType;
     const table = TABLE_MAP[refType] as any;
-    const { idField, lookupValue } = resolveId(refType, table, id);
+    const { idField, lookupValue } = resolveId(table, id);
 
     const rows = await db.select().from(table).where(eq(idField, lookupValue)).limit(1);
     if (rows.length === 0)
@@ -379,12 +276,11 @@ export function adminReferentialRoutes(
     }
     const refType = type as ReferentialType;
     const table = TABLE_MAP[refType] as any;
-    const conflictField = refType === 'entity' ? entities.canonicalName : (table as any).slug;
-    const lookupValue = refType === 'entity' ? parseInt(id, 10) : id;
+    const { idField: conflictField, lookupValue } = resolveId(table, id);
 
     const existing = await db.select().from(table).where(eq(conflictField, new_value)).limit(1);
     if (existing.length > 0) {
-      const existingId = refType === 'entity' ? existing[0].id : existing[0].slug;
+      const existingId = existing[0].slug;
       if (existingId !== lookupValue) {
         return reply.status(409).send({
           data: null,
@@ -422,7 +318,7 @@ export function adminReferentialRoutes(
 
     const refType = type as ReferentialType;
     const table = TABLE_MAP[refType] as any;
-    const { idField, lookupValue } = resolveId(refType, table, id);
+    const { idField, lookupValue } = resolveId(table, id);
     const userLogin = (request.user as { login: string }).login;
     const userRole = (request.user as { role: string }).role;
 
@@ -430,28 +326,17 @@ export function adminReferentialRoutes(
     if (currentRows.length === 0)
       return reply.status(404).send({ data: null, meta: null, error: 'Item not found' });
 
-    const oldValue = refType === 'entity' ? currentRows[0].canonicalName : currentRows[0].slug;
+    const oldValue = currentRows[0].slug;
     const linkedFragments = await getFragmentsForItem(db, refType, lookupValue);
     const affectedIds = linkedFragments.map((f) => f.id);
     const now = new Date().toISOString();
 
     try {
       db.transaction((tx) => {
-        if (refType === 'entity') {
-          tx.update(entities)
-            .set({
-              canonicalName: new_value,
-              normalizedName: new_value.toLowerCase().trim(),
-              trustSource: 'human-direct',
-            })
-            .where(eq(entities.id, lookupValue as number))
-            .run();
-        } else {
-          tx.update(table)
-            .set({ slug: new_value, label: new_label ?? new_value, trustSource: 'human-direct' })
-            .where(eq((table as any).slug, oldValue))
-            .run();
-        }
+        tx.update(table)
+          .set({ slug: new_value, label: new_label ?? new_value, trustSource: 'human-direct' })
+          .where(eq((table as any).slug, oldValue))
+          .run();
 
         if (refType === 'domain') {
           tx.update(fragments)
@@ -545,7 +430,7 @@ export function adminReferentialRoutes(
     }
     const refType = type as ReferentialType;
     const table = TABLE_MAP[refType] as any;
-    const { idField, lookupValue } = resolveId(refType, table, id);
+    const { idField, lookupValue } = resolveId(table, id);
     const userLogin = (request.user as { login: string }).login;
     const userRole = (request.user as { role: string }).role;
 
@@ -581,7 +466,7 @@ export function adminReferentialRoutes(
     }
     const refType = type as ReferentialType;
     const table = TABLE_MAP[refType] as any;
-    const { idField, lookupValue } = resolveId(refType, table, id);
+    const { idField, lookupValue } = resolveId(table, id);
     const userLogin = (request.user as { login: string }).login;
     const userRole = (request.user as { role: string }).role;
 
@@ -614,7 +499,7 @@ export function adminReferentialRoutes(
     return { data: { ok: true }, meta: null, error: null };
   });
 
-  // PATCH /v1/admin/referential/:type/:id/category — update category for tags and entity type
+  // PATCH /v1/admin/referential/:type/:id/category — update category for tags
   app.patch('/v1/admin/referential/:type/:id/category', auth, async (request, reply) => {
     const { type, id } = request.params as { type: string; id: string };
     if (!VALID_TYPES.includes(type as ReferentialType)) {
@@ -626,23 +511,17 @@ export function adminReferentialRoutes(
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     const { category } = parsed.data;
 
-    if (refType === 'entity') {
-      await db
-        .update(entities)
-        .set({ type: category ?? '' })
-        .where(eq(entities.id, Number(id)));
-    } else if (refType === 'tag') {
-      await db
-        .update(fragmentTags)
-        .set({ category: category ?? null } as any)
-        .where(eq(fragmentTags.slug, id));
-    } else {
+    if (refType !== 'tag') {
       return reply.status(400).send({
         data: null,
         meta: null,
-        error: 'Category update only supported for tag and entity types',
+        error: 'Category update only supported for tag type',
       });
     }
+    await db
+      .update(fragmentTags)
+      .set({ category: category ?? null } as any)
+      .where(eq(fragmentTags.slug, id));
 
     return { data: { ok: true }, meta: null, error: null };
   });

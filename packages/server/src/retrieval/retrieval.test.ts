@@ -208,7 +208,6 @@ function makeIndexData(overrides: Partial<IndexData> = {}): IndexData {
               title: 'Fragment One',
               lang: 'fr',
               tags: [],
-              entities: [],
             },
           ],
         },
@@ -232,7 +231,6 @@ function fakeIndexServiceLarge(): IndexService {
     title: `Fragment ${i + 1}`,
     lang: 'fr',
     tags: [] as string[],
-    entities: [] as string[],
   }));
   const data = makeIndexData({
     total: 201,

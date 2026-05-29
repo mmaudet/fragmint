@@ -268,6 +268,8 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                       avec{' '}
                       <Link
                         to={`/fragments?fragment=${fragment.harvest_near_dup!.fragment_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="font-mono text-xs underline underline-offset-2 hover:opacity-70"
                       >
                         {fragment.harvest_near_dup!.fragment_id.slice(0, 8)}…

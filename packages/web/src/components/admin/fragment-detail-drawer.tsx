@@ -1,21 +1,25 @@
 // packages/web/src/components/admin/fragment-detail-drawer.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, CheckCircle2, Archive, Trash2 } from 'lucide-react';
+import { CheckCircle2, Archive, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusBadge } from './status-badge';
 import { OriginBadge } from './origin-badge';
 import { apiRequest } from '@/api/client';
 import { Sheet, SheetContent, SheetClose, SheetTitle } from '@/components/ui/sheet';
-import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
-import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-editor';
 import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
+import { tagDisplayLabel } from '@/lib/tag-display';
 
-interface FragmentEntity {
-  id: number;
-  canonicalName: string;
-  type: string;
+/** Truncate a stored title to first sentence when the body was mistakenly used as title. */
+function safeTitle(title: string | null): string | null {
+  if (!title) return null;
+  if (title.length <= 120) return title;
+  const sentenceEnd = title.search(/[.!?](\s|$)/);
+  if (sentenceEnd >= 20) return title.slice(0, sentenceEnd + 1).trim();
+  const cut = title.slice(0, 100);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '…';
 }
 
 interface FragmentDetail {
@@ -40,7 +44,6 @@ interface FragmentDetail {
   superseded_by: string | null;
   supersedes: string | null;
   git_hash: string | null;
-  entities: FragmentEntity[];
   frontmatter?: {
     reviewed_by?: string | null;
     approved_by?: string | null;
@@ -59,66 +62,12 @@ interface Props {
   onUpdate: () => void;
 }
 
-/** Inline entity search picker that exposes the full {id, name, type} on selection. */
-function EntityPicker({ onAdd }: { onAdd: (entity: FragmentEntity) => void }) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const debouncedQ = useDebouncedValue(query, 250);
-  const { data = [] } = useReferenceLookup('entity', debouncedQ);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const select = (item: (typeof data)[number]) => {
-    onAdd({ id: parseInt(item.slug, 10), canonicalName: item.label, type: item.type ?? '' });
-    setQuery('');
-    setOpen(false);
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <input
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder="Rechercher une entité validée…"
-        className="w-full px-2 py-1 border rounded text-sm bg-background"
-      />
-      {open && data.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-          {data.map((item) => (
-            <button
-              key={item.slug}
-              type="button"
-              onMouseDown={() => select(item)}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
-            >
-              <span>{item.label}</span>
-              {item.type && <span className="text-xs text-muted-foreground ml-2">{item.type}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const EMPTY_EDITS: MetaEdits = { type: '', domain: '', lang: '', tags: [], body: '' };
 
 export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<MetaEdits>(EMPTY_EDITS);
-  const [editEntities, setEditEntities] = useState<FragmentEntity[]>([]);
   const [open, setOpen] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -154,45 +103,29 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
   useEffect(() => {
     setEditing(false);
     setForm(EMPTY_EDITS);
-    setEditEntities([]);
     setConfirmDelete(false);
   }, [fragmentId]);
 
   const startEditing = () => {
-    setEditEntities(frag?.entities ?? []);
     setEditing(true);
   };
 
   const cancelEditing = () => {
     setEditing(false);
-    setEditEntities([]);
   };
-
-  const addEntity = (entity: FragmentEntity) => {
-    if (editEntities.some((e) => e.id === entity.id)) return;
-    setEditEntities((prev) => [...prev, entity]);
-  };
-
-  const removeEntity = (id: number) => setEditEntities((prev) => prev.filter((e) => e.id !== id));
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      await Promise.all([
-        apiRequest('PUT', `/v1/fragments/${fragmentId}`, {
-          domain: form.domain,
-          type: form.type,
-          lang: form.lang,
-          tags: form.tags,
-          body: form.body || undefined,
-        }),
-        apiRequest('PUT', `/v1/fragments/${fragmentId}/entities`, {
-          entity_ids: editEntities.map((e) => e.id),
-        }),
-      ]);
+      await apiRequest('PUT', `/v1/fragments/${fragmentId}`, {
+        domain: form.domain,
+        type: form.type,
+        lang: form.lang,
+        tags: form.tags,
+        body: form.body || undefined,
+      });
     },
     onSuccess: () => {
       setEditing(false);
-      setEditEntities([]);
       queryClient.invalidateQueries({ queryKey: ['fragment-detail', fragmentId] });
       onUpdate();
       toast.success('Fragment mis à jour');
@@ -300,7 +233,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
           {frag && (
             <>
               <h2 className="text-lg font-semibold">
-                {frag.title || <em className="text-muted-foreground font-normal">Sans titre</em>}
+                {safeTitle(frag.title) || <em className="text-muted-foreground font-normal">Sans titre</em>}
               </h2>
 
               {editing ? (
@@ -357,7 +290,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                             key={t}
                             className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded dark:bg-blue-900/30 dark:text-blue-300"
                           >
-                            #{t}
+                            #{tagDisplayLabel(t)}
                           </span>
                         ))
                       )}
@@ -365,57 +298,6 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
                   </div>
                 </>
               )}
-
-              {/* Entities — shown in both modes */}
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Entités</label>
-                {editing ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1 min-h-[1.5rem]">
-                      {editEntities.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">Aucune entité</span>
-                      ) : (
-                        editEntities.map((e) => (
-                          <span
-                            key={e.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
-                          >
-                            {e.canonicalName}
-                            {e.type && <span className="opacity-60">({e.type})</span>}
-                            <button
-                              type="button"
-                              onClick={() => removeEntity(e.id)}
-                              className="ml-0.5 hover:text-red-500"
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </span>
-                        ))
-                      )}
-                    </div>
-                    <EntityPicker onAdd={addEntity} />
-                    <p className="text-xs text-muted-foreground">
-                      Seules les entités validées dans le référentiel sont proposées.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1">
-                    {(frag.entities ?? []).length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Aucune entité</span>
-                    ) : (
-                      frag.entities.map((e) => (
-                        <span
-                          key={e.id}
-                          className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
-                        >
-                          {e.canonicalName}
-                          {e.type && <span className="ml-1 opacity-60">({e.type})</span>}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
 
               {/* Origin */}
               <div className="grid grid-cols-2 gap-4">

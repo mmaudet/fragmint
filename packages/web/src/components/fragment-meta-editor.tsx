@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Eye, Pencil, X, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { tagDisplayLabel } from '@/lib/tag-display';
 
 function levenshteinSimilarity(a: string, b: string): number {
   const longer = a.length > b.length ? a : b;
@@ -162,7 +163,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
         <div className="flex flex-wrap gap-1">
           {edits.tags.map((tag) => (
             <Badge key={tag} variant="secondary" className="text-xs gap-1 pr-1">
-              {tag}
+              {tagDisplayLabel(tag)}
               <button onClick={() => removeTag(tag)} className="ml-0.5 hover:text-destructive">
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -227,7 +228,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
                     inputRef.current?.focus();
                   }}
                 >
-                  {tag}
+                  {tagDisplayLabel(tag)}
                 </li>
               ))}
             </ul>

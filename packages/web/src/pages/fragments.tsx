@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
@@ -38,20 +38,23 @@ export default function FragmentsPage() {
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(24);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedId, setSelectedId] = useState<string | null>(
-    searchParams.get('fragment') ?? null,
+  // Derive selectedId from the URL — makes <Link to="?fragment=xxx"> work correctly.
+  const selectedId = searchParams.get('fragment');
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set('fragment', id);
+          else next.delete('fragment');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Keep URL in sync with open drawer
-  useEffect(() => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (selectedId) next.set('fragment', selectedId);
-      else next.delete('fragment');
-      return next;
-    }, { replace: true });
-  }, [selectedId, setSearchParams]);
   const [bulkPending, setBulkPending] = useState(false);
   const { t } = useI18n();
   const { activeCollection } = useCollection();

@@ -5,9 +5,10 @@ import { X } from 'lucide-react';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
 import type { ReferenceItem } from '@/api/hooks/use-reference-lookup';
+import { tagDisplayLabel } from '@/lib/tag-display';
 
 interface Props {
-  kind: 'domain' | 'tag' | 'function' | 'entity';
+  kind: 'domain' | 'tag' | 'function';
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
@@ -109,7 +110,7 @@ export function MultiAutocompleteSelect({
             variant="secondary"
             className={`text-xs gap-1 ${!isKnown(v) ? 'border border-dashed border-blue-400 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30' : ''}`}
           >
-            {v}
+            {kind === 'tag' ? tagDisplayLabel(v) : v}
             <button type="button" onClick={() => remove(v)}>
               <X className="h-2.5 w-2.5" />
             </button>

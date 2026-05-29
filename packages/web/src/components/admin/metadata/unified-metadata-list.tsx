@@ -18,19 +18,8 @@ import type { ProposalKind, UnifiedMetadataItem } from '@/types/admin-metadata';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 
-const ENTITY_TYPES = [
-  'client',
-  'product',
-  'technology',
-  'partner',
-  'certification',
-  'regulation',
-  'metric',
-] as const;
-
 const KIND_DESC_KEYS: Record<ProposalKind, string> = {
   tag: 'descKindTag',
-  entity: 'descKindEntity',
   domain: 'descKindDomain',
   type: 'descKindType',
 };
@@ -49,9 +38,9 @@ export function UnifiedMetadataList() {
   const statusFilter = searchParams.get('status') ?? 'all';
   const trustFilter = searchParams.get('trust') ?? 'all';
   const search = searchParams.get('search') ?? '';
-  const entityType = searchParams.get('category') ?? '';
   const sortBy = (searchParams.get('sort') ?? 'created') as 'usage' | 'name' | 'created';
   const onlySimilar = searchParams.get('similar') === 'true';
+  const tagPrefixFilter = searchParams.get('prefix') ?? 'all';
 
   const updateFilters = useCallback(
     (updates: Record<string, string | null>) => {
@@ -81,8 +70,8 @@ export function UnifiedMetadataList() {
       activeKind,
       statusFilter,
       trustFilter,
+      tagPrefixFilter,
       search,
-      entityType,
       sortBy,
       page,
       pageSize,
@@ -98,8 +87,8 @@ export function UnifiedMetadataList() {
         limit: String(pageSize),
         offset: String(offset),
       });
-      if (entityType) params.set('category', entityType);
       if (trustFilter !== 'all') params.set('trust_source', trustFilter);
+      if (activeKind === 'tag' && tagPrefixFilter !== 'all') params.set('prefix', tagPrefixFilter);
       return apiRequest<any>('GET', `/v1/admin/referential/${activeKind}?${params}`);
     },
   });
@@ -109,15 +98,13 @@ export function UnifiedMetadataList() {
   const { data: pendingCounts, refetch: refetchCounts } = useQuery({
     queryKey: ['referential-pending-counts'],
     queryFn: async () => {
-      const [tag, entity, domain, type] = await Promise.all([
+      const [tag, domain, type] = await Promise.all([
         apiRequest<any>('GET', '/v1/admin/referential/tag?status=pending&limit=1&offset=0'),
-        apiRequest<any>('GET', '/v1/admin/referential/entity?status=pending&limit=1&offset=0'),
         apiRequest<any>('GET', '/v1/admin/referential/domain?status=pending&limit=1&offset=0'),
         apiRequest<any>('GET', '/v1/admin/referential/type?status=pending&limit=1&offset=0'),
       ]);
       return {
         tag: (tag?.stats?.byStatus?.pending ?? 0) as number,
-        entity: (entity?.stats?.byStatus?.pending ?? 0) as number,
         domain: (domain?.stats?.byStatus?.pending ?? 0) as number,
         type: (type?.stats?.byStatus?.pending ?? 0) as number,
       };
@@ -138,7 +125,6 @@ export function UnifiedMetadataList() {
 
   const kinds: Array<{ key: ProposalKind; label: string }> = [
     { key: 'tag', label: t('admin', 'kindTags') },
-    { key: 'entity', label: t('admin', 'kindEntities') },
     { key: 'domain', label: t('admin', 'kindDomains') },
     { key: 'type', label: t('admin', 'kindTypes') },
   ];
@@ -190,7 +176,7 @@ export function UnifiedMetadataList() {
         {kinds.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => updateFilters({ kind: key, category: null, similar: null })}
+            onClick={() => updateFilters({ kind: key, category: null, similar: null, prefix: null })}
             className={`px-4 py-2 text-sm border-b-2 transition-colors ${
               activeKind === key
                 ? 'border-primary text-foreground font-medium'
@@ -226,20 +212,6 @@ export function UnifiedMetadataList() {
             <option value="archived">{t('admin', 'filterStatusArchived')}</option>
             <option value="rejected">{t('admin', 'filterStatusRejected')}</option>
           </select>
-          {activeKind === 'entity' && (
-            <select
-              value={entityType}
-              onChange={(e) => updateFilters({ category: e.target.value })}
-              className="px-3 py-1.5 border rounded-md text-sm bg-background"
-            >
-              <option value="">{t('admin', 'filterAllEntities')}</option>
-              {ENTITY_TYPES.map((et) => (
-                <option key={et} value={et}>
-                  {et}
-                </option>
-              ))}
-            </select>
-          )}
           <select
             value={trustFilter}
             onChange={(e) => updateFilters({ trust: e.target.value })}
@@ -251,6 +223,21 @@ export function UnifiedMetadataList() {
             <option value="llm-confirmed">{t('admin', 'filterTrustLlmConfirmed')}</option>
             <option value="llm-deviation">{t('admin', 'filterTrustLlmDeviation')}</option>
           </select>
+          {activeKind === 'tag' && (
+            <select
+              value={tagPrefixFilter}
+              onChange={(e) => updateFilters({ prefix: e.target.value })}
+              className="px-3 py-1.5 border rounded-md text-sm bg-background"
+            >
+              <option value="all">{t('admin', 'filterTagPrefixAll')}</option>
+              <option value="client">{t('admin', 'tagPrefixClient')}</option>
+              <option value="produit">{t('admin', 'tagPrefixProduit')}</option>
+              <option value="tech">{t('admin', 'tagPrefixTech')}</option>
+              <option value="partner">{t('admin', 'tagPrefixPartner')}</option>
+              <option value="cert">{t('admin', 'tagPrefixCert')}</option>
+              <option value="reg">{t('admin', 'tagPrefixReg')}</option>
+            </select>
+          )}
           {isPendingView && (
             <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
               <input

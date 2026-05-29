@@ -14,10 +14,10 @@ import {
   Info,
   Wand2,
   RotateCcw,
-  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { tagDisplayLabel } from '@/lib/tag-display';
 import type { HarvestCandidate, SuggestedMetadata } from '@/api/types';
 
 export interface CandidateEdits {
@@ -26,49 +26,8 @@ export interface CandidateEdits {
   lang?: string;
   tags?: string[];
   body?: string;
-  entities_json?: string;
 }
 
-const ENTITY_TYPES = [
-  'clients',
-  'products',
-  'technologies',
-  'partners',
-  'certifications',
-  'regulations',
-] as const;
-
-function parseEntities(json: string | null | undefined): Record<string, string[]> {
-  if (!json) return {};
-  try {
-    return JSON.parse(json) as Record<string, string[]>;
-  } catch {
-    return {};
-  }
-}
-
-function serializeEntities(map: Record<string, string[]>): string {
-  return JSON.stringify(map);
-}
-
-/** Flat {name, type} list from the nested map, filtered to non-empty names */
-function flatEntities(map: Record<string, string[]>): { name: string; type: string }[] {
-  return Object.entries(map).flatMap(([t, names]) =>
-    (Array.isArray(names) ? names : [])
-      .filter((n) => n.trim().length > 1)
-      .map((n) => ({ name: n, type: t })),
-  );
-}
-
-/** Rebuild the nested map from a flat list */
-function buildMap(flat: { name: string; type: string }[]): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const { name, type } of flat) {
-    if (!out[type]) out[type] = [];
-    out[type].push(name);
-  }
-  return out;
-}
 
 interface Props {
   candidate: HarvestCandidate | null;
@@ -83,82 +42,6 @@ interface Props {
   onClose: () => void;
 }
 
-function EntityEditor({
-  entitiesJson,
-  onChange,
-}: {
-  entitiesJson: string | null | undefined;
-  onChange: (json: string) => void;
-}) {
-  const map = parseEntities(entitiesJson);
-  const flat = flatEntities(map);
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<string>(ENTITY_TYPES[0]);
-
-  const remove = (idx: number) => {
-    const updated = flat.filter((_, i) => i !== idx);
-    onChange(serializeEntities(buildMap(updated)));
-  };
-
-  const add = () => {
-    const name = newName.trim();
-    if (!name) return;
-    const updated = [...flat, { name, type: newType }];
-    onChange(serializeEntities(buildMap(updated)));
-    setNewName('');
-  };
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">Entités détectées</p>
-      <div className="flex flex-wrap gap-1 min-h-[1.5rem]">
-        {flat.length === 0 ? (
-          <span className="text-xs text-muted-foreground">Aucune entité détectée</span>
-        ) : (
-          flat.map((e, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded dark:bg-purple-900/30 dark:text-purple-300"
-            >
-              {e.name}
-              <span className="opacity-60">({e.type})</span>
-              <button type="button" onClick={() => remove(i)} className="ml-0.5 hover:text-red-500">
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </span>
-          ))
-        )}
-      </div>
-      <div className="flex gap-1">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-          placeholder="Nom de l'entité"
-          className="flex-1 min-w-0 px-2 py-1 border rounded text-xs bg-background"
-        />
-        <select
-          value={newType}
-          onChange={(e) => setNewType(e.target.value)}
-          className="px-2 py-1 border rounded text-xs bg-background"
-        >
-          {ENTITY_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={add}
-          className="px-2 py-1 border rounded text-xs hover:bg-muted"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export function CandidateDetailSheet({
   candidate,
@@ -293,12 +176,6 @@ export function CandidateDetailSheet({
           }
         />
 
-        {/* Entities — editable */}
-        <EntityEditor
-          entitiesJson={edits.entities_json ?? candidate.entities_json}
-          onChange={(json) => onEditsChange({ ...edits, entities_json: json })}
-        />
-
         {candidate.quality_signals && candidate.quality_signals.filter((s) => s.type !== 'duplicate_check').length > 0 && (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -422,7 +299,7 @@ export function CandidateDetailSheet({
                       variant="outline"
                       className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
                     >
-                      #{tag}
+                      #{tagDisplayLabel(tag)}
                     </Badge>
                   ))}
                 </div>
