@@ -273,11 +273,15 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
     try {
       const response = await this.chat(prompt);
       const json = this.extractJson(response, true);
-      if (!json) return [];
+      if (!json) {
+        console.warn('[llm-client][segmentAndClassify] no JSON array in response — first 300 chars:', response.slice(0, 300));
+        return [];
+      }
       const parsed = JSON.parse(json);
       if (!Array.isArray(parsed)) return [];
       return parsed as CombinedBlock[];
-    } catch {
+    } catch (err) {
+      console.error('[llm-client][segmentAndClassify] failed:', err instanceof Error ? err.message : err);
       return [];
     }
   }
