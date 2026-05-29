@@ -24,6 +24,7 @@ import {
 } from '../schema/fragment.js';
 import { AuditService } from './audit-service.js';
 import { hasRole } from '../auth/index.js';
+import { generateReadableId } from './readable-id.js';
 import { SearchService, type SearchFilters } from '../search/index.js';
 import type { LlmClient } from './llm-client.js';
 import { detectAndPropose } from './supersedure-detector.js';
@@ -68,6 +69,18 @@ export class FragmentService {
     collectionSlug?: string,
   ) {
     const id = generateId();
+    // Generate with retry — protects against the read-then-write race under concurrent requests
+    let readableId: string | undefined;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = await generateReadableId(this.db, input.domain, input.type);
+      const collision = await this.db
+        .select({ id: fragments.id })
+        .from(fragments)
+        .where(eq(fragments.readable_id, candidate))
+        .limit(1);
+      if (collision.length === 0) { readableId = candidate; break; }
+    }
+    if (!readableId) readableId = await generateReadableId(this.db, input.domain, input.type);
     const now = new Date().toISOString();
     const effectivePath = storePathOverride ?? this.storePath;
     const fragmentsDir = storePathOverride
@@ -149,6 +162,7 @@ export class FragmentService {
       audience: input.audience ? JSON.stringify(input.audience) : null,
       maturity: input.maturity ?? null,
       harvest_confidence: (input as any).harvest_confidence ?? null,
+      readable_id: readableId,
     });
 
     // Sync fragment_tag_links
@@ -183,7 +197,7 @@ export class FragmentService {
       maturity: input.maturity ?? null,
     });
 
-    return { id, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
+    return { id, readable_id: readableId, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
   }
 
   async getById(id: string) {
@@ -241,6 +255,16 @@ export class FragmentService {
       if (e?.code === 'ENOENT') return null; // fichier manquant → 404 propre
       throw e;
     }
+  }
+
+  async getByReadableId(readableId: string) {
+    const rows = await this.db
+      .select()
+      .from(fragments)
+      .where(eq(fragments.readable_id, readableId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    return this.getById(rows[0].id);
   }
 
   /** Replace the full set of entity links for a fragment. Only links to validated entities. */
@@ -901,6 +925,14 @@ export class FragmentService {
           const relPath = relative(storePath, absPath);
           const title = deriveTitle(body);
 
+          // Generate readable_id for new fragments (existing ones keep theirs — readable_id is
+          // intentionally excluded from onConflictDoUpdate.set so it's never overwritten)
+          const reindexReadableId = await generateReadableId(
+            this.db,
+            frontmatter.domain,
+            frontmatter.type,
+          );
+
           await this.db
             .insert(fragments)
             .values({
@@ -921,6 +953,7 @@ export class FragmentService {
               translation_of: frontmatter.translation_of ?? null,
               valid_from: frontmatter.valid_from ?? null,
               valid_until: frontmatter.valid_until ?? null,
+              readable_id: reindexReadableId,
             })
             .onConflictDoUpdate({
               target: fragments.id,
@@ -933,6 +966,7 @@ export class FragmentService {
                 collection_slug: collectionSlug,
                 valid_from: frontmatter.valid_from ?? null,
                 valid_until: frontmatter.valid_until ?? null,
+                // readable_id intentionally omitted: existing fragments keep their stable ID
               },
             });
 

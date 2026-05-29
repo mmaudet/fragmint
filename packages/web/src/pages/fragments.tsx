@@ -217,7 +217,7 @@ export default function FragmentsPage() {
               setSelectedIds(new Set());
             }}
           >
-            <SelectTrigger className="flex-1 min-w-36 border-slate-300 bg-white">
+            <SelectTrigger className="flex-1 min-w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -10,7 +10,11 @@ export const getDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      id: { type: 'string', description: 'Fragment ID (e.g. "frag-f1a2b3c4-...")' },
+      id: {
+        type: 'string',
+        description:
+          'Fragment UUID (frag-xxxx-...) or stable readable_id (e.g. LS-ref-003, TM-arg-012). Readable IDs are human-friendly and guaranteed stable — prefer them over UUIDs when referencing fragments by hand.',
+      },
       include_history: {
         type: 'boolean',
         description: 'Include Git commit history (default false)',

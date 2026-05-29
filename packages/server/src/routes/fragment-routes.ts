@@ -129,10 +129,14 @@ export function fragmentRoutes(
     },
   );
 
-  // Get fragment by ID
+  // Get fragment by UUID or readable_id (e.g. LS-ref-003)
   app.get(`${prefix}/fragments/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const frag = await fragmentService.getById(id);
+    // Try UUID first, then fall back to readable_id lookup
+    let frag = await fragmentService.getById(id);
+    if (!frag && !id.startsWith('frag-')) {
+      frag = await fragmentService.getByReadableId(id);
+    }
     if (!frag)
       return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
     const data = {

@@ -477,6 +477,16 @@ export function createDb(path: string | ':memory:') {
     );
   } catch (_) {}
 
+  // Migration 017 — readable_id stable sur fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN readable_id TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_fragments_readable_id ON fragments(readable_id)',
+    );
+  } catch (_) {}
+
   const db = drizzle(sqlite, { schema });
   return db;
 }

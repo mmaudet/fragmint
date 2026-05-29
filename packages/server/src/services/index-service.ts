@@ -141,7 +141,7 @@ export class IndexService {
         subjects[domain].types[type] = [];
       }
       subjects[domain].types[type].push({
-        readable_id: '',
+        readable_id: row.readable_id ?? '',
         id: row.id,
         title: row.title ?? row.id,
         lang: row.lang,
@@ -156,8 +156,19 @@ export class IndexService {
       for (const [type, frags] of Object.entries(subjectData.types)) {
         frags.sort((a, b) => a.title.localeCompare(b.title));
         const short = typeShort(type);
-        frags.forEach((f, i) => {
-          f.readable_id = `${prefix}-${short}-${String(i + 1).padStart(3, '0')}`;
+        // Collect stable IDs to avoid collisions when assigning positional fallbacks
+        const stableIds = new Set(frags.map((f) => f.readable_id).filter(Boolean));
+        let fallbackNum = 1;
+        frags.forEach((f) => {
+          if (!f.readable_id) {
+            // Positional fallback for pre-migration fragments (run migrate-readable-ids.ts to fix permanently)
+            let candidate: string;
+            do {
+              candidate = `${prefix}-${short}-${String(fallbackNum++).padStart(3, '0')}`;
+            } while (stableIds.has(candidate));
+            f.readable_id = candidate;
+            stableIds.add(candidate);
+          }
         });
       }
     }

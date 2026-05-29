@@ -18,6 +18,7 @@ export const fragments = sqliteTable('fragments', {
   file_path: text('file_path').notNull(),
   collection_slug: text('collection_slug'),
   git_hash: text('git_hash'),
+  readable_id: text('readable_id').unique(),
   origin: text('origin').notNull().default('manual'),
   origin_source: text('origin_source'),
   origin_page: integer('origin_page'),

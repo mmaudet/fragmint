@@ -5,6 +5,7 @@ import { fragments } from '../db/schema.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
 import { detectAndPropose } from './supersedure-detector.js';
 import { FragmentService } from './fragment-service.js';
+import { generateReadableId } from './readable-id.js';
 
 export class FragmentBulkService extends FragmentService {
   async bulkReview(
@@ -299,7 +300,7 @@ export class FragmentBulkService extends FragmentService {
     const now = new Date().toISOString();
     const { mkdirSync } = await import('node:fs');
     type Group = {
-      items: Array<{ idx: number; id: string; relPath: string; item: (typeof items)[number] }>;
+      items: Array<{ idx: number; id: string; readableId: string; relPath: string; item: (typeof items)[number] }>;
     };
     const groups = new Map<string, Group>();
 
@@ -307,6 +308,7 @@ export class FragmentBulkService extends FragmentService {
       const item = items[idx];
       try {
         const id = generateId();
+        const readableId = await generateReadableId(this.db, item.domain, item.type);
         const fragmentsDir = this.fragmentsDir(item.collectionSlug);
         mkdirSync(fragmentsDir, { recursive: true });
 
@@ -343,7 +345,7 @@ export class FragmentBulkService extends FragmentService {
         if (!groups.has(this.storePath)) {
           groups.set(this.storePath, { items: [] });
         }
-        groups.get(this.storePath)!.items.push({ idx, id, relPath, item });
+        groups.get(this.storePath)!.items.push({ idx, id, readableId, relPath, item });
       } catch (e) {
         console.error(`[bulkCreate] item ${idx} failed to prepare:`, e);
       }
@@ -360,8 +362,9 @@ export class FragmentBulkService extends FragmentService {
         );
 
         await this.db.insert(fragments).values(
-          groupItems.map(({ id, relPath, item }) => ({
+          groupItems.map(({ id, readableId, relPath, item }) => ({
             id,
+            readable_id: readableId,
             type: item.type,
             domain: item.domain,
             lang: item.lang,
