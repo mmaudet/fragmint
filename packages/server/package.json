@@ -17,6 +17,7 @@
     "@fastify/static": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
+    "@marp-team/marp-cli": "^4.4.0",
     "@marp-team/marp-core": "^4.3.0",
     "@zilliz/milvus2-sdk-node": "^2.5.0",
     "better-sqlite3": "^12.8.0",

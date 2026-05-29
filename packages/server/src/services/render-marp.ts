@@ -38,29 +38,26 @@ export async function renderMarp(
     const { randomUUID } = await import('node:crypto');
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
+    const { createRequire } = await import('node:module');
     const execFileAsync = promisify(execFile);
+
+    // Resolve local marp-cli binary — avoids npx / network dependency in Docker
+    const require = createRequire(import.meta.url);
+    const marpCliMain = require.resolve('@marp-team/marp-cli');
 
     const tmpMd = join(tmpdir(), `marp-${randomUUID()}.md`);
     const tmpPptx = tmpMd.replace('.md', '.pptx');
     writeFileSync(tmpMd, resolvedMd);
 
     try {
-      await execFileAsync('npx', ['--yes', '@marp-team/marp-cli', tmpMd, '--pptx', '-o', tmpPptx], {
+      await execFileAsync(process.execPath, [marpCliMain, tmpMd, '--pptx', '-o', tmpPptx], {
         timeout: 60_000,
       });
       const buffer = readFileSync(tmpPptx);
       return { buffer, format: 'pptx' };
     } finally {
-      try {
-        unlinkSync(tmpMd);
-      } catch {
-        /* ignore */
-      }
-      try {
-        unlinkSync(tmpPptx);
-      } catch {
-        /* ignore */
-      }
+      try { unlinkSync(tmpMd); } catch { /* ignore */ }
+      try { unlinkSync(tmpPptx); } catch { /* ignore */ }
     }
   }
 
