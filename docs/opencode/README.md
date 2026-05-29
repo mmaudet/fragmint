@@ -63,10 +63,13 @@ Expected: OpenCode calls `plan_create` then `plan_generate` and shows you the se
 
 **No tools visible**: Check `opencode.json` is in the current directory when you run opencode.
 
-**`${FRAGMINT_TOKEN}` not expanded**: Some MCP hosts don't support env var substitution. In that case, put the literal token in `opencode.json` and add `opencode.json` to `.gitignore`:
+**`${FRAGMINT_TOKEN}` not expanded**: Some MCP hosts don't support env var substitution. In that case, put the literal token in `opencode.json` and stop tracking it in git:
 ```bash
+git rm --cached opencode.json
 echo "opencode.json" >> .gitignore
+git add .gitignore
 ```
+Then edit `opencode.json` to replace `"${FRAGMINT_TOKEN}"` with your literal token. Never commit a file with a real token in it.
 
 ## Notes
 

@@ -33,7 +33,7 @@ export async function renderMarp(
 
   if (outputType === 'pptx') {
     const { writeFileSync, unlinkSync } = await import('node:fs');
-    const { join } = await import('node:path');
+    const { join, dirname } = await import('node:path');
     const { tmpdir } = await import('node:os');
     const { randomUUID } = await import('node:crypto');
     const { execFile } = await import('node:child_process');
@@ -44,10 +44,9 @@ export async function renderMarp(
     // Resolve the CLI binary entry (marp-cli.js), not the library entry point (lib/index.js).
     // require.resolve('@marp-team/marp-cli') returns the library; the argv-driven CLI lives at
     // <pkg-root>/marp-cli.js — get there via the package.json manifest.
-    const { dirname, join: pathJoin } = await import('node:path');
     const require = createRequire(import.meta.url);
     const marpPkgDir = dirname(require.resolve('@marp-team/marp-cli/package.json'));
-    const marpCliMain = pathJoin(marpPkgDir, 'marp-cli.js');
+    const marpCliMain = join(marpPkgDir, 'marp-cli.js');
 
     const tmpMd = join(tmpdir(), `marp-${randomUUID()}.md`);
     const tmpPptx = tmpMd.replace('.md', '.pptx');

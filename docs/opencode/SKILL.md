@@ -33,13 +33,7 @@ plan_section_search({ id: "<plan_id>", section_id: "<section.id>" })
 ```
 → Returns candidates scored by relevance. The top candidates are in `section.candidates`.
 
-### 4. Validate the plan before export
-```tool
-plan_validate({ id: "<plan_id>" })
-```
-→ Marks the plan as `plan_validated`. Required before export.
-
-### 5. Export the document
+### 4. Export the document
 ```tool
 plan_export({ id: "<plan_id>", format: "docx" })
 ```
@@ -90,7 +84,7 @@ Readable IDs like `TM-arg-001` (prefix-type-number) are stable human-readable re
 - **Collections**: default is `common`. Use `collection_list` to discover team collections.
 - **plan_export docx** returns base64 — always give the user the decode command.
 - **Fragments quality**: prefer `approved` > `reviewed` > `draft`. The search service re-ranks by quality automatically.
-- **Plan status flow**: draft → plan_generated (after plan_generate) → plan_validated (after plan_validate) → completed.
+- **Plan status flow**: draft → plan_generated (after plan_generate) → export is callable at any status.
 
 ## Template-Based Composition (alternative to plan workflow)
 
