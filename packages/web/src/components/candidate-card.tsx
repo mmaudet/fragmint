@@ -131,6 +131,11 @@ export function CandidateCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {candidate.source_section && (
+          <span className="text-xs text-muted-foreground truncate block max-w-full">
+            📄 {candidate.source_section}
+          </span>
+        )}
         <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
 
         {simLevel && candidate.duplicate_of && pct != null && (

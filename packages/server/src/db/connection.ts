@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
+import { LINAGORA_DOMAINS } from './seeds/linagora-domains.js';
 
 export type FragmintDb = ReturnType<typeof createDb>;
 
@@ -486,6 +487,27 @@ export function createDb(path: string | ':memory:') {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_fragments_readable_id ON fragments(readable_id)',
     );
   } catch (_) {}
+
+  // Migration: add source_section to harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN source_section TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
+  // Seed 001 — default Linagora product domains (INSERT OR IGNORE — safe on every boot).
+  // Intentional: once seeded, domains are admin-owned. Label/description changes in this
+  // file will NOT update existing rows — edit via the admin UI or a manual migration.
+  const insertDomain = sqlite.prepare(
+    'INSERT OR IGNORE INTO fragment_domains (slug, label, description, created_at) VALUES (?, ?, ?, ?)',
+  );
+  const seedDomainsNow = sqlite.transaction(() => {
+    const now = new Date().toISOString();
+    for (const domain of LINAGORA_DOMAINS) {
+      insertDomain.run(domain.slug, domain.label, domain.description, now);
+    }
+  });
+  seedDomainsNow();
 
   const db = drizzle(sqlite, { schema });
   return db;

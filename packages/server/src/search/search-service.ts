@@ -355,6 +355,14 @@ export class SearchService {
     return this.sqliteSearch(query, filters, limit);
   }
 
+  /**
+   * Embed a batch of texts. Returns one number[] per input string.
+   * Delegates to EmbeddingClient.embedBatch — batched in chunks of 32 internally.
+   */
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    return this.embeddingClient.embedBatch(texts);
+  }
+
   async removeFromIndex(id: string): Promise<void> {
     if (!this.milvusClient) return;
     try {

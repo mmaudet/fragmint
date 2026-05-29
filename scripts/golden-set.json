@@ -1,0 +1,74 @@
+{
+  "comment": "Golden set for harvest pipeline eval. Each case: input markdown + expected blocks.",
+  "cases": [
+    {
+      "id": "gs-001",
+      "description": "Two distinct product sections, French",
+      "markdown": "# Présentation LinShare\n\nLinShare est une solution open source de partage de fichiers développée par Linagora. Elle permet aux entreprises de partager des documents de façon sécurisée.\n\n# Présentation Twake Mail\n\nTwake Mail est un client mail open source moderne développé par Linagora. Il offre une interface épurée et des fonctionnalités avancées de collaboration.",
+      "expected": [
+        { "domain": "linshare", "type": "introduction", "lang": "fr" },
+        { "domain": "twake-mail", "type": "introduction", "lang": "fr" }
+      ]
+    },
+    {
+      "id": "gs-002",
+      "description": "Junk blocks (separator, TOC title, short header)",
+      "markdown": "---\n\n# Sommaire\n\n## Section 1\n\nContenu substantiel de la première section avec plusieurs phrases complètes et des informations utiles sur le produit LinShare.",
+      "expected": [
+        { "domain": "linshare", "type": "introduction", "lang": "fr" }
+      ],
+      "expected_junky": [
+        { "body_starts_with": "---" },
+        { "body_starts_with": "# Sommaire" }
+      ]
+    },
+    {
+      "id": "gs-003",
+      "description": "Duplicate in two chunks (same text repeated)",
+      "markdown": "LinShare est une solution open source de partage de fichiers. Elle est utilisée par de nombreuses entreprises pour partager des documents.\n\nLinShare est une solution open source de partage de fichiers. Elle est utilisée par de nombreuses entreprises pour partager des documents.",
+      "expected_count": 1,
+      "expected_dedup": true
+    },
+    {
+      "id": "gs-004",
+      "description": "Table with Pandoc (pipe table extraction)",
+      "markdown": "| Feature | LinShare | Competitor |\n|---------|----------|------------|\n| Open source | Yes | No |\n| LDAP support | Yes | Partial |",
+      "expected": [
+        { "type": "argument", "lang": "en" }
+      ]
+    },
+    {
+      "id": "gs-005",
+      "description": "Hints: domain suggestion should NOT override all blocks",
+      "markdown": "# LinShare Features\n\nLinShare provides secure file sharing.\n\n# Twake Collaboration\n\nTwake is a complete collaboration platform.",
+      "hint_domain": "linshare",
+      "expected": [
+        { "domain": "linshare" },
+        { "domain": "twake" }
+      ],
+      "comment": "Second block should keep 'twake' not be overridden to 'linshare'"
+    },
+    {
+      "id": "gs-006",
+      "name": "source_section populated from semantic chunker",
+      "description": "A document with H2 sections. Candidates from section 'Installation' should have source_section='Installation'.",
+      "input": "# Guide\n\n## Installation\n\nSuivez ces étapes pour installer Twake Workplace sur votre serveur. Configurez d'abord le pare-feu, puis déployez les conteneurs Docker.\n\n## Désinstallation\n\nPour désinstaller, supprimez les conteneurs et nettoyez les volumes.",
+      "expected": {
+        "source_section_non_null_count_min": 1,
+        "source_section_values_include": ["Installation"]
+      },
+      "checks": ["source_section_populated"]
+    },
+    {
+      "id": "gs-007",
+      "name": "junkiness filter removes separator keeps substance",
+      "description": "A document with one solid paragraph and one pure separator line '---'. Only the paragraph should survive.",
+      "input": "---\n\nTwake est une suite collaborative open source développée par Linagora. Elle intègre messagerie, visioconférence et gestion documentaire dans une interface unifiée adaptée aux entreprises publiques et privées.",
+      "expected": {
+        "min_blocks_kept": 1,
+        "separator_removed": true
+      },
+      "checks": ["junkiness_filter_active"]
+    }
+  ]
+}

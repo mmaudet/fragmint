@@ -174,11 +174,11 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
       uploadHints.entities?.length
     );
     const hintsBlock = hasAnyHint
-      ? `\n# Operator hints (high confidence — prefer these unless content clearly contradicts them)\n${
-          uploadHints.domain ? `- domain: ${uploadHints.domain}\n` : ''
-        }${uploadHints.function_type ? `- function_type: ${uploadHints.function_type}\n` : ''}${
-          uploadHints.audience?.length ? `- audience: ${uploadHints.audience.join(', ')}\n` : ''
-        }${uploadHints.maturity ? `- maturity: ${uploadHints.maturity}\n` : ''}${
+      ? `\n# Operator hints (orientation — apply where relevant, not systematically to every block)\n${
+          uploadHints.domain ? `- domain (suggested): ${uploadHints.domain}\n` : ''
+        }${uploadHints.function_type ? `- function_type (suggested): ${uploadHints.function_type}\n` : ''}${
+          uploadHints.audience?.length ? `- audience (suggested): ${uploadHints.audience.join(', ')}\n` : ''
+        }${uploadHints.maturity ? `- maturity (suggested): ${uploadHints.maturity}\n` : ''}${
           uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
         }${
           uploadHints.entities?.length

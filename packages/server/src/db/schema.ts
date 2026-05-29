@@ -145,6 +145,7 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   confidence: real('confidence').notNull(),
   origin_source: text('origin_source').notNull(),
   origin_page: integer('origin_page'),
+  source_section: text('source_section'),
   duplicate_of: text('duplicate_of'),
   duplicate_score: real('duplicate_score'),
   duplicate_method: text('duplicate_method'),     // 'hash' | 'shingles' | 'cosine'

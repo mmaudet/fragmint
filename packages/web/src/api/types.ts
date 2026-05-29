@@ -160,6 +160,7 @@ export interface HarvestCandidate {
   confidence: number;
   origin_source: string;
   origin_page: number | null;
+  source_section: string | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
   duplicate_method?: string | null;

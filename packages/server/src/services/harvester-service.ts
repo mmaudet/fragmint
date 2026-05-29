@@ -50,6 +50,7 @@ export interface HarvestCandidate {
   confidence: number;
   origin_source: string;
   origin_page: number | null;
+  source_section: string | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
   duplicate_method: string | null;
@@ -185,6 +186,7 @@ export class HarvesterService {
         confidence: c.confidence,
         origin_source: c.origin_source,
         origin_page: c.origin_page,
+        source_section: c.source_section ?? null,
         duplicate_of: c.duplicate_of,
         duplicate_score: c.duplicate_score,
         duplicate_method: c.duplicate_method ?? null,

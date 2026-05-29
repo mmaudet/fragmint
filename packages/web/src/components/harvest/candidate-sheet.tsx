@@ -89,6 +89,11 @@ export function CandidateSheet({
                 {t('harvest', 'duplicatePotential')}
               </Badge>
             )}
+            {candidate.source_section && (
+              <span className="text-xs text-muted-foreground line-clamp-2">
+                📄 {candidate.source_section}
+              </span>
+            )}
           </div>
         </SheetHeader>
 

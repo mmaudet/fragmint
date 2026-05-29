@@ -20,6 +20,7 @@ import {
 } from '../db/schema.js';
 import { computeQualitySignals } from './quality-signals.js';
 import { generateShingles } from './dedupe/shingles.js';
+import { deduplicateL1L2, deduplicateL3 } from './dedupe/dedup-pipeline.js';
 import { detectDuplicate } from './dedupe/duplicate-detector.js';
 import { shouldRunJudge, runQualityJudge } from './quality-judge.js';
 import type { JudgeResult } from './quality-judge.js';
@@ -32,6 +33,8 @@ import {
   insertNewProposals,
   flushHintReferentials,
 } from './harvest-hint-processor.js';
+import { semanticChunk } from './harvest-chunker.js';
+import { isJunky } from './dedupe/junkiness-filter.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -126,6 +129,7 @@ export async function runPipeline(
     let totalCandidates = 0;
     let duplicatesCount = 0;
     let lowConfidenceCount = 0;
+    let l3Skipped = false;
 
     for (let i = 0; i < files.length; i++) {
       const buffer = files[i];
@@ -143,7 +147,7 @@ export async function runPipeline(
           '--from',
           'docx',
           '--to',
-          'markdown',
+          'markdown+pipe_tables',
           tempFile,
         ]);
         markdown = stdout;
@@ -162,18 +166,18 @@ export async function runPipeline(
         .replace(/\n{3,}/g, '\n\n');
       const lang = detectLanguage(markdown);
 
-      // Parallel LLM calls — one segmentAndClassify per chunk
-      const chunks = chunkMarkdown(markdown);
+      // Parallel LLM calls — one segmentAndClassify per semantic chunk
+      const semanticChunks = semanticChunk(markdown);
       console.log(
-        `[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${chunks.length} chunk(s)`,
+        `[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${semanticChunks.length} chunk(s)`,
       );
 
       const t0 = Date.now();
       const chunkResults = await Promise.all(
-        chunks.map(async (chunk, ci) => {
+        semanticChunks.map(async (chunk, ci) => {
           const tc = Date.now();
           const result = await llmClient.segmentAndClassify(
-            chunk,
+            chunk.text,
             existingTypes,
             existingDomains,
             knownTags,
@@ -183,22 +187,30 @@ export async function runPipeline(
             uploadHints,
           );
           console.log(
-            `[harvest:${jobId}] chunk ${ci + 1}/${chunks.length}: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`,
+            `[harvest:${jobId}] chunk ${ci + 1}/${semanticChunks.length} [${chunk.sourceSection || 'root'}]: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`,
           );
-          return result;
+          // Tag each result block with its source section
+          return result.map(b => ({ ...b, _sourceSection: chunk.sourceSection }));
         }),
       );
       console.log(`[harvest:${jobId}] LLM total: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-      const deduped = deduplicateBlocks(chunkResults.flat());
-      const blocks: CombinedBlock[] = deduped.filter((b) => !isSeparatorBlock(b.body));
-      console.log(`[harvest:${jobId}] ${blocks.length} block(s) after dedup+separator-filter`);
+      type TaggedBlock = CombinedBlock & { _sourceSection: string };
+      const allBlocks = chunkResults.flat() as TaggedBlock[];
+      const dedupedTagged = deduplicateL1L2(allBlocks);
+      const l1l2Blocks: TaggedBlock[] = dedupedTagged.filter((b) => !isJunky(b.body ?? ''));
+      console.log(`[harvest:${jobId}] ${l1l2Blocks.length} block(s) after dedup+separator-filter`);
 
-      // Apply hint overrides: domain forced on all fragments (document-level metadata)
-      // Tags and entities are fragment-level — LLM applies tags where coherent,
-      // entities are injected only where found in the body (body-scan below)
-      if (uploadHints.domain) {
-        for (const block of blocks) block.domain = uploadHints.domain;
+      // L3: embedding cosine dedup (skipped when embedding service unavailable)
+      let blocks = l1l2Blocks;
+      try {
+        const texts = l1l2Blocks.map((b) => `${b.title}\n\n${b.body.slice(0, 300)}`);
+        const embeddings = await searchService.embedBatch(texts);
+        blocks = deduplicateL3(l1l2Blocks, embeddings) as TaggedBlock[];
+        console.info(`[harvest:${jobId}] L3 dedup: ${l1l2Blocks.length} → ${blocks.length}`);
+      } catch (err) {
+        l3Skipped = true;
+        console.warn(`[harvest:${jobId}] L3 embedding dedup skipped:`, (err as Error).message);
       }
 
       // Parallel duplicate detection — exact match always, Milvus near-match if available
@@ -327,6 +339,7 @@ export async function runPipeline(
             judge_result: judgeResults[j] ? JSON.stringify(judgeResults[j]) : null,
             origin_source: filename,
             origin_page: null,
+            source_section: (block as TaggedBlock)._sourceSection ?? null,
             duplicate_of: dupeChecks[j]?.id ?? null,
             duplicate_score: dupeChecks[j]?.score ?? null,
             duplicate_method: dupeChecks[j]?.method ?? null,
@@ -356,6 +369,7 @@ export async function runPipeline(
       duplicates: duplicatesCount,
       low_confidence: lowConfidenceCount,
       valid: totalCandidates - duplicatesCount - lowConfidenceCount,
+      ...(l3Skipped ? { l3_dedup_skipped: true } : {}),
     };
 
     await db
@@ -403,6 +417,7 @@ export function extractBlockText(markdown: string, startMarker: string, endMarke
 export const MAX_CHUNK_CHARS = 12000; // ~3000 tokens — larger chunks = fewer LLM calls
 export const OVERLAP_CHARS = 400;
 
+/** @deprecated Use semanticChunk() from harvest-chunker.ts for new code. */
 export function chunkMarkdown(markdown: string): string[] {
   if (markdown.length <= MAX_CHUNK_CHARS) return [markdown];
 
@@ -425,6 +440,10 @@ export function chunkMarkdown(markdown: string): string[] {
   return chunks;
 }
 
+/**
+ * @deprecated Use deduplicateL1L2 from './dedupe/dedup-pipeline.js' for new code.
+ *   This body-prefix approach is kept for backward compatibility with HarvesterService static API.
+ */
 export function deduplicateBlocks<T extends { body: string }>(blocks: T[]): T[] {
   const seen = new Set<string>();
   return blocks.filter((b) => {
@@ -436,53 +455,11 @@ export function deduplicateBlocks<T extends { body: string }>(blocks: T[]): T[] 
   });
 }
 
-/** Returns true if the block body is purely decorative (separator lines, horizontal rules, etc.)
- *  and carries no semantic content worth indexing. */
-export function isSeparatorBlock(body: string): boolean {
-  const stripped = body.replace(/\s+/g, '');
-  if (stripped.length === 0) return false;
-  return /^[-=_*#~|.•·]+$/.test(stripped);
-}
-
 export function detectLanguage(text: string): 'fr' | 'en' {
-  const frStops = [
-    'le',
-    'la',
-    'les',
-    'de',
-    'du',
-    'des',
-    'un',
-    'une',
-    'est',
-    'sont',
-    'dans',
-    'pour',
-    'avec',
-    'qui',
-    'que',
-    'nous',
-    'cette',
-    'sur',
-  ];
-  const enStops = [
-    'the',
-    'is',
-    'are',
-    'of',
-    'in',
-    'to',
-    'for',
-    'with',
-    'and',
-    'that',
-    'this',
-    'from',
-    'have',
-    'has',
-    'been',
-    'will',
-  ];
+  // prettier-ignore
+  const frStops = ['le','la','les','de','du','des','un','une','est','sont','dans','pour','avec','qui','que','nous','cette','sur'];
+  // prettier-ignore
+  const enStops = ['the','is','are','of','in','to','for','with','and','that','this','from','have','has','been','will'];
 
   const words = text.toLowerCase().split(/\s+/);
   const frSet = new Set(frStops);
