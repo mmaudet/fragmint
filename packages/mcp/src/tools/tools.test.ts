@@ -1,5 +1,6 @@
 // packages/mcp/src/tools/tools.test.ts
 import { describe, it, expect, vi } from 'vitest';
+import { FragmintApiClient } from '../client.js';
 import { inventoryHandler, inventoryDefinition } from './fragment-inventory.js';
 import { searchHandler, searchDefinition } from './fragment-search.js';
 import { getHandler } from './fragment-get.js';
@@ -250,5 +251,52 @@ describe('document_compose', () => {
     const result = await handler({ template_id: 'bad', context: {} });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Template not found');
+  });
+});
+
+describe('FragmintApiClient.postText / postBinary', () => {
+  it('postText returns response body as string', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('# My Plan\n\n## Intro'),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FragmintApiClient('http://localhost:3210', 'tok-test');
+    const text = await client.postText('/v1/plans/plan-1/export', { format: 'md' });
+    expect(text).toBe('# My Plan\n\n## Intro');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3210/v1/plans/plan-1/export',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('postBinary returns base64-encoded content', async () => {
+    const bytes = Buffer.from('PK\x03\x04fake-docx'); // fake zip magic bytes
+    // bytes.buffer is a shared Node.js ArrayBuffer — slice to get just our bytes
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(ab),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FragmintApiClient('http://localhost:3210', 'tok-test');
+    const b64 = await client.postBinary('/v1/plans/plan-1/export', { format: 'docx' });
+    expect(b64).toBe(bytes.toString('base64'));
+    vi.unstubAllGlobals();
+  });
+
+  it('postBinary throws on HTTP error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('Plan not found'),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FragmintApiClient('http://localhost:3210', 'tok-test');
+    await expect(client.postBinary('/v1/plans/bad/export', { format: 'docx' })).rejects.toThrow(
+      'HTTP 404',
+    );
+    vi.unstubAllGlobals();
   });
 });
