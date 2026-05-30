@@ -30,6 +30,8 @@ export const fragments = sqliteTable('fragments', {
   maturity: text('maturity'),
   superseded_by: text('superseded_by'),
   supersedes: text('supersedes'),
+  payload: text('payload'),           // JSON-serialized payload, nullable
+  payload_schema: text('payload_schema'), // e.g. 'pricing-line-v1', nullable
 });
 
 export const auditLog = sqliteTable('audit_log', {
@@ -160,6 +162,8 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   trust_sources_json: text('trust_sources_json'),
   quality_signals: text('quality_signals'), // JSON: CoherenceFlag[]
   judge_result: text('judge_result'), // JSON: JudgeResult | null
+  payload: text('payload'),
+  payload_schema: text('payload_schema'),
 });
 
 export const jobs = sqliteTable('jobs', {
@@ -288,4 +292,17 @@ export const supersedureProposals = sqliteTable('supersedure_proposals', {
   resolvedBy: text('resolved_by'),
   resolvedAt: text('resolved_at'),
   createdAt: text('created_at').notNull(),
+});
+
+export const fragmentCollections = sqliteTable('fragment_collections', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  payload_schema: text('payload_schema'),
+  member_ids: text('member_ids').notNull().default('[]'), // JSON array of fragment IDs, ordered
+  source_document: text('source_document'),   // filename of the source document (from harvest)
+  collection_slug: text('collection_slug'),   // workspace collection slug
+  created_at: text('created_at').notNull(),
+  created_by: text('created_by').notNull(),
+  updated_at: text('updated_at').notNull(),
 });

@@ -495,6 +495,38 @@ export function createDb(path: string | ':memory:') {
     // Column already exists — ignore
   }
 
+  // Migration 018 — payload fields on fragments and harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN payload TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN payload_schema TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN payload TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN payload_schema TEXT');
+  } catch (_) {}
+
+  // Migration 018b — fragment_collections table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS fragment_collections (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      payload_schema TEXT,
+      member_ids TEXT NOT NULL DEFAULT '[]',
+      source_document TEXT,
+      collection_slug TEXT,
+      created_at TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fc_collection_slug ON fragment_collections(collection_slug);
+    CREATE INDEX IF NOT EXISTS idx_fc_created_by ON fragment_collections(created_by);
+  `);
+
   // Seed 001 — default Linagora product domains (INSERT OR IGNORE — safe on every boot).
   // Intentional: once seeded, domains are admin-owned. Label/description changes in this
   // file will NOT update existing rows — edit via the admin UI or a manual migration.
