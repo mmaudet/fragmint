@@ -333,6 +333,16 @@ export async function runPipeline(
         if (ts) ts.domain = 'human-direct';
       }
 
+      // Promote new_proposals.tags into block.tags BEFORE saving to DB so that
+      // llm-inferred tags surface on the candidate (and later the fragment) immediately.
+      for (const block of blocks) {
+        for (const rawTag of block.new_proposals?.tags ?? []) {
+          const slug = rawTag.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
+          if (!block.tags) block.tags = [];
+          if (!block.tags.includes(slug)) block.tags.push(slug);
+        }
+      }
+
       // Batch insert all candidates
       if (blocks.length > 0) {
         await db.insert(harvestCandidates).values(

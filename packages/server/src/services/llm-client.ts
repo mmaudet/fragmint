@@ -134,8 +134,8 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
 
     const tagHint =
       knownTags.length > 0
-        ? `ONLY use tags from this exact list: ${JSON.stringify(knownTags.slice(0, 80))}. Do NOT invent tags or add anything outside this list to the "tags" array.`
-        : 'Leave "tags" empty — new thematic tags go in new_proposals.tags instead.';
+        ? `Use tags from this referential list when relevant: ${JSON.stringify(knownTags.slice(0, 80))}. For concepts NOT covered by this list, add new tags in new_proposals.tags with a semantic prefix in the form "category:value" (e.g. "health:patient-data", "tech:hl7-fhir", "legal:gdpr", "domain:logistics"). Do NOT add unknown tags to the "tags" array — only new_proposals.tags.`
+        : 'The referential has no matching tags. Freely infer relevant tags from the content and put them in new_proposals.tags. Use a semantic prefix in the form "category:value" (e.g. "health:patient-data", "tech:cloud-native", "legal:compliance", "domain:finance"). Leave "tags" empty — they will be reviewed by an admin.';
 
     const hasAnyHint = !!(
       uploadHints.domain ||
