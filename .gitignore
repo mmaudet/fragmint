@@ -18,6 +18,7 @@ packages/web/tsconfig.tsbuildinfo
 docs/superpowers/research/
 # Ignore all Claude Code configuration (local tooling, not project code)
 .claude/
+!.claude/mission/PLAN.md
 *.~lock.*
 e2e/demo/output/
 
