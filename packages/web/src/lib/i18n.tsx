@@ -331,6 +331,8 @@ const translations = {
     assembleFirst: { fr: "Assemblez d'abord le document", en: 'Assemble the document first' },
     styleTemplate: { fr: 'Modèle de style', en: 'Style template' },
     defaultStyling: { fr: '(style par défaut)', en: '(default styling)' },
+    pandocDefault: { fr: 'Modèle Pandoc (défaut)', en: 'Pandoc default template' },
+    builtinDefault: { fr: '(par défaut)', en: '(default)' },
     uploadStyleTemplate: { fr: 'Importer un nouveau modèle', en: 'Upload new template' },
     approve: { fr: 'Approuver', en: 'Approve' },
     reject: { fr: 'Rejeter', en: 'Reject' },
