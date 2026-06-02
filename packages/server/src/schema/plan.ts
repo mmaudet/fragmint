@@ -33,6 +33,7 @@ export const FragmentCandidateSchema = z.object({
   body_excerpt: z.string().nullable(),
   body_full: z.string().nullable().optional(),
   quality: z.string(),
+  type: z.string().optional(),
   score_breakdown: ScoreBreakdownSchema.optional(),
   justification: z.string().optional(),
 });
@@ -123,6 +124,7 @@ export const SectionSearchSchema = z.object({
 export const ExportPlanSchema = z.object({
   format: z.enum(['md', 'docx', 'pptx', 'slides', 'reveal']),
   style_template_id: z.string().optional(),
+  // kept for legacy compatibility — no longer exposed in UI
   marp_theme: z.enum(['default', 'gaia', 'uncover', 'linagora']).optional(),
   reveal_theme: z.enum(['white', 'black', 'moon', 'sky', 'beige', 'simple', 'solarized', 'linagora']).optional(),
 });

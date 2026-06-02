@@ -500,8 +500,16 @@ export function planRoutes(
       }
 
       if (parsed.data.format === 'pptx') {
+        const pptxStyleId = parsed.data.style_template_id ?? plan.state.export_style_template_id;
+        let pptxStylePath: string | undefined;
+        if (pptxStyleId) {
+          const tpl = await templateService.getById(pptxStyleId);
+          if (tpl?.kind === 'style_reference') {
+            pptxStylePath = join(storePath, tpl.template_path);
+          }
+        }
         const { content, filename } = await planService.exportPptx(id, {
-          marpTheme: parsed.data.marp_theme,
+          styleTemplatePath: pptxStylePath,
         });
         return reply
           .type('application/vnd.openxmlformats-officedocument.presentationml.presentation')

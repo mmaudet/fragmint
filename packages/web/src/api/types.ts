@@ -211,6 +211,7 @@ export interface FragmentCandidate {
   title: string | null;
   body_excerpt: string | null;
   quality: string;
+  type?: string;
   score_breakdown?: {
     method: 'vector' | 'agentic' | 'hybrid_rrf' | 'sqlite_like';
     vector_score?: number;

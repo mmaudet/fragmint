@@ -97,6 +97,14 @@ export function useSectionSearch(id: string) {
   });
 }
 
+export function useSearchAllSections(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiRequest<Plan>('POST', `/v1/plans/${id}/search-all-sections`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
+  });
+}
+
 export function useValidateFragments(id: string) {
   const qc = useQueryClient();
   return useMutation({
