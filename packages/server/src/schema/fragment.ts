@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const tagSlug = z.string().trim().transform((s) => s.toLowerCase().replace(/\s+/g, '-'));
+
 export const FRAGMENT_TYPES = [
   'introduction',
   'argument',
@@ -39,7 +41,7 @@ export const fragmentFrontmatterSchema = z.object({
   id: z.string().regex(/^frag-[a-f0-9-]+$/),
   type: z.string().min(1),
   domain: z.string().min(1),
-  tags: z.array(z.string()),
+  tags: z.array(tagSlug),
   lang: z.string().regex(/^[a-z]{2}$/),
   translation_of: z.string().nullable(),
   translations: z.record(z.string(), z.string().nullable()).optional(),
@@ -72,7 +74,7 @@ export type FragmentFrontmatter = z.infer<typeof fragmentFrontmatterSchema>;
 export const createFragmentSchema = z.object({
   type: z.string().min(1),
   domain: z.string().min(1),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(tagSlug).default([]),
   lang: z.string().regex(/^[a-z]{2}$/),
   body: z.string().min(1),
   translation_of: z.string().nullable().default(null),
@@ -82,6 +84,8 @@ export const createFragmentSchema = z.object({
   valid_until: z.string().nullable().default(null),
   harvest_confidence: z.number().min(0).max(1).nullable().default(null),
   source_position: z.number().int().min(1).nullable().default(null),
+  payload: z.string().nullable().default(null),
+  payload_schema: z.string().nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   origin_source: z.string().nullable().default(null),
   origin_page: z.number().nullable().default(null),
@@ -104,7 +108,7 @@ export const updateFragmentSchema = z.object({
     .string()
     .regex(/^[a-z]{2}$/)
     .optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(tagSlug).optional(),
   quality: z.enum(QUALITY_VALUES).optional(),
   access: z
     .object({

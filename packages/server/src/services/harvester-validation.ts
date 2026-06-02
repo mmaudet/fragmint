@@ -60,6 +60,8 @@ export async function validate(
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
         harvest_confidence: candidate.confidence,
+        payload: candidate.payload ?? null,
+        payload_schema: candidate.payload_schema ?? null,
       } as any,
       userId,
       'expert',
@@ -109,6 +111,8 @@ export async function validate(
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
         harvest_confidence: candidate.confidence,
+        payload: candidate.payload ?? null,
+        payload_schema: candidate.payload_schema ?? null,
       } as any,
       userId,
       'expert',
@@ -201,6 +205,8 @@ export async function bulkAccept(
     origin: 'harvested' as const,
     harvest_confidence: candidate.confidence,
     source_position: sourcePositionMap.get(candidate.id) ?? null,
+    payload: candidate.payload ?? null,
+    payload_schema: candidate.payload_schema ?? null,
     collectionSlug: jobCollectionMap.get(candidate.job_id),
   }));
 
@@ -265,7 +271,6 @@ export async function upsertTags(db: FragmintDb, tags: string[]): Promise<void> 
       normalized.map((slug) => ({
         slug,
         label: slug,
-        validated: 0,
         status: 'pending' as const,
         proposedBy: 'llm-auto',
         trustSource: 'llm-inferred',

@@ -287,6 +287,9 @@ export class FragmentBulkService extends FragmentService {
       tags: string[];
       origin: 'manual' | 'harvested' | 'generated';
       harvest_confidence?: number;
+      source_position?: number | null;
+      payload?: string | null;
+      payload_schema?: string | null;
       collectionSlug?: string;
     }>,
     author: string,
@@ -378,6 +381,8 @@ export class FragmentBulkService extends FragmentService {
             valid_from: null,
             valid_until: null,
             harvest_confidence: item.harvest_confidence ?? null,
+            payload: item.payload ?? null,
+            payload_schema: item.payload_schema ?? null,
           })),
         );
 
