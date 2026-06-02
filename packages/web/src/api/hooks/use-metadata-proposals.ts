@@ -10,6 +10,7 @@ import type { TrustSource } from '@/types/trust-source';
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['admin', 'metadata'] });
+  qc.invalidateQueries({ queryKey: ['admin', 'metadata', 'pending-count'] });
   qc.invalidateQueries({ queryKey: ['referential'] });
   qc.invalidateQueries({ queryKey: ['fragments'] });
 }
@@ -89,7 +90,7 @@ export function useMetadataPendingCount() {
   return useQuery<PendingCounts>({
     queryKey: ['admin', 'metadata', 'pending-count'],
     queryFn: () => apiRequest('GET', '/v1/admin/metadata/pending-count'),
-    staleTime: 1000 * 60,
+    staleTime: 0,
     refetchInterval: 1000 * 60 * 5,
   });
 }
