@@ -182,6 +182,55 @@ function parseSimpleTableBlock(lines: string[]): { headers: string[]; rows: Reco
   return dataRows.length > 0 ? { headers, rows: dataRows } : null;
 }
 
+// ── HTML table parser (Pandoc <table> output for complex Word tables) ─────────
+
+function stripHtmlTags(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+function extractHtmlCells(tagName: 'th' | 'td', block: string): string[] {
+  const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi');
+  const cells: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) {
+    cells.push(stripHtmlTags(m[1]));
+  }
+  return cells;
+}
+
+function parseHtmlTableBlock(html: string): { headers: string[]; rows: Record<string, string>[] } | null {
+  const theadMatch = /<thead[^>]*>([\s\S]*?)<\/thead>/i.exec(html);
+  const headers = theadMatch
+    ? extractHtmlCells('th', theadMatch[1])
+    : extractHtmlCells('th', html);
+
+  if (headers.length < 2) return null;
+
+  const tbodyMatch = /<tbody[^>]*>([\s\S]*?)<\/tbody>/i.exec(html);
+  const bodyHtml = tbodyMatch ? tbodyMatch[1] : html;
+
+  const rows: Record<string, string>[] = [];
+  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let trMatch: RegExpExecArray | null;
+  while ((trMatch = trRe.exec(bodyHtml)) !== null) {
+    const cells = extractHtmlCells('td', trMatch[1]);
+    if (cells.length === 0) continue;
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => { row[h] = cells[idx] ?? ''; });
+    rows.push(row);
+  }
+
+  return rows.length > 0 ? { headers, rows } : null;
+}
+
 // ── Main detector ─────────────────────────────────────────────────────────────
 
 export function detectTables(markdown: string): DetectTablesResult {
@@ -234,6 +283,27 @@ export function detectTables(markdown: string): DetectTablesResult {
       for (let j = tableStart; j < tableStart + tableLines.length; j++) {
         removeLines.add(j);
       }
+      if (parsed && parsed.rows.length > 0) {
+        tables.push({ headers: parsed.headers, rows: parsed.rows, precedingHeading: lastHeading });
+      }
+      continue;
+    }
+
+    // HTML table: Pandoc output for complex Word tables
+    if (line.trim().toLowerCase().startsWith('<table')) {
+      const tableStart = i;
+      const tableLines: string[] = [line];
+      i++;
+      while (i < lines.length && !lines[i].toLowerCase().includes('</table>')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) { tableLines.push(lines[i]); i++; } // closing </table>
+      const htmlBlock = tableLines.join('\n');
+      for (let j = tableStart; j < tableStart + tableLines.length; j++) {
+        removeLines.add(j); // always strip HTML tables regardless of parse result
+      }
+      const parsed = parseHtmlTableBlock(htmlBlock);
       if (parsed && parsed.rows.length > 0) {
         tables.push({ headers: parsed.headers, rows: parsed.rows, precedingHeading: lastHeading });
       }
