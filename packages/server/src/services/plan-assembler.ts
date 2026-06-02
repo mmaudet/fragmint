@@ -5,7 +5,7 @@ import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js'
 import { type PlanSection } from '../schema/plan.js';
 import { buildSectionMessages } from './plan-prompts.js';
 import { slugify } from './slugify.js';
-import { renderMarkdownToDocx } from './pandoc-render.js';
+import { renderMarkdownToDocx, renderMarkdownToPptx } from './pandoc-render.js';
 import { renderMarpFromString } from './render-marp.js';
 import { renderDocxWithTables, type DocxSection } from './render-docx-table.js';
 import { renderPptxWithTables, type PptxSection } from './render-pptx-table.js';
@@ -90,6 +90,8 @@ export class PlanAssembler extends PlanService {
               valid_until: null,
               harvest_confidence: null,
               source_position: null,
+              payload: null,
+              payload_schema: null,
               origin: 'generated',
               origin_source: null,
               origin_page: null,
@@ -338,7 +340,7 @@ export class PlanAssembler extends PlanService {
 
   async exportPptx(
     id: string,
-    opts: { marpTheme?: 'default' | 'gaia' | 'uncover' | 'linagora' } = {},
+    args: { styleTemplatePath?: string } = {},
   ): Promise<{ content: Buffer; filename: string }> {
     const p = await this.get(id);
     if (!p) throw new Error('Plan not found');
@@ -372,10 +374,9 @@ export class PlanAssembler extends PlanService {
       return { content: buf, filename: `${slugify(p.title)}.pptx` };
     }
 
-    const mdContent = buildMarpContent(p.state.draft_markdown, opts.marpTheme);
-    const { buffer } = await renderMarpFromString(mdContent, 'pptx');
+    const buf = await renderMarkdownToPptx(p.state.draft_markdown, args.styleTemplatePath);
     await this.update(id, { status: 'completed' });
-    return { content: buffer, filename: `${slugify(p.title)}.pptx` };
+    return { content: buf, filename: `${slugify(p.title)}.pptx` };
   }
 
   async exportSlides(

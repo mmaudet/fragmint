@@ -229,6 +229,7 @@ export class PlanService {
         title: r.title,
         body_excerpt: r.body_excerpt,
         quality: r.quality,
+        type: r.type,
         score_breakdown: r.score_breakdown,
         justification: r.justification,
       }));
@@ -508,6 +509,8 @@ export class PlanService {
         valid_until: null,
         harvest_confidence: null,
         source_position: null,
+        payload: null,
+        payload_schema: null,
         origin: 'manual',
         origin_source: null,
         origin_page: null,

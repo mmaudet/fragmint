@@ -6,8 +6,9 @@ import { randomUUID } from 'node:crypto';
 
 const TIMEOUT_MS = 30_000;
 
-export async function renderMarkdownToDocx(
+async function renderMarkdownToOffice(
   markdown: string,
+  format: 'docx' | 'pptx',
   referenceDocPath?: string,
 ): Promise<Buffer> {
   let effectiveRef = referenceDocPath;
@@ -18,26 +19,29 @@ export async function renderMarkdownToDocx(
 
   const id = randomUUID();
   const mdPath = join(tmpdir(), `fragmint-plan-${id}.md`);
-  const docxPath = join(tmpdir(), `fragmint-plan-${id}.docx`);
+  const outPath = join(tmpdir(), `fragmint-plan-${id}.${format}`);
   writeFileSync(mdPath, markdown, 'utf-8');
 
-  const args = ['-f', 'markdown', '-t', 'docx', '-o', docxPath];
+  const args = ['-f', 'markdown', '-t', format, '-o', outPath];
   if (effectiveRef) args.push(`--reference-doc=${effectiveRef}`);
   args.push(mdPath);
 
   try {
     await runPandoc(args);
-    return readFileSync(docxPath);
+    return readFileSync(outPath);
   } finally {
-    if (existsSync(mdPath))
-      try {
-        unlinkSync(mdPath);
-      } catch (_) {}
-    if (existsSync(docxPath))
-      try {
-        unlinkSync(docxPath);
-      } catch (_) {}
+    for (const f of [mdPath, outPath]) {
+      if (existsSync(f)) try { unlinkSync(f); } catch (_) {}
+    }
   }
+}
+
+export function renderMarkdownToDocx(markdown: string, referenceDocPath?: string): Promise<Buffer> {
+  return renderMarkdownToOffice(markdown, 'docx', referenceDocPath);
+}
+
+export function renderMarkdownToPptx(markdown: string, referenceDocPath?: string): Promise<Buffer> {
+  return renderMarkdownToOffice(markdown, 'pptx', referenceDocPath);
 }
 
 function runPandoc(args: string[]): Promise<void> {

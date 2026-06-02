@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import type { FragmentCandidate, SectionFragmentSelection } from '@/api/types';
 import { useFragment } from '@/api/hooks/use-fragments';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Check, Pencil, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -59,16 +61,16 @@ export function SectionFragmentCard({
       : matchTier === 'medium'
         ? t('planGeneration', 'matchMedium')
         : matchTier === 'unscored'
-          ? 'Non scoré'
+          ? t('planGeneration', 'matchUnscored')
           : t('planGeneration', 'matchWeak');
   const matchClass =
     matchTier === 'strong'
-      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded'
       : matchTier === 'medium'
-        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded'
         : matchTier === 'unscored'
-          ? 'bg-muted text-muted-foreground/60'
-          : 'bg-muted text-muted-foreground';
+          ? 'text-muted-foreground/40'
+          : 'text-muted-foreground/60';
 
   function approve() {
     onChange({
@@ -103,19 +105,26 @@ export function SectionFragmentCard({
     <Card className={cardClass}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm truncate">
-            {candidate.title ?? candidate.fragment_id}
-          </CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="text-sm truncate">
+              {candidate.title ?? candidate.fragment_id}
+            </CardTitle>
+            {candidate.type && (
+              <span className="text-[11px] text-muted-foreground/70 font-normal">{candidate.type}</span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              {t('quality', candidate.quality as 'draft' | 'reviewed' | 'approved')}
-            </Badge>
+            {(/^\|.+\|/m.test(candidate.body_excerpt ?? '') || /<table[\s>]/i.test(candidate.body_excerpt ?? '')) && (
+              <span className="text-xs px-2 py-0.5 rounded bg-teal-500/15 text-teal-700 dark:text-teal-300">
+                📊 Tableau
+              </span>
+            )}
             {candidate.score_breakdown ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className={`text-xs px-2 py-0.5 rounded cursor-help ${matchClass}`}>
                     {matchLabel}
-                    {displayScore != null && (
+                    {displayScore != null && Math.round(displayScore * 100) > 0 && (
                       <span className="ml-1 opacity-75">· {Math.round(displayScore * 100)}%</span>
                     )}
                   </span>
@@ -134,7 +143,7 @@ export function SectionFragmentCard({
                 title={displayScore != null ? `cosine ${Math.round(displayScore * 100)}%` : 'non scoré'}
               >
                 {matchLabel}
-                {displayScore != null && (
+                {displayScore != null && Math.round(displayScore * 100) > 0 && (
                   <span className="ml-1 opacity-75">· {Math.round(displayScore * 100)}%</span>
                 )}
               </span>
@@ -182,12 +191,25 @@ export function SectionFragmentCard({
                 Chargement…
               </div>
             ) : (
-              <p className={`text-sm whitespace-pre-wrap ${expanded ? '' : 'line-clamp-3'}`}>
-                {(selection?.edited ? selection.body : null) ??
-                  fullFragment?.body ??
-                  selection?.body ??
-                  candidate.body_excerpt}
-              </p>
+              <div className={`text-sm prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1 ${expanded ? '' : 'line-clamp-3'}`}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={{
+                    a: ({ href, children }) =>
+                      href?.startsWith('#') ? (
+                        <span>{children}</span>
+                      ) : (
+                        <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                      ),
+                  }}
+                >
+                  {(selection?.edited ? selection.body : null) ??
+                    fullFragment?.body ??
+                    selection?.body ??
+                    candidate.body_excerpt ?? ''}
+                </ReactMarkdown>
+              </div>
             )}
             <button
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
@@ -214,7 +236,7 @@ export function SectionFragmentCard({
                 <Pencil className="h-4 w-4 mr-1" />
                 {t('planGeneration', 'edit')}
               </Button>
-              <Button size="sm" variant="ghost" onClick={onReject}>
+              <Button size="sm" variant="ghost" onClick={onReject} className="text-destructive hover:text-destructive">
                 <Trash2 className="h-4 w-4 mr-1" />
                 {t('planGeneration', 'reject')}
               </Button>

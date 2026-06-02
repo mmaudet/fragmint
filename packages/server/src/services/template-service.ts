@@ -123,11 +123,14 @@ export class TemplateService {
       `template: create style-reference ${name} (${id})`,
     );
 
+    const ext = docxFilename.split('.').pop()?.toLowerCase() ?? 'docx';
+    const outputFormat = ext === 'pptx' ? 'pptx' : ext === 'xlsx' ? 'xlsx' : 'docx';
+
     await this.db.insert(templates).values({
       id,
       name,
       description,
-      output_format: 'docx',
+      output_format: outputFormat,
       version: '1.0.0',
       template_path: relDocxPath,
       yaml_path: '',

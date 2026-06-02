@@ -16,34 +16,12 @@ import { useI18n } from '@/lib/i18n';
 import { UploadStyleTemplateDialog } from './upload-style-template-dialog';
 import { toast } from 'sonner';
 
-type ExportFormat = 'md' | 'docx' | 'pptx' | 'slides' | 'reveal';
-type MarpTheme = 'linagora' | 'default' | 'gaia' | 'uncover';
-type RevealTheme = 'linagora' | 'white' | 'black' | 'moon' | 'sky' | 'beige' | 'simple' | 'solarized';
+type ExportFormat = 'md' | 'docx' | 'pptx';
 
 const FORMAT_OPTIONS: { value: ExportFormat; label: string; ext: string }[] = [
   { value: 'docx', label: 'Word (.docx)', ext: 'docx' },
   { value: 'pptx', label: 'PowerPoint (.pptx)', ext: 'pptx' },
-  { value: 'slides', label: 'Marp slides (.html)', ext: 'html' },
-  { value: 'reveal', label: 'Reveal.js (.html)', ext: 'html' },
   { value: 'md', label: 'Markdown (.md)', ext: 'md' },
-];
-
-const MARP_THEMES: { value: MarpTheme; label: string }[] = [
-  { value: 'linagora', label: 'Linagora' },
-  { value: 'default', label: 'Default' },
-  { value: 'gaia', label: 'Gaia' },
-  { value: 'uncover', label: 'Uncover' },
-];
-
-const REVEAL_THEMES: { value: RevealTheme; label: string }[] = [
-  { value: 'linagora', label: 'Linagora' },
-  { value: 'white', label: 'White' },
-  { value: 'black', label: 'Black' },
-  { value: 'moon', label: 'Moon' },
-  { value: 'sky', label: 'Sky' },
-  { value: 'beige', label: 'Beige' },
-  { value: 'simple', label: 'Simple' },
-  { value: 'solarized', label: 'Solarized' },
 ];
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -63,13 +41,23 @@ export function ExportStep({ plan }: { plan: Plan }) {
   const [draft, setDraft] = useState(plan.state.draft_markdown ?? '');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('docx');
-  const [marpTheme, setMarpTheme] = useState<MarpTheme>('linagora');
-  const [revealTheme, setRevealTheme] = useState<RevealTheme>('linagora');
   const [exporting, setExporting] = useState(false);
   const styleId = plan.state.export_style_template_id ?? '';
   const defaultName = styleTemplates.data?.defaultName ?? null;
   const hasDraft = !!plan.state.draft_markdown?.trim();
   const saveTimer = useRef<number | null>(null);
+
+  // Sync export format with the template stored on the plan (e.g. pptx template saved in a
+  // previous session — without this, the dropdown shows blank because the pptx template isn't
+  // in the docx visibleTemplates list).
+  useEffect(() => {
+    if (!styleId || !styleTemplates.data) return;
+    const tpl = styleTemplates.data.templates.find((t) => t.id === styleId);
+    if (tpl && tpl.output_format !== exportFormat) {
+      setExportFormat(tpl.output_format as ExportFormat);
+    }
+  }, [styleTemplates.data, styleId]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   useEffect(() => {
     return () => {
@@ -93,9 +81,7 @@ export function ExportStep({ plan }: { plan: Plan }) {
     try {
       const opt = FORMAT_OPTIONS.find((f) => f.value === exportFormat)!;
       const blob = await exportPlan(plan.id, exportFormat, {
-        style_template_id: exportFormat === 'docx' ? styleId || undefined : undefined,
-        marp_theme: exportFormat === 'pptx' || exportFormat === 'slides' ? marpTheme : undefined,
-        reveal_theme: exportFormat === 'reveal' ? revealTheme : undefined,
+        style_template_id: hasStyleTemplate ? effectiveStyleId || undefined : undefined,
       });
       downloadBlob(blob, `${plan.title || 'plan'}.${opt.ext}`);
     } catch (e: any) {
@@ -113,9 +99,20 @@ export function ExportStep({ plan }: { plan: Plan }) {
     }, 500);
   }
 
-  const isMarpFormat = exportFormat === 'pptx' || exportFormat === 'slides';
-  const isRevealFormat = exportFormat === 'reveal';
+  const hasStyleTemplate = exportFormat === 'docx' || exportFormat === 'pptx';
   const isDocxFormat = exportFormat === 'docx';
+
+  // Templates filtered by current export format (docx templates for Word, pptx for PowerPoint)
+  const visibleTemplates = (styleTemplates.data?.templates ?? []).filter(
+    (tpl) => tpl.output_format === exportFormat,
+  );
+
+  // If the stored template doesn't match the current format, fall back to the first visible
+  // template for that format (or '' = default/none). Does NOT mutate plan state so switching
+  // docx ↔ pptx preserves both selections.
+  const effectiveStyleId = visibleTemplates.some((t) => t.id === styleId)
+    ? styleId
+    : (visibleTemplates[0]?.id ?? '');
 
   return (
     <div className="p-6 space-y-4">
@@ -129,31 +126,45 @@ export function ExportStep({ plan }: { plan: Plan }) {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Left: style/theme options depending on format */}
           <div className="flex items-center gap-2 flex-wrap">
-            {isDocxFormat && (
+            {hasStyleTemplate && (
               <>
                 <Select
-                  value={styleId || '__none__'}
-                  onValueChange={(v) =>
-                    update.mutate({ export_style_template_id: v === '__none__' ? null : v })
-                  }
+                  value={effectiveStyleId || '__none__'}
+                  onValueChange={(v) => {
+                    if (v === '__none__') {
+                      update.mutate({ export_style_template_id: null });
+                      return;
+                    }
+                    const tpl = styleTemplates.data?.templates.find((t) => t.id === v);
+                    if (tpl && tpl.output_format !== exportFormat) {
+                      setExportFormat(tpl.output_format as ExportFormat);
+                    }
+                    update.mutate({ export_style_template_id: v });
+                  }}
                 >
-                  <SelectTrigger className="w-52">
+                  <SelectTrigger className="w-56">
                     <SelectValue placeholder={t('planGeneration', 'styleTemplate')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">
-                      {defaultName ? (
-                        <span>
-                          {defaultName}{' '}
-                          <span className="text-xs text-muted-foreground ml-1">(par défaut)</span>
+                      <span className="flex items-center gap-2">
+                        {isDocxFormat && defaultName
+                          ? <>{defaultName} <span className="text-xs text-muted-foreground">(par défaut)</span></>
+                          : <span className="text-muted-foreground">Sans modèle</span>
+                        }
+                        <span className="text-xs font-mono text-muted-foreground">
+                          .{exportFormat}
                         </span>
-                      ) : (
-                        t('planGeneration', 'defaultStyling')
-                      )}
+                      </span>
                     </SelectItem>
-                    {(styleTemplates.data?.templates ?? []).map((tpl) => (
+                    {visibleTemplates.map((tpl) => (
                       <SelectItem key={tpl.id} value={tpl.id}>
-                        {tpl.name}
+                        <span className="flex items-center gap-2">
+                          {tpl.name}
+                          <span className="text-xs text-muted-foreground font-mono">
+                            .{tpl.output_format}
+                          </span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -164,41 +175,6 @@ export function ExportStep({ plan }: { plan: Plan }) {
               </>
             )}
 
-            {isMarpFormat && (
-              <Select
-                value={marpTheme}
-                onValueChange={(v) => setMarpTheme(v as MarpTheme)}
-              >
-                <SelectTrigger className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARP_THEMES.map((th) => (
-                    <SelectItem key={th.value} value={th.value}>
-                      {th.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            {isRevealFormat && (
-              <Select
-                value={revealTheme}
-                onValueChange={(v) => setRevealTheme(v as RevealTheme)}
-              >
-                <SelectTrigger className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {REVEAL_THEMES.map((th) => (
-                    <SelectItem key={th.value} value={th.value}>
-                      {th.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
 
           {/* Right: format selector + download button */}
@@ -239,7 +215,10 @@ export function ExportStep({ plan }: { plan: Plan }) {
       <UploadStyleTemplateDialog
         open={uploadOpen}
         onOpenChange={setUploadOpen}
-        onUploaded={(id) => update.mutate({ export_style_template_id: id })}
+        onUploaded={(id, outputFormat) => {
+          if (outputFormat !== exportFormat) setExportFormat(outputFormat as ExportFormat);
+          update.mutate({ export_style_template_id: id });
+        }}
       />
     </div>
   );
