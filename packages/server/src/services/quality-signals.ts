@@ -63,39 +63,6 @@ export function checkSubjectCoherence(block: { domain: string; body: string }): 
   };
 }
 
-// Prefixes expected in tags for each function_type
-const TAG_PREFIX_EXPECTATIONS: Record<string, string[]> = {
-  technical: ['tech:', 'produit:'],
-  commercial: ['produit:'],
-  reference: ['client:'],
-  legal: ['reg:', 'cert:'],
-};
-
-export function checkTagCoverage(block: {
-  function_type: string | null | undefined;
-  tags: string[];
-}): CoherenceFlag {
-  const expected = TAG_PREFIX_EXPECTATIONS[block.function_type ?? ''] ?? [];
-  if (expected.length === 0) {
-    return {
-      type: 'entity_coverage',   // keep same type string for backward compat with stored signals
-      level: 'info',
-      message: 'No entity tag expectations for this function',
-    };
-  }
-  const missing = expected.filter(
-    (prefix) => !block.tags.some((t) => t.startsWith(prefix)),
-  );
-  if (missing.length > 0) {
-    return {
-      type: 'entity_coverage',
-      level: 'warning',
-      message: `Missing expected entity tags: ${missing.join(', ')}`,
-    };
-  }
-  return { type: 'entity_coverage', level: 'ok', message: 'Expected entity tags present' };
-}
-
 function duplicateSignal(dupResult: { id: string; score: number } | null): CoherenceFlag {
   if (!dupResult) {
     return { type: 'duplicate_check', level: 'ok', message: 'No duplicates detected' };
@@ -128,14 +95,12 @@ export function computeQualitySignals(
     type: string;
     body: string;
     domain: string;
-    function_type?: string | null;
     tags?: string[];
   },
   dupResult: { id: string; score: number } | null,
 ): CoherenceFlag[] {
   const signals: CoherenceFlag[] = [
     checkSubjectCoherence({ domain: block.domain, body: block.body }),
-    checkTagCoverage({ function_type: block.function_type, tags: block.tags ?? [] }),
     duplicateSignal(dupResult),
   ];
   return signals;

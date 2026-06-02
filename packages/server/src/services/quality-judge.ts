@@ -36,9 +36,7 @@ export async function runQualityJudge(
     title: string;
     body: string;
     domain: string;
-    function_type?: string | null;
     type: string;
-    audience?: string[];
   },
   signals: CoherenceFlag[],
   taxonomy?: { domains: string[]; types: string[]; tags: string[] },
@@ -63,8 +61,7 @@ Title: ${block.title}
 Body: ${block.body}
 
 # Metadata assigned by ingestion
-Domain: ${block.domain} / Function: ${block.function_type ?? 'unknown'} / Type: ${block.type}
-Audience: ${(block.audience ?? []).join(', ')}
+Domain: ${block.domain} / Type: ${block.type}
 
 # Quality signals already detected
 ${signalsSummary}

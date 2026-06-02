@@ -38,9 +38,6 @@ function formatFragmentContext(frag: FragmentRow): string {
     `domain: ${frag.domain}`,
     `type: ${frag.type}`,
     `lang: ${frag.lang}`,
-    frag.function_type ? `function_type: ${frag.function_type}` : null,
-    frag.audience ? `audience: ${frag.audience}` : null,
-    frag.maturity ? `maturity: ${frag.maturity}` : null,
     tags.length > 0 ? `tags: ${tags.join(', ')}` : null,
   ]
     .filter(Boolean)

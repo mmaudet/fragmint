@@ -18,7 +18,6 @@ function normalizeCandidate(c: any): HarvestCandidate {
     ...c,
     quality_signals: parseJson(c.quality_signals, []),
     tags: parseJson(c.tags, []),
-    audience: parseJson(c.audience, []),
   };
 }
 

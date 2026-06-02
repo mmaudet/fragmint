@@ -159,9 +159,6 @@ export function harvestRoutes(
         const parsed = z
           .object({
             domain: z.string().optional(),
-            function_type: z.string().optional(),
-            audience: z.array(z.string()).optional(),
-            maturity: z.string().optional(),
             tags: z.array(z.string()).optional(),
             entities_json: z.string().optional(),
           })
@@ -201,9 +198,6 @@ export function harvestRoutes(
           .update(harvestCandidates)
           .set({
             ...(parsed.data.domain && { domain: parsed.data.domain }),
-            ...(parsed.data.function_type && { function_type: parsed.data.function_type }),
-            ...(parsed.data.audience && { audience: JSON.stringify(parsed.data.audience) }),
-            ...(parsed.data.maturity && { maturity: parsed.data.maturity }),
             ...(parsed.data.tags && { tags: JSON.stringify(parsed.data.tags) }),
             ...(parsed.data.entities_json && { entities_json: parsed.data.entities_json }),
             metadata_status: 'human-validated',

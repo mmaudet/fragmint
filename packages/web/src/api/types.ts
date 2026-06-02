@@ -27,6 +27,10 @@ export interface Fragment {
   valid_from?: string | null;
   valid_until?: string | null;
   origin?: string;
+  origin_source?: string | null;
+  origin_page?: number | null;
+  payload?: string | null;
+  payload_schema?: string | null;
   harvest_near_dup?: {
     fragment_id: string;
     score: number | null;
@@ -154,9 +158,6 @@ export interface HarvestCandidate {
   domain: string;
   lang: string;
   tags: string[];
-  function_type: string | null;
-  audience: string[];
-  maturity: string | null;
   confidence: number;
   origin_source: string;
   origin_page: number | null;
@@ -169,6 +170,8 @@ export interface HarvestCandidate {
   trust_sources_json: string | null;
   quality_signals: CoherenceFlag[];
   judge_result: JudgeResult | null;
+  payload?: string | null;
+  payload_schema?: string | null;
 }
 
 export interface HarvestJobWithCandidates extends HarvestJob {
@@ -228,6 +231,14 @@ export interface SectionFragmentSelection {
   proposed_fragment_id?: string;
 }
 
+export interface TableSource {
+  collection_id?: string;
+  fragment_ids?: string[];
+  payload_schema?: string;
+  tags?: string[];
+  order_by?: { field: string; direction: 'asc' | 'desc' };
+}
+
 export interface PlanSection {
   id: string;
   title: string;
@@ -238,6 +249,10 @@ export interface PlanSection {
   filters_override?: PlanFilters;
   inferred_type?: string;
   writer_instructions?: string;
+  render_mode?: 'prose' | 'table' | 'data_point' | 'list';
+  table_source?: TableSource;
+  columns?: string[];
+  data_field?: string;
 }
 
 export interface PlanState {

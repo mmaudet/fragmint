@@ -15,9 +15,6 @@ export interface FragmentMetadata {
   access_read: string[];
   created_at: string;
   updated_at: string;
-  function_type?: string | null;
-  audience?: string[];
-  maturity?: string | null;
 }
 
 export interface SearchFilters {
@@ -29,9 +26,6 @@ export interface SearchFilters {
   tags?: string[];
   collectionSlug?: string;
   valid_at?: string;
-  function_type?: string[];
-  audience?: string[];
-  maturity?: string[];
 }
 
 export interface SearchResult {
@@ -157,9 +151,6 @@ export class SearchService {
             tags: metadata.tags,
             access_read: metadata.access_read,
             community_id: 0,
-            function_type: metadata.function_type ?? '',
-            audience: metadata.audience ?? [],
-            maturity: metadata.maturity ?? '',
           },
         ],
         partitionName,
@@ -197,9 +188,6 @@ export class SearchService {
         tags: item.metadata.tags,
         access_read: item.metadata.access_read,
         community_id: 0,
-        function_type: item.metadata.function_type ?? '',
-        audience: item.metadata.audience ?? [],
-        maturity: item.metadata.maturity ?? '',
       }));
 
       // Batch upsert in chunks of 100
@@ -233,9 +221,6 @@ export class SearchService {
         domain: filters?.domain,
         lang: filters?.lang,
         quality_min: filters?.quality_min,
-        function_type: filters?.function_type,
-        audience: filters?.audience,
-        maturity: filters?.maturity,
       };
       const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit);
       if (milvusResults.length === 0) return [];
@@ -289,9 +274,6 @@ export class SearchService {
           domain: filters?.domain,
           lang: filters?.lang,
           quality_min: filters?.quality_min,
-          function_type: filters?.function_type,
-          audience: filters?.audience,
-          maturity: filters?.maturity,
         };
         const milvusResults = await this.milvusClient.search(
           vector,
@@ -434,16 +416,6 @@ export class SearchService {
         conditions.push(like(fragments.tags, `%${tag}%`));
       }
     }
-    if (filters?.function_type?.length) {
-      conditions.push(inArray(fragments.function_type, filters.function_type));
-    }
-    if (filters?.audience?.length) {
-      conditions.push(or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))));
-    }
-    if (filters?.maturity?.length) {
-      conditions.push(inArray(fragments.maturity, filters.maturity));
-    }
-
     // Filter by collection
     if (filters?.collectionSlug) {
       if (filters.collectionSlug === 'common') {

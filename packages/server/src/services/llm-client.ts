@@ -1,4 +1,4 @@
-// packages/server/src/services/llm-client.ts
+import { listPayloadSchemas } from '../schema/payload-schemas.js';
 import type { UploadHints } from '../schema/trust-source.js';
 
 export interface LlmClientConfig {
@@ -33,9 +33,6 @@ export interface CombinedBlock {
   body: string;
   type: string;
   domain: string;
-  function_type: string;
-  audience: string[];
-  maturity: string;
   lang: string;
   tags: string[];
   new_proposals: {
@@ -129,14 +126,8 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
     validDomains: string[],
     knownTags: string[] = [],
     domainHints: Record<string, string> = {},
-    validFunctions: string[] = [],
     uploadHints: UploadHints = {},
   ): Promise<CombinedBlock[]> {
-    const functionList =
-      validFunctions.length > 0
-        ? validFunctions.join(' | ')
-        : 'technical | commercial | legal | operational | strategic | reference';
-
     const domainList = validDomains
       .map((d) => (domainHints[d] ? `"${d}": ${domainHints[d]}` : `"${d}"`))
       .join('\n  ');
@@ -148,18 +139,13 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
 
     const hasAnyHint = !!(
       uploadHints.domain ||
-      uploadHints.function_type ||
-      uploadHints.maturity ||
-      uploadHints.audience?.length ||
       uploadHints.tags?.length
     );
     const hasClientTag = uploadHints.tags?.some((t) => t.startsWith('client:')) ?? false;
     const hintsBlock = hasAnyHint
       ? `\n# Operator hints (orientation — apply where relevant, not systematically to every block)\n${
           uploadHints.domain ? `- domain (suggested): ${uploadHints.domain}\n` : ''
-        }${uploadHints.function_type ? `- function_type (suggested): ${uploadHints.function_type}\n` : ''}${
-          uploadHints.audience?.length ? `- audience (suggested): ${uploadHints.audience.join(', ')}\n` : ''
-        }${uploadHints.maturity ? `- maturity (suggested): ${uploadHints.maturity}\n` : ''}${
+        }${
           uploadHints.tags?.length ? `- tags (suggested): ${uploadHints.tags.join(', ')}\n` : ''
         }${
           hasClientTag
@@ -183,9 +169,6 @@ Extract reusable content blocks from the document and classify each one using st
   Use "other" for content not clearly tied to one specific domain.
   If the content belongs to a domain NOT in the list, add it to new_proposals.domains with "NEW:" prefix.
 
-## function_type — the rhetorical function of this block. MUST be one of:
-  ${functionList}
-
 ## type — the content type. MUST be one of:
   ${JSON.stringify(validTypes)}
 
@@ -205,12 +188,6 @@ Extract reusable content blocks from the document and classify each one using st
   KEY DISTINCTION — "use-case" vs "reference":
     → "reference" if: a named organization is cited + specific deployment details OR measurable results
     → "use-case" if: describes a generic scenario or workflow without naming a real client
-
-## audience — who this block targets. JSON array with 1-3 values from:
-  ["technical", "decision-maker", "user", "legal"]
-
-## maturity — lifecycle stage of the described feature/offer. MUST be one of:
-  production | beta | roadmap | archive
 
 ## tags — ${tagHint}
 
@@ -234,10 +211,7 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
     "title": "...",
     "body": "...",
     "domain": "...",
-    "function_type": "...",
     "type": "...",
-    "audience": ["technical"],
-    "maturity": "production",
     "lang": "fr",
     "tags": ["open-source"],
     "new_proposals": {
@@ -307,6 +281,35 @@ Return a JSON object with: type (string), domain (string), tags (string array), 
       return parsed as Classification;
     } catch {
       return fallback;
+    }
+  }
+
+  async inferPayloadSchema(
+    headers: string[],
+    sampleRow: Record<string, string>,
+  ): Promise<string> {
+    const schemas = listPayloadSchemas();
+    const known = schemas.map((s) => s.id);
+    const schemaList = schemas
+      .map((s) => `- ${s.id}: ${s.label} (champs: ${Object.keys((s.fields as any).shape ?? {}).join(', ')})`)
+      .join('\n');
+
+    const prompt = `Tu analyses les colonnes d'un tableau extrait d'un document.
+
+En-têtes : ${headers.join(', ')}
+Exemple de ligne : ${JSON.stringify(sampleRow)}
+
+Schémas disponibles :
+${schemaList}
+
+Réponds UNIQUEMENT avec l'identifiant du schéma le plus adapté (ex: "pricing-line-v1"). Si aucun ne correspond, réponds "generic-row-v1". Aucune explication.`;
+
+    try {
+      const result = await this.chat(prompt);
+      const id = result.trim().replace(/['"]/g, '');
+      return known.includes(id) ? id : 'generic-row-v1';
+    } catch {
+      return 'generic-row-v1';
     }
   }
 }

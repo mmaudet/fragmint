@@ -4,18 +4,12 @@ export type TrustSource = 'human-direct' | 'llm-confirmed' | 'llm-deviation' | '
 
 export interface UploadHints {
   domain?: string;
-  function_type?: string;
-  audience?: string[];
-  maturity?: string;
   tags?: string[];
 }
 
 export const UploadHintsSchema = z
   .object({
     domain: z.string().max(100).optional(),
-    function_type: z.string().max(100).optional(),
-    audience: z.array(z.string().max(50)).max(4).optional(),
-    maturity: z.enum(['production', 'beta', 'roadmap', 'archive']).optional(),
     tags: z.array(z.string().max(80)).max(20).optional(),
   })
   .strict();
@@ -85,9 +79,6 @@ export function computeTrustSources(
 
   const fields: (keyof UploadHints)[] = [
     'domain',
-    'function_type',
-    'audience',
-    'maturity',
     'tags',
   ];
 
