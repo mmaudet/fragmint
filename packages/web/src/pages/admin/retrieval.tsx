@@ -38,8 +38,8 @@ const MODES: ModeSpec[] = [
     icon: Zap,
     label: { fr: 'Vectoriel', en: 'Vector-only' },
     tagline: {
-      fr: 'Similarité cosinus sur les embeddings Milvus',
-      en: 'Cosine similarity on Milvus embeddings',
+      fr: 'Similarité sémantique + re-ranking qualité',
+      en: 'Semantic similarity + quality re-ranking',
     },
     how: {
       fr: "La requête est transformée en vecteur par le modèle d'embedding, puis comparée à tous les fragments de la collection. Les fragments les plus proches vectoriellement sont renvoyés, avec un re-ranking qualité (statut, fraîcheur, usage).",
@@ -80,36 +80,32 @@ const MODES: ModeSpec[] = [
     icon: Layers3,
     label: { fr: 'Hybride', en: 'Hybrid' },
     tagline: {
-      fr: 'Pré-filtrage Milvus + re-ranking LLM',
-      en: 'Milvus pre-filter + LLM re-ranking',
+      fr: 'Pré-filtrage sémantique + re-ranking',
+      en: 'Semantic pre-filter + re-ranking',
     },
     how: {
-      fr: 'Milvus sélectionne les N meilleurs candidats par similarité vectorielle (pré-filtrage rapide). Un LLM juge ensuite chaque fragment en tenant compte du contexte du document et réordonne les résultats selon la pertinence sémantique réelle.',
-      en: 'Milvus selects the top N candidates by vector similarity (fast pre-filter). An LLM then judges each fragment in context of the document and reorders results by true semantic relevance.',
+      fr: 'Les N meilleurs candidats sont sélectionnés par similarité vectorielle (pré-filtrage rapide), puis re-rankés selon la pertinence sémantique réelle et le contexte du document.',
+      en: 'The top N candidates are selected by vector similarity (fast pre-filter), then re-ranked by true semantic relevance and document context.',
     },
     pros: {
       fr: [
         'Bon rapport qualité/vitesse',
-        'Le LLM comprend le contexte métier et les nuances',
         'Re-ranking contextuel : tient compte du contexte de la requête',
+        'Meilleure précision que le mode vectoriel seul',
       ],
       en: [
         'Good quality/speed tradeoff',
-        'LLM understands business context and nuances',
         'Contextual re-ranking: uses the query context',
+        'Higher precision than vector-only mode',
       ],
     },
     cons: {
       fr: [
         'Latence 1–3s selon la taille du lot',
-        'Coût LLM par requête',
-        'Qualité dépend du modèle LLM configuré',
         'Sensible au domain drift si le vault est hétérogène',
       ],
       en: [
         '1–3s latency depending on batch size',
-        'LLM cost per query',
-        'Quality depends on the configured LLM model',
         'Sensitive to domain drift on heterogeneous vaults',
       ],
     },
@@ -118,27 +114,27 @@ const MODES: ModeSpec[] = [
   {
     value: 'agentic-only',
     icon: Brain,
-    label: { fr: 'Agentique', en: 'Agentic' },
+    label: { fr: 'Vectorless RAG', en: 'Vectorless RAG' },
     tagline: {
-      fr: "LLM juge sur l'index Karpathy (index.md)",
-      en: 'LLM judge over the Karpathy index (index.md)',
+      fr: 'Sélection LLM via index condensé — sans base vectorielle',
+      en: 'LLM selection via condensed index — no vector database',
     },
     how: {
-      fr: "Un LLM lit l'index de la bibliothèque (index.md — résumés condensés de chaque fragment, inspiré du LLM Wiki de Karpathy) et sélectionne les fragments pertinents sans passer par Milvus. Pour chaque section du document, le LLM reçoit le titre et la description de la section et raisonne sur son intention précise — ce qui lui permet de distinguer, par exemple, une section « références clients » d'une section « présentation produit » sans se fier uniquement à la similarité vectorielle.",
-      en: "An LLM reads the library index (index.md — condensed summaries of each fragment, inspired by Karpathy's LLM Wiki) and selects relevant fragments without Milvus. For each document section, the LLM receives the section title and description and reasons about its precise intent — allowing it to distinguish, for example, a 'client references' section from a 'product overview' section without relying solely on vector similarity.",
+      fr: "Un index des fragments est dynamiquement maintenu, qui contient un résumé condensé de chaque fragment. Le LLM sélectionne les fragments de chaque section via cet index, puis s'auto-review par rapport au contenu des fragments et de leur pertinence pour la section.",
+      en: "A fragment index is dynamically maintained, containing a condensed summary of each fragment. The LLM selects fragments for each section via this index, then self-reviews against the actual fragment content and its relevance to the section.",
     },
     pros: {
       fr: [
-        'Meilleure qualité : raisonnement LLM complet sur le contexte AO',
+        'Meilleure qualité : raisonnement LLM complet sur le contexte du document',
         'Résiste au domain drift — discrimine les produits entre eux',
         "Comprend l'intention même avec un vocabulaire très différent",
-        'Fonctionne sans Milvus (mode dégradé souverain)',
+        'Fonctionne sans base vectorielle (mode souverain)',
       ],
       en: [
         'Best quality: full LLM reasoning with document context',
         'Resistant to domain drift — discriminates between products',
         'Understands intent even with very different vocabulary',
-        'Works without Milvus (sovereign fallback mode)',
+        'Works without a vector database (sovereign mode)',
       ],
     },
     cons: {
@@ -256,19 +252,19 @@ export default function AdminRetrievalPage() {
             <div className="text-sm">
               {indexStatus.milvus ? (
                 <span className="text-emerald-700 dark:text-emerald-400 font-medium">
-                  {lang === 'fr' ? 'Milvus connecté' : 'Milvus connected'}
+                  {lang === 'fr' ? 'Index sémantique connecté' : 'Semantic index connected'}
                   <span className="ml-2 font-normal text-emerald-600 dark:text-emerald-500">
                     {lang === 'fr'
-                      ? `— retrieval : ${indexStatus.retrieval_mode === 'vector-only' ? 'vectoriel' : indexStatus.retrieval_mode === 'hybrid' ? 'hybride' : 'agentique'}`
-                      : `— retrieval: ${indexStatus.retrieval_mode ?? indexStatus.mode}`}
+                      ? `— retrieval : ${indexStatus.retrieval_mode === 'vector-only' ? 'vectoriel' : indexStatus.retrieval_mode === 'hybrid' ? 'hybride' : 'Vectorless RAG'}`
+                      : `— retrieval: ${indexStatus.retrieval_mode === 'agentic-only' ? 'Vectorless RAG' : (indexStatus.retrieval_mode ?? indexStatus.mode)}`}
                   </span>
                 </span>
               ) : (
                 <span className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {lang === 'fr'
-                    ? 'Milvus non disponible — les modes Vectoriel et Hybride ne fonctionneront pas'
-                    : 'Milvus unavailable — Vector-only and Hybrid modes will not work'}
+                    ? 'Base vectorielle non disponible — les modes Vectoriel et Hybride ne fonctionneront pas'
+                    : 'Vector database unavailable — Vector-only and Hybrid modes will not work'}
                 </span>
               )}
             </div>
@@ -351,7 +347,7 @@ export default function AdminRetrievalPage() {
               <p className="text-xs text-muted-foreground">{l(mode.tagline)}</p>
 
               {/* How it works */}
-              <div className="space-y-1.5 text-sm flex-1">
+              <div className="space-y-1.5 text-sm">
                 <p className="font-medium text-foreground/80 text-xs uppercase tracking-wide">
                   {lang === 'fr' ? 'Comment ça marche' : 'How it works'}
                 </p>
@@ -387,6 +383,9 @@ export default function AdminRetrievalPage() {
                   ))}
                 </ul>
               </div>
+
+              {/* Spacer pushes footer to bottom */}
+              <div className="flex-1" />
 
               {/* Latency footer */}
               <div className="pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">

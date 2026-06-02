@@ -206,6 +206,25 @@ export function UnifiedMetadataList() {
         ))}
       </div>
 
+      {/* Global stats — always shown above filters */}
+      {stats && (
+        <p className="text-xs text-muted-foreground">
+          {stats.byStatus.active} {t('admin', 'statsActive')}
+          {stats.byStatus.pending > 0 && (
+            <> · <span className="text-amber-600 font-medium">{stats.byStatus.pending} {t('admin', 'statsPending')}</span></>
+          )}
+          {stats.byStatus.archived > 0 && (
+            <> · {stats.byStatus.archived} {t('admin', 'statsArchived')}</>
+          )}
+          {stats.byStatus.rejected > 0 && (
+            <> · {stats.byStatus.rejected} {t('admin', 'statsRejected')}</>
+          )}
+          {stats.total > 0 && (
+            <> · {stats.total} {t('admin', 'statsResults')}</>
+          )}
+        </p>
+      )}
+
       {/* Filters */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -251,6 +270,7 @@ export function UnifiedMetadataList() {
               <option value="partner">{t('admin', 'tagPrefixPartner')}</option>
               <option value="cert">{t('admin', 'tagPrefixCert')}</option>
               <option value="reg">{t('admin', 'tagPrefixReg')}</option>
+              <option value="none">{t('admin', 'filterTagPrefixNone')}</option>
             </select>
           )}
           {isPendingView && (
@@ -322,52 +342,10 @@ export function UnifiedMetadataList() {
         </div>
       )}
 
-      {/* Stats */}
-      {stats && statusFilter === 'all' && (
+      {/* Filtered count — always shown below filters */}
+      {!isLoading && stats && (
         <p className="text-xs text-muted-foreground">
-          {search ? (
-            <>
-              {stats.filteredTotal ?? items.length} {t('admin', 'statsResults')}
-            </>
-          ) : (
-            <>
-              {stats.byStatus.active} {t('admin', 'statsActive')}
-              {stats.byStatus.pending > 0 && (
-                <>
-                  {' '}
-                  ·{' '}
-                  <span className="text-amber-600 font-medium">
-                    {stats.byStatus.pending} {t('admin', 'statsPending')}
-                  </span>
-                </>
-              )}
-              {stats.byStatus.archived > 0 && (
-                <>
-                  {' '}
-                  · {stats.byStatus.archived} {t('admin', 'statsArchived')}
-                </>
-              )}
-              {stats.byStatus.rejected > 0 && (
-                <>
-                  {' '}
-                  · {stats.byStatus.rejected} {t('admin', 'statsRejected')}
-                </>
-              )}
-              {stats.total > PAGE_SIZE_OPTIONS[0] && (
-                <>
-                  {' '}
-                  · {stats.total} {t('admin', 'statsResults')}
-                </>
-              )}
-            </>
-          )}
-        </p>
-      )}
-      {!isLoading && statusFilter !== 'all' && stats && (
-        <p className="text-xs text-muted-foreground">
-          {onlySimilar
-            ? `${items.length} ${t('admin', 'statsResults')}`
-            : `${search ? (stats.filteredTotal ?? items.length) : (stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? items.length)} ${t('admin', 'statsResults')}`}
+          {(stats.filteredTotal ?? items.length)} {t('admin', 'statsResults')}
         </p>
       )}
 
@@ -408,11 +386,7 @@ export function UnifiedMetadataList() {
       {/* Pagination */}
       {stats &&
         (() => {
-          const total = onlySimilar
-            ? items.length
-            : statusFilter === 'all'
-              ? stats.total
-              : (stats.byStatus[statusFilter as keyof typeof stats.byStatus] ?? 0);
+          const total = onlySimilar ? items.length : (stats.filteredTotal ?? items.length);
           const totalPages = Math.ceil(total / pageSize);
           if (total <= PAGE_SIZE_OPTIONS[0]) return null;
           return (

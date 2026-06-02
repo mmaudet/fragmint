@@ -70,6 +70,7 @@ export function adminFragmentRoutes(
           author: fragments.author,
           created_at: fragments.created_at,
           updated_at: fragments.updated_at,
+          payload_schema: fragments.payload_schema,
         })
         .from(fragments)
         .where(where)

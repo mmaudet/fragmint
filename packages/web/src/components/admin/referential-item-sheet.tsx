@@ -112,7 +112,10 @@ export function ReferentialItemSheet({
   const [renameOpen, setRenameOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(false);
-  const [categoryDraft, setCategoryDraft] = useState('');
+  const [categorySelect, setCategorySelect] = useState(''); // predefined or '__custom__' or ''
+  const [categoryCustom, setCategoryCustom] = useState(''); // free text when '__custom__'
+  const TAG_CATEGORIES = ['client', 'produit', 'tech', 'partner', 'cert', 'reg'];
+  const categoryDraft = categorySelect === '__custom__' ? categoryCustom : categorySelect;
   const approve = useApproveProposal();
   const reject = useRejectProposal();
 
@@ -273,45 +276,64 @@ export function ReferentialItemSheet({
                       </span>
                     </label>
                     {editingCategory ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="h-7 text-sm w-40"
-                          value={categoryDraft}
-                          onChange={(e) => setCategoryDraft(e.target.value)}
-                          placeholder="ex: produit"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') updateCategory.mutate(categoryDraft || null);
-                            if (e.key === 'Escape') setEditingCategory(false);
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => updateCategory.mutate(categoryDraft || null)}
-                          disabled={updateCategory.isPending}
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={() => setEditingCategory(false)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="h-7 text-sm px-2 border rounded-md bg-background w-40"
+                            value={categorySelect}
+                            autoFocus
+                            onChange={(e) => {
+                              setCategorySelect(e.target.value);
+                              setCategoryCustom('');
+                            }}
+                          >
+                            <option value="">— aucune —</option>
+                            {TAG_CATEGORIES.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                            <option value="__custom__">Autre…</option>
+                          </select>
+                          <Button size="sm" variant="ghost" className="h-7 px-2"
+                            onClick={() => updateCategory.mutate(categoryDraft || null)}
+                            disabled={updateCategory.isPending}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2"
+                            onClick={() => setEditingCategory(false)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        {categorySelect === '__custom__' && (
+                          <Input
+                            className="h-7 text-sm w-40"
+                            value={categoryCustom}
+                            onChange={(e) => setCategoryCustom(e.target.value)}
+                            placeholder="Saisir une catégorie…"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') updateCategory.mutate(categoryDraft || null);
+                              if (e.key === 'Escape') setEditingCategory(false);
+                            }}
+                          />
+                        )}
                       </div>
                     ) : (
                       <button
                         className="flex items-center gap-1.5 text-sm hover:text-foreground group"
                         onClick={() => {
-                          setCategoryDraft(
-                            currentCategory && currentCategory !== 'proposed'
-                              ? currentCategory
-                              : '',
-                          );
+                          const cur = currentCategory && currentCategory !== 'proposed' ? currentCategory : '';
+                          if (TAG_CATEGORIES.includes(cur)) {
+                            setCategorySelect(cur);
+                            setCategoryCustom('');
+                          } else if (cur) {
+                            setCategorySelect('__custom__');
+                            setCategoryCustom(cur);
+                          } else {
+                            setCategorySelect('');
+                            setCategoryCustom('');
+                          }
                           setEditingCategory(true);
                         }}
                       >

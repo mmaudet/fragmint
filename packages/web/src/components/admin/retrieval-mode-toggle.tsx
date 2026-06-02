@@ -15,17 +15,17 @@ const MODES: {
   {
     value: 'vector-only',
     label: 'Vectoriel',
-    tooltip: 'Milvus cosine similarity — <100ms, baseline',
+    tooltip: 'Similarité sémantique — <100ms, baseline',
   },
   {
     value: 'agentic-only',
-    label: 'Agentique',
-    tooltip: 'LLM judge sur index.md Karpathy — 2-5s/section, meilleure qualité ⭐',
+    label: 'Vectorless RAG',
+    tooltip: 'Index condensé + LLM — 2-5s/section, meilleure qualité',
   },
   {
     value: 'hybrid',
     label: 'Hybride',
-    tooltip: 'Milvus pré-filtrage + LLM re-rank — 1-3s, bon compromis',
+    tooltip: 'Pré-filtrage sémantique + re-ranking — 1-3s, bon compromis',
   },
 ];
 
@@ -67,7 +67,6 @@ export function RetrievalModeToggle() {
                 )}
               >
                 {m.label}
-                {m.value === 'agentic-only' && !isActive && <span className="ml-0.5 opacity-60">⭐</span>}
               </button>
               <TooltipContent side="right" className="max-w-[200px] text-xs">
                 {m.tooltip}
