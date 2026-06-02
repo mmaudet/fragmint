@@ -4,27 +4,32 @@
 // Content nature (technical, commercial, legal…) goes in tags, not domain.
 export interface DomainDef {
   slug: string;
+  label?: string;
   description: string;
 }
 
 export const HARVESTER_DOMAINS: DomainDef[] = [
   {
     slug: 'twake',
+    label: 'Twake',
     description:
       'Twake Workplace — messaging, visio, collaborative drive, tasks. Use only when the text explicitly discusses Twake features or proposes Twake as a solution.',
   },
   {
     slug: 'lincloud',
+    label: 'LinCloud',
     description:
       'LinCloud / LinShare cloud suite. Use only when the text explicitly discusses LinCloud hosting or the LinShare suite.',
   },
   {
     slug: 'linagora',
+    label: 'Linagora',
     description:
       'Linagora company — ONLY for content explicitly about Linagora itself: company presentation, methodology, values, history. NOT for generic SLA, technical specs, or client requirements.',
   },
   {
     slug: 'other',
+    label: 'Other',
     description:
       'Generic or client-specific content: SLA definitions, procurement requirements, legal clauses, technical specs not tied to a specific product. When in doubt, use other.',
   },

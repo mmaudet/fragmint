@@ -134,8 +134,8 @@ Return ONLY a JSON array where each element has: title (string), body (string), 
 
     const tagHint =
       knownTags.length > 0
-        ? `Use tags from this list when relevant: ${JSON.stringify(knownTags.slice(0, 60))}. For new tags not in the list, prefix with "NEW:" (e.g. "NEW:edge-computing"). All tags must be English lowercase kebab-case.`
-        : 'English lowercase kebab-case only. Prefix unknown ones with "NEW:".';
+        ? `ONLY use tags from this exact list: ${JSON.stringify(knownTags.slice(0, 80))}. Do NOT invent tags or add anything outside this list to the "tags" array.`
+        : 'Leave "tags" empty — new thematic tags go in new_proposals.tags instead.';
 
     const hasAnyHint = !!(
       uploadHints.domain ||
@@ -191,11 +191,12 @@ Extract reusable content blocks from the document and classify each one using st
 
 ## tags — ${tagHint}
 
-  Entity tags — identify named organizations, products, and technologies using prefixed tags:
+  Entity tags — identify named organizations, products, and technologies:
   Prefix format: client:name, produit:name, tech:name, partner:name, cert:name, reg:name
-  Use lowercase kebab-case after the colon. Examples: client:dgfip, produit:linshare, tech:apache-james, cert:iso-27001, reg:rgpd
+  Use lowercase kebab-case after the colon. Examples: client:dgfip, produit:linshare, tech:apache-james
   Apply entity tags ONLY when the fragment body explicitly names the organization/product/technology.
-  New entity proposals: prefix with NEW: (e.g. NEW:client:some-new-client). These go into new_proposals.tags.
+  If an entity tag is NOT in the known list above → put it in new_proposals.tags (no NEW: prefix), e.g. "client:some-new-client".
+  If a thematic concept is worth tagging but not in the known list → put it in new_proposals.tags too (e.g. "edge-computing").
 ${hintsBlock}
 # Document
 ${markdown}
@@ -215,8 +216,8 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
     "lang": "fr",
     "tags": ["open-source"],
     "new_proposals": {
-      "tags": [],
-      "domains": []
+      "tags": ["client:acme-corp", "edge-computing"],
+      "domains": ["NEW:quantum-computing"]
     },
     "confidence": 0.72
   }
@@ -231,6 +232,21 @@ Return ONLY a valid JSON array. Each element must contain ALL fields:
       }
       const parsed = JSON.parse(json);
       if (!Array.isArray(parsed)) return [];
+      // Normalize: LLM sometimes puts NEW:* tags in `tags` instead of `new_proposals.tags`
+      for (const block of parsed as CombinedBlock[]) {
+        if (!Array.isArray(block.tags)) { block.tags = []; continue; }
+        const known: string[] = [];
+        const novel: string[] = [];
+        for (const t of block.tags) {
+          if (typeof t === 'string' && t.startsWith('NEW:')) novel.push(t.slice(4));
+          else if (typeof t === 'string') known.push(t);
+        }
+        block.tags = known;
+        if (novel.length > 0) {
+          block.new_proposals = block.new_proposals ?? { tags: [], domains: [] };
+          block.new_proposals.tags = [...new Set([...(block.new_proposals.tags ?? []), ...novel])];
+        }
+      }
       return parsed as CombinedBlock[];
     } catch (err) {
       console.error('[llm-client][segmentAndClassify] failed:', err instanceof Error ? err.message : err);

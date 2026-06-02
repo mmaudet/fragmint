@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql, desc } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   harvestJobs,
@@ -69,10 +69,11 @@ export async function runPipeline(
       domainRows.filter((r) => r.description).map((r) => [r.slug, r.description!]),
     );
     const knownTagRows = await db
-      .select({ slug: fragmentTags.slug })
+      .select({ slug: fragmentTags.slug, usageCount: sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)` })
       .from(fragmentTags)
-      .where(eq(fragmentTags.status, 'active'));
-    const knownTags = knownTagRows.map((r) => r.slug);
+      .where(eq(fragmentTags.status, 'active'))
+      .orderBy(desc(sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`));
+    const knownTagsAll = knownTagRows.map((r) => r.slug);
 
     const hintTagsFound = new Set<string>();
 
@@ -162,6 +163,13 @@ export async function runPipeline(
       if (specs.length > 0) {
         markdown = cleanedMarkdown;
       }
+
+      // Only pass tags whose keyword appears in the document — others won't be assigned anyway
+      const markdownLower = markdown.toLowerCase();
+      const knownTags = knownTagsAll.filter((tag) => {
+        const keyword = tag.includes(':') ? tag.split(':')[1] : tag;
+        return keyword.length >= 3 && markdownLower.includes(keyword.toLowerCase());
+      });
 
       // Parallel LLM calls — one segmentAndClassify per semantic chunk
       // Skip table-of-contents chunks (Word ToC → Pandoc heading with .Contents-Heading class)
@@ -270,6 +278,25 @@ export async function runPipeline(
 
       // Track coherent hint tags + apply hint-domain override for unknown domains
       const domainOverridden = applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound, existingDomains);
+
+      // Body-scan: force-add known tags whose keyword appears in the block text — LLM sometimes misses obvious ones
+      console.log(`[body-scan:${jobId}] knownTags count: ${knownTags.length}`);
+      for (const block of blocks) {
+        const blockText = `${block.title ?? ''} ${block.body ?? ''}`.toLowerCase();
+        const added: string[] = [];
+        for (const tag of knownTags) {
+          const normalizedTag = tag.toLowerCase();
+          const keyword = normalizedTag.includes(':') ? normalizedTag.split(':')[1] : normalizedTag;
+          if (keyword.length >= 3 && blockText.includes(keyword)) {
+            if (!block.tags) block.tags = [];
+            if (!block.tags.some((t) => t.toLowerCase() === normalizedTag)) {
+              block.tags.push(normalizedTag);
+              added.push(normalizedTag);
+            }
+          }
+        }
+        if (added.length > 0) console.log(`[body-scan:${jobId}] "${block.title}" +[${added.join(', ')}]`);
+      }
 
       // Run LLM-as-judge on all non-duplicate fragments — provides quality verdict + metadata suggestions
       const judgeTaxonomy = { domains: existingDomains, types: existingTypes, tags: knownTags };

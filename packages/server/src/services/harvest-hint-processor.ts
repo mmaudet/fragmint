@@ -83,14 +83,17 @@ export async function insertNewProposals(
 
     for (const rawTag of proposals.tags ?? []) {
       const slug = rawTag.replace(/^NEW:/i, '').toLowerCase().replace(/\s+/g, '-');
+      const colonIdx = slug.indexOf(':');
+      const label = colonIdx !== -1 ? slug.slice(colonIdx + 1) : slug;
+      const category = colonIdx !== -1 ? slug.slice(0, colonIdx) : null;
       // onConflictDoNothing: if the tag already exists in any state (pending, active, rejected…)
       // we never overwrite it — the LLM re-discovering a known tag is not a reason to change it.
       await db
         .insert(fragmentTags)
         .values({
           slug,
-          label: slug,
-          category: 'proposed',
+          label,
+          category,
           status: tagAutoValidated ? 'active' : 'pending',
           proposedBy: 'llm-auto',
           trustSource: tagTrust,
