@@ -34,7 +34,7 @@ const ROLE_LEVEL: Record<string, number> = { reader: 0, contributor: 1, expert: 
 
 const adminNavItems = [
   { to: '/admin/fragments', label: 'Fragments', icon: FileStack },
-  { to: '/admin/metadata', label: 'Metadata', icon: Tag },
+  { to: '/admin/metadata', label: 'Référentiel', icon: Tag },
   { to: '/admin/supersedure', label: 'Remplacements', icon: ArrowLeftRight },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/collections', label: 'Collections', icon: Layers },
