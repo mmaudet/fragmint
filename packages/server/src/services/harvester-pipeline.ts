@@ -280,10 +280,8 @@ export async function runPipeline(
       const domainOverridden = applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound, existingDomains);
 
       // Body-scan: force-add known tags whose keyword appears in the block text — LLM sometimes misses obvious ones
-      console.log(`[body-scan:${jobId}] knownTags count: ${knownTags.length}`);
       for (const block of blocks) {
         const blockText = `${block.title ?? ''} ${block.body ?? ''}`.toLowerCase();
-        const added: string[] = [];
         for (const tag of knownTags) {
           const normalizedTag = tag.toLowerCase();
           const keyword = normalizedTag.includes(':') ? normalizedTag.split(':')[1] : normalizedTag;
@@ -291,11 +289,9 @@ export async function runPipeline(
             if (!block.tags) block.tags = [];
             if (!block.tags.some((t) => t.toLowerCase() === normalizedTag)) {
               block.tags.push(normalizedTag);
-              added.push(normalizedTag);
             }
           }
         }
-        if (added.length > 0) console.log(`[body-scan:${jobId}] "${block.title}" +[${added.join(', ')}]`);
       }
 
       // Run LLM-as-judge on all non-duplicate fragments — provides quality verdict + metadata suggestions
