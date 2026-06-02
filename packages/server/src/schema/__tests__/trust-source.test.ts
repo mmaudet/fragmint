@@ -36,12 +36,9 @@ describe('computeTrustSources', () => {
       { domain: 'twake-mail' },
       {
         domain: 'twake-mail',
-        function_type: 'commercial',
-        audience: [],
-        maturity: 'production',
         tags: [],
       },
-      { domain: ['twake-mail'], function_type: [], tags: [] },
+      { domain: ['twake-mail'], tags: [] },
     );
     expect(result.domain).toBe('llm-confirmed');
   });
@@ -51,33 +48,29 @@ describe('computeTrustSources', () => {
       {},
       {
         domain: 'anything',
-        function_type: 'commercial',
-        audience: [],
-        maturity: 'production',
         tags: [],
       },
-      { domain: [], function_type: [], tags: [] },
+      { domain: [], tags: [] },
     );
     expect(result.domain).toBe('llm-inferred');
-    expect(result.function_type).toBe('llm-inferred');
   });
 });
 
 describe('overallTrustSource', () => {
   it('returns llm-deviation if any field has llm-deviation', () => {
-    expect(overallTrustSource({ domain: 'llm-deviation', function_type: 'human-direct' })).toBe(
+    expect(overallTrustSource({ domain: 'llm-deviation', tags: 'human-direct' })).toBe(
       'llm-deviation',
     );
   });
 
   it('returns llm-inferred if any field has llm-inferred but none have llm-deviation', () => {
-    expect(overallTrustSource({ domain: 'llm-inferred', function_type: 'llm-confirmed' })).toBe(
+    expect(overallTrustSource({ domain: 'llm-inferred', tags: 'llm-confirmed' })).toBe(
       'llm-inferred',
     );
   });
 
   it('returns human-direct when all fields are human-direct', () => {
-    expect(overallTrustSource({ domain: 'human-direct', maturity: 'human-direct' })).toBe(
+    expect(overallTrustSource({ domain: 'human-direct', tags: 'human-direct' })).toBe(
       'human-direct',
     );
   });

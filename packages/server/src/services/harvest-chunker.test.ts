@@ -57,7 +57,40 @@ Contenu de la section B avec du texte différent sur un autre sujet.`;
 
   it('returns non-empty chunks for empty markdown', () => {
     const chunks = semanticChunk('');
-    // Should handle gracefully
     expect(Array.isArray(chunks)).toBe(true);
+  });
+
+  it('merges L2 subsections into their L1 parent chunk (sourceSection = L1 title)', () => {
+    // This mirrors the Word proposal structure where H1 = major section, H2 = subsections.
+    // The chunker should merge "Macro-planning" into the "Offre de service" chunk,
+    // NOT create a separate chunk with sourceSection="Macro-planning des prestations".
+    const md = `# Offre de service
+
+Texte introductif de l'offre de service.
+
+## Gouvernance et pilotage
+
+${' Description de la gouvernance. '.repeat(10)}
+
+## Macro-planning des prestations
+
+${' Calendrier prévisionnel des livrables. '.repeat(10)}
+
+# Facturation
+
+${' Modalités de facturation et de paiement. '.repeat(10)}`;
+
+    const chunks = semanticChunk(md);
+    const sourceSections = chunks.map((c) => c.sourceSection);
+
+    // "Macro-planning" is L2 → merged into L1 "Offre de service", not its own chunk
+    expect(sourceSections).not.toContain('Macro-planning des prestations');
+    expect(sourceSections).toContain('Offre de service');
+    // "Facturation" is L1 → gets its own chunk
+    expect(sourceSections).toContain('Facturation');
+
+    // The L1 chunk text should contain the L2 heading as an ATX line
+    const offreChunk = chunks.find((c) => c.sourceSection === 'Offre de service');
+    expect(offreChunk?.text).toMatch(/## Macro-planning des prestations/);
   });
 });

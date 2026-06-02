@@ -3,7 +3,6 @@ import {
   normalizeForComparison,
   detectExactDuplicate,
   checkSubjectCoherence,
-  checkTagCoverage,
   computeQualitySignals,
 } from '../../services/quality-signals.js';
 
@@ -81,69 +80,18 @@ describe('checkSubjectCoherence', () => {
   });
 });
 
-describe('checkTagCoverage', () => {
-  it('returns ok when expected tag prefixes present for function', () => {
-    const result = checkTagCoverage({
-      function_type: 'reference',
-      tags: ['client:dgfip', 'open-source'],
-    });
-    expect(result.level).toBe('ok');
-    expect(result.type).toBe('entity_coverage');
-  });
-
-  it('returns warning when expected tag prefix missing', () => {
-    const result = checkTagCoverage({
-      function_type: 'reference',
-      tags: ['open-source'],
-    });
-    expect(result.level).toBe('warning');
-    expect(result.message).toContain('client:');
-  });
-
-  it('returns info for function types with no expectations', () => {
-    const result = checkTagCoverage({
-      function_type: 'introduction',
-      tags: [],
-    });
-    expect(result.level).toBe('info');
-  });
-
-  it('handles missing tags array gracefully', () => {
-    const result = checkTagCoverage({ function_type: 'commercial', tags: [] });
-    expect(result.level).toBe('warning');
-    expect(result.message).toContain('produit:');
-  });
-
-  it('returns ok for technical with tech: and produit: tags', () => {
-    const result = checkTagCoverage({
-      function_type: 'technical',
-      tags: ['tech:apache-james', 'produit:linshare'],
-    });
-    expect(result.level).toBe('ok');
-  });
-
-  it('returns warning when only one of two required prefixes present (technical)', () => {
-    const result = checkTagCoverage({
-      function_type: 'technical',
-      tags: ['tech:apache-james'],
-    });
-    expect(result.level).toBe('warning');
-  });
-});
-
 describe('computeQualitySignals', () => {
-  it('returns 3 flags for a clean block', () => {
+  it('returns 2 flags for a clean block', () => {
     const result = computeQualitySignals(
       {
         type: 'argument',
         body: 'Twake Mail est une solution de messagerie souveraine.',
         domain: 'twake-mail',
-        function_type: 'commercial',
         tags: ['produit:twake-mail'],
       },
       null,
     );
-    expect(result).toHaveLength(3);
+    expect(result).toHaveLength(2);
     expect(result.find((f) => f.type === 'duplicate_check')?.level).toBe('ok');
     expect(result.find((f) => f.type === 'subject_coherence')?.level).toBe('ok');
   });
@@ -163,7 +111,7 @@ describe('computeQualitySignals', () => {
       { type: 'argument', body: 'Contenu quelconque.', domain: 'unknown' },
       null,
     );
-    expect(result).toHaveLength(3);
+    expect(result).toHaveLength(2);
     expect(() => result).not.toThrow();
   });
 });
