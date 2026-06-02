@@ -60,6 +60,8 @@ import { adminMetadataLookupRoutes } from './routes/admin-metadata-lookup-routes
 import { adminSupersedureRoutes } from './routes/admin-supersedure-routes.js';
 import { adminReferentialRoutes } from './routes/admin-referential-routes.js';
 import { adminFragmentRoutes } from './routes/admin-fragment-routes.js';
+import { fragmentCollectionRoutes } from './routes/fragment-collection-routes.js';
+import { FragmentCollectionService } from './services/fragment-collection-service.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -269,6 +271,8 @@ export async function createServer(options?: {
   const authenticate = buildAuthMiddleware(db);
   const jobService = new JobService(db);
 
+  const fragmentCollectionService = new FragmentCollectionService(db);
+
   // Collection service and middleware
   const collectionService = new CollectionService(db, {
     store_path: config.store_path,
@@ -292,6 +296,7 @@ export async function createServer(options?: {
     fragmentService,
     storePath,
     { dupeShinglesThreshold: config.dupe_shingles_threshold },
+    fragmentCollectionService,
   );
 
   // Index service (agentique pipeline)
@@ -341,7 +346,7 @@ export async function createServer(options?: {
     defaultReferenceDocName: config.plan_docx_reference_name,
   });
   harvestRoutes(app, harvesterService, authenticate, { db });
-  planRoutes(app, planService, templateService, config.store_path, authenticate);
+  planRoutes(app, planService, templateService, config.store_path, authenticate, { harvesterService });
 
   taxonomyRoutes(app, db, authenticate);
   adminMetadataRoutes(app, db, authenticate);
@@ -350,6 +355,7 @@ export async function createServer(options?: {
   adminSupersedureRoutes(app, db, authenticate, llmClient);
   adminReferentialRoutes(app, db, authenticate, jobService);
   adminFragmentRoutes(app, db, authenticate, fragmentService, jobService);
+  fragmentCollectionRoutes(app, fragmentCollectionService, authenticate);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);
@@ -376,6 +382,7 @@ export async function createServer(options?: {
   planRoutes(app, planService, templateService, config.store_path, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    harvesterService,
   });
 
   // Serve frontend static files

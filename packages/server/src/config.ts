@@ -156,7 +156,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     retrieval_mode:
       toRetrievalMode(process.env.FRAGMINT_RETRIEVAL_MODE) ??
       fileConfig.retrieval_mode ??
-      'vector-only',
+      'hybrid',
     rrf_k: Number(process.env.FRAGMINT_RRF_K ?? fileConfig.rrf_k ?? 60),
     rrf_weights: toRrfWeights(process.env.FRAGMINT_RRF_WEIGHTS) ?? fileConfig.rrf_weights ?? 'balanced',
     hybrid_llm_floor: toFloat(process.env.FRAGMINT_HYBRID_LLM_FLOOR) ?? fileConfig.hybrid_llm_floor ?? 3,

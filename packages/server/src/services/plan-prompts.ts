@@ -6,6 +6,7 @@ export interface BuildPlanArgs {
   filters: PlanFilters;
   current_plan?: string;
   extra_instructions?: string;
+  reference_docs?: Array<{ name: string; content: string }>;
 }
 
 const PLAN_SYSTEM = `You produce structured document plans in Markdown. Output ONLY the plan.
@@ -26,6 +27,18 @@ export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
   parts.push(`- Language: ${lang}`);
   parts.push(`- Domain: ${domain}`);
   parts.push(`- Tags: ${tags}`);
+
+  if (args.reference_docs && args.reference_docs.length > 0) {
+    parts.push('');
+    parts.push('Reference documents (use as context, do not quote directly):');
+    for (const doc of args.reference_docs) {
+      const truncated =
+        doc.content.length > 2000 ? doc.content.slice(0, 2000) + '\n…[truncated]' : doc.content;
+      parts.push(`--- ${doc.name} ---`);
+      parts.push(truncated);
+      parts.push('---');
+    }
+  }
 
   if (args.extra_instructions && !args.current_plan) {
     parts.push('');
@@ -54,6 +67,7 @@ export interface BuildSectionArgs {
   writer_prompt_override?: string;
   plan_title?: string;
   spec_prompt?: string;
+  reference_docs?: Array<{ name: string; content: string }>;
 }
 
 const WRITER_SYSTEM_BASE = `You are an expert technical writer producing one section of a larger
@@ -97,8 +111,16 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
   lines.push(`Section title: ${args.section.title}`);
   lines.push(`Section description: ${args.section.description}`);
   lines.push('');
+  if (args.reference_docs?.length) {
+    lines.push('Reference documents (background context for this plan — do not quote directly):');
+    args.reference_docs.forEach((doc) => {
+      lines.push(`--- ${doc.name} ---`);
+      lines.push(truncate(doc.content, 1500));
+    });
+    lines.push('');
+  }
   if (args.fragments.length === 0) {
-    lines.push('(no source fragments — write from the description alone, mark uncertain claims)');
+    lines.push('(no source fragments — write from the description and reference documents above)');
   } else {
     lines.push('Source fragments (use these as the basis for the content):');
     args.fragments.forEach((f, i) => {

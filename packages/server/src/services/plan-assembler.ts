@@ -2,10 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { fragments, planFragmentUsages } from '../db/schema.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
+import { type PlanSection } from '../schema/plan.js';
 import { buildSectionMessages } from './plan-prompts.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx } from './pandoc-render.js';
 import { renderMarpFromString } from './render-marp.js';
+import { renderDocxWithTables, type DocxSection } from './render-docx-table.js';
+import { renderPptxWithTables, type PptxSection } from './render-pptx-table.js';
+import { buildGfmTable, buildMarkdownList } from './table-assembler.js';
 import { PlanService, type PlanRecord } from './plan-service.js';
 
 // Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
@@ -84,10 +88,8 @@ export class PlanAssembler extends PlanService {
               generation: 0,
               valid_from: null,
               valid_until: null,
-              function_type: null,
-              audience: [],
-              maturity: null,
               harvest_confidence: null,
+              source_position: null,
               origin: 'generated',
               origin_source: null,
               origin_page: null,
@@ -141,6 +143,13 @@ export class PlanAssembler extends PlanService {
       writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
       plan_title: p.title,
       spec_prompt: p.state.spec_prompt,
+      reference_docs: [
+        ...(p.state.reference_docs ?? []),
+        ...(section.reference_docs ?? []),
+      ].length ? [
+        ...(p.state.reference_docs ?? []),
+        ...(section.reference_docs ?? []),
+      ] : undefined,
     });
     const out = await this.requireLlm().chatMessages(messages);
 
@@ -167,15 +176,105 @@ export class PlanAssembler extends PlanService {
     return this.update(planId, { sections: updatedSections });
   }
 
+  async generateAllSections(planId: string): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    // Generate prose sections sequentially to avoid LLM rate limits
+    for (const section of p.state.sections) {
+      if (section.render_mode && section.render_mode !== 'prose') continue;
+      try {
+        await this.generateSection(planId, section.id);
+      } catch (err) {
+        console.error(`[generateAllSections] section "${section.title}" failed:`, err);
+      }
+    }
+    return this.assemble(planId);
+  }
+
+  private async resolveTableRows(section: PlanSection): Promise<Record<string, unknown>[]> {
+    const source = section.table_source;
+    const rows: Record<string, unknown>[] = [];
+
+    if (source?.collection_id && this.config.collectionService) {
+      const col = await this.config.collectionService.getById(source.collection_id);
+      if (col) {
+        // Use member fragment payloads
+        const fragmentsSvc = this.config.fragments;
+        if (fragmentsSvc && col.member_ids.length > 0) {
+          for (const fid of col.member_ids) {
+            const frag = await fragmentsSvc.getById(fid);
+            if (!frag) continue;
+            let payload: Record<string, unknown> = {};
+            if (frag.payload) {
+              try {
+                payload = JSON.parse(frag.payload) as Record<string, unknown>;
+              } catch {
+                payload = {};
+              }
+            }
+            rows.push(payload);
+          }
+        }
+      }
+    } else if (source?.fragment_ids && this.config.fragments) {
+      const fragmentsSvc = this.config.fragments;
+      for (const fid of source.fragment_ids) {
+        const frag = await fragmentsSvc.getById(fid);
+        if (!frag) continue;
+        let payload: Record<string, unknown> = {};
+        if (frag.payload) {
+          try {
+            payload = JSON.parse(frag.payload) as Record<string, unknown>;
+          } catch {
+            payload = {};
+          }
+        }
+        rows.push(payload);
+      }
+    } else {
+      // Fall back to selected fragment payloads
+      const fragmentsSvc = this.config.fragments;
+      if (fragmentsSvc) {
+        for (const sel of section.selected) {
+          const frag = await fragmentsSvc.getById(sel.fragment_id);
+          if (!frag) continue;
+          let payload: Record<string, unknown> = {};
+          if (frag.payload) {
+            try {
+              payload = JSON.parse(frag.payload) as Record<string, unknown>;
+            } catch {
+              payload = {};
+            }
+          }
+          rows.push(payload);
+        }
+      }
+    }
+    return rows;
+  }
+
   async assemble(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
     const parts: string[] = [`---\ntitle: "${p.title.replace(/"/g, '\\"')}"\n---`, ''];
     for (const s of p.state.sections) {
-      if (!s.generated_markdown) continue;
       parts.push(`# ${s.title}`);
       parts.push('');
-      parts.push(s.generated_markdown.trim());
+
+      if (s.render_mode === 'table') {
+        const rows = await this.resolveTableRows(s);
+        const columns = s.columns ?? [];
+        const table = buildGfmTable(rows, columns);
+        if (table) parts.push(table);
+      } else if (s.render_mode === 'list') {
+        const bodies = s.selected.map((sel) => sel.body).filter(Boolean);
+        const list = buildMarkdownList(bodies);
+        if (list) parts.push(list);
+      } else {
+        // prose (default) — use generated_markdown if available
+        if (s.generated_markdown) parts.push(s.generated_markdown.trim());
+      }
+
       parts.push('');
     }
     return this.update(id, { draft_markdown: parts.join('\n'), draft_dirty: false });
@@ -200,6 +299,37 @@ export class PlanAssembler extends PlanService {
     if (!p.state.draft_markdown || p.state.draft_markdown.trim() === '') {
       throw new Error('No assembled draft to export — call /assemble first');
     }
+
+    const hasTableSection = p.state.sections.some((s) => s.render_mode === 'table');
+    const tableTemplatePath = this.config.docxTableTemplatePath;
+
+    if (hasTableSection && tableTemplatePath) {
+      const docxSections: DocxSection[] = await Promise.all(
+        p.state.sections.map(async (s) => {
+          if (s.render_mode === 'table') {
+            const rows = await this.resolveTableRows(s);
+            return {
+              title: s.title,
+              is_table: true,
+              prose: '',
+              rows,
+              columns: s.columns ?? [],
+            };
+          }
+          return {
+            title: s.title,
+            is_table: false,
+            prose: s.generated_markdown ?? '',
+            rows: [],
+            columns: [],
+          };
+        }),
+      );
+      const buf = await renderDocxWithTables(tableTemplatePath, p.title, docxSections);
+      await this.update(id, { status: 'completed' });
+      return { content: buf, filename: `${slugify(p.title)}.docx` };
+    }
+
     const reference = args.styleTemplatePath ?? this.config.docxReferencePath;
     const buf = await renderMarkdownToDocx(p.state.draft_markdown, reference);
     await this.update(id, { status: 'completed' });
@@ -215,6 +345,33 @@ export class PlanAssembler extends PlanService {
     if (!p.state.draft_markdown?.trim()) {
       throw new Error('No assembled draft to export — call /assemble first');
     }
+
+    const hasTableSection = p.state.sections.some((s) => s.render_mode === 'table');
+
+    if (hasTableSection) {
+      const pptxSections: PptxSection[] = await Promise.all(
+        p.state.sections.map(async (s) => {
+          if (s.render_mode === 'table') {
+            const rows = await this.resolveTableRows(s);
+            return {
+              title: s.title,
+              render_mode: 'table' as const,
+              rows,
+              columns: s.columns ?? [],
+            };
+          }
+          return {
+            title: s.title,
+            render_mode: 'prose' as const,
+            prose: s.generated_markdown ?? '',
+          };
+        }),
+      );
+      const buf = await renderPptxWithTables(p.title, pptxSections);
+      await this.update(id, { status: 'completed' });
+      return { content: buf, filename: `${slugify(p.title)}.pptx` };
+    }
+
     const mdContent = buildMarpContent(p.state.draft_markdown, opts.marpTheme);
     const { buffer } = await renderMarpFromString(mdContent, 'pptx');
     await this.update(id, { status: 'completed' });

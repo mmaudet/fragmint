@@ -31,6 +31,7 @@ export const FragmentCandidateSchema = z.object({
   score: z.number().nullable(),
   title: z.string().nullable(),
   body_excerpt: z.string().nullable(),
+  body_full: z.string().nullable().optional(),
   quality: z.string(),
   score_breakdown: ScoreBreakdownSchema.optional(),
   justification: z.string().optional(),
@@ -44,6 +45,17 @@ export const SectionFragmentSelectionSchema = z.object({
   proposed_fragment_id: z.string().optional(),
 });
 
+export const TableSourceSchema = z.object({
+  collection_id: z.string().optional(),
+  fragment_ids: z.array(z.string()).optional(),
+  payload_schema: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  order_by: z.object({
+    field: z.string(),
+    direction: z.enum(['asc', 'desc']),
+  }).optional(),
+});
+
 export const PlanSectionSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -54,6 +66,11 @@ export const PlanSectionSchema = z.object({
   filters_override: PlanFiltersSchema.optional(),
   inferred_type: z.string().optional(),
   writer_instructions: z.string().optional(),
+  render_mode: z.enum(['prose', 'table', 'data_point', 'list']).optional(),
+  table_source: TableSourceSchema.optional(),
+  columns: z.array(z.string()).optional(),
+  data_field: z.string().optional(),
+  reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).optional(),
 });
 
 export const PlanStateSchema = z.object({
@@ -65,6 +82,7 @@ export const PlanStateSchema = z.object({
   draft_markdown: z.string().optional(),
   draft_dirty: z.boolean().optional(),
   export_style_template_id: z.string().optional(),
+  reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).default([]),
 });
 
 export type PlanState = z.infer<typeof PlanStateSchema>;
@@ -72,6 +90,7 @@ export type PlanSection = z.infer<typeof PlanSectionSchema>;
 export type PlanFilters = z.infer<typeof PlanFiltersSchema>;
 export type SectionFragmentSelection = z.infer<typeof SectionFragmentSelectionSchema>;
 export type FragmentCandidate = z.infer<typeof FragmentCandidateSchema>;
+export type TableSource = z.infer<typeof TableSourceSchema>;
 
 export const CreatePlanSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -89,6 +108,7 @@ export const UpdatePlanSchema = z.object({
   writer_prompt_override: z.string().optional(),
   sections: z.array(PlanSectionSchema).optional(),
   export_style_template_id: z.string().nullable().optional(),
+  reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).optional(),
 });
 
 export const GeneratePlanSchema = z.object({

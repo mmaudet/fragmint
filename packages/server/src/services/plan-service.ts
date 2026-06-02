@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans, fragmentTypes, fragmentDomains } from '../db/schema.js';
+import { plans, fragmentTypes, fragmentDomains, fragments } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -23,6 +23,7 @@ import type {
 } from '../retrieval/fragment-retriever.js';
 import { VectorRetriever } from '../retrieval/vector-retriever.js';
 import { getCurrentRetriever } from '../retrieval/factory.js';
+import type { FragmentCollectionService } from './fragment-collection-service.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
 
@@ -34,10 +35,12 @@ function normalizeTitle(raw: string | undefined, fallback: string): string {
 export interface PlanServiceConfig {
   fragmentMaxChars: number;
   docxReferencePath?: string;
+  docxTableTemplatePath?: string;
   llm?: LlmClient;
   search?: SearchService;
   retriever?: FragmentRetriever;
   fragments?: FragmentService;
+  collectionService?: FragmentCollectionService;
   sectionTopK?: number;
 }
 
@@ -76,6 +79,7 @@ export interface UpdatePlanInput {
   sections?: PlanState['sections'];
   export_style_template_id?: string | null;
   status?: PlanStatus;
+  reference_docs?: Array<{ name: string; content: string }>;
 }
 
 function rowToRecord(row: typeof plans.$inferSelect): PlanRecord {
@@ -155,6 +159,7 @@ export class PlanService {
     } else if (input.export_style_template_id !== undefined) {
       newState.export_style_template_id = input.export_style_template_id;
     }
+    if (input.reference_docs !== undefined) newState.reference_docs = input.reference_docs;
 
     const now = new Date().toISOString();
     await this.db
@@ -266,9 +271,34 @@ export class PlanService {
       filters: p.state.filters,
       current_plan: p.state.plan_markdown,
       extra_instructions: args.extra_instructions,
+      reference_docs: p.state.reference_docs,
     });
     const out = await this.requireLlm().chatMessages(messages);
     return this.update(id, { plan_markdown: out.trim(), status: 'plan_generated' });
+  }
+
+  async addReferenceDoc(
+    id: string,
+    doc: { name: string; content: string },
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const existing = p.state.reference_docs ?? [];
+    return this.update(id, { reference_docs: [...existing, doc] });
+  }
+
+  async addSectionReferenceDoc(
+    id: string,
+    sectionId: string,
+    doc: { name: string; content: string },
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(id);
+    if (!p) return null;
+    const sections = p.state.sections.map((s) => {
+      if (s.id !== sectionId) return s;
+      return { ...s, reference_docs: [...(s.reference_docs ?? []), doc] };
+    });
+    return this.update(id, { sections });
   }
 
   async validatePlan(id: string): Promise<PlanRecord | null> {
@@ -350,6 +380,80 @@ export class PlanService {
     return this.update(planId, { sections: updatedSections });
   }
 
+  async searchAllSections(
+    planId: string,
+    args: { top_k?: number } = {},
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const validatedStatuses: PlanStatus[] = ['plan_validated', 'fragments_validated', 'completed'];
+    if (!validatedStatuses.includes(p.status)) {
+      throw Object.assign(new Error('Outline must be validated first. Call plan_validate_outline after the user approves the outline.'), { statusCode: 409 });
+    }
+    const sections = p.state.sections;
+    const toInfer = sections.filter((s) => !s.inferred_type);
+    const inferredById = toInfer.length > 0 ? await this.inferSectionTypes(toInfer) : new Map<string, string | undefined>();
+
+    // Sequential to avoid overwhelming the LLM with parallel requests
+    const updatedSections: typeof sections = [];
+    for (const s of sections) {
+      const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
+      const filters = s.filters_override ?? p.state.filters;
+      let candidates: FragmentCandidate[] = s.candidates ?? [];
+      try {
+        candidates = await this.runSectionSearch(
+          { ...s, inferred_type },
+          filters,
+          p.collection_slug,
+          p.state.spec_prompt,
+          args.top_k,
+        );
+      } catch (err) {
+        console.error(`[searchAllSections] section "${s.title}" failed:`, err);
+      }
+      updatedSections.push({ ...s, candidates, inferred_type });
+    }
+
+    // Batch fetch full bodies for all candidates in one query
+    const allIds = updatedSections.flatMap((s) => (s.candidates ?? []).map((c) => c.fragment_id));
+    const bodyRows = allIds.length > 0
+      ? await this.db.select({ id: fragments.id, body: fragments.body_excerpt }).from(fragments).where(inArray(fragments.id, allIds))
+      : [];
+    const bodyById = new Map(bodyRows.map((r) => [r.id, r.body]));
+
+    const sectionsWithBodies = updatedSections.map((s) => ({
+      ...s,
+      candidates: (s.candidates ?? []).map((c) => ({
+        ...c,
+        body_full: bodyById.get(c.fragment_id) ?? null,
+      })),
+    }));
+
+    return this.update(planId, { sections: sectionsWithBodies });
+  }
+
+  async approveFragments(
+    planId: string,
+    exclusions: { section_id: string; exclude_ids: string[] }[] = [],
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const exclusionMap = new Map(exclusions.map((e) => [e.section_id, new Set(e.exclude_ids)]));
+    const sections = p.state.sections.map((s) => {
+      const excluded = exclusionMap.get(s.id) ?? new Set<string>();
+      const selected = (s.candidates ?? [])
+        .filter((c) => !excluded.has(c.fragment_id))
+        .map((c) => ({
+          fragment_id: c.fragment_id,
+          body: c.body_excerpt ?? '',
+          edited: false as const,
+          propose_to_library: false as const,
+        }));
+      return { ...s, selected };
+    });
+    return this.update(planId, { sections });
+  }
+
   async addFragmentToSection(
     planId: string,
     sectionId: string,
@@ -402,10 +506,8 @@ export class PlanService {
         generation: 0,
         valid_from: null,
         valid_until: null,
-        function_type: null,
-        audience: [],
-        maturity: null,
         harvest_confidence: null,
+        source_position: null,
         origin: 'manual',
         origin_source: null,
         origin_page: null,
@@ -452,6 +554,32 @@ export class PlanService {
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId ? { ...s, candidates: newCandidates, selected: newSelected } : s,
     );
+    return this.update(planId, { sections: updatedSections });
+  }
+
+  async editSectionFragment(
+    planId: string,
+    sectionId: string,
+    fragmentId: string,
+    body: string,
+  ): Promise<PlanRecord | null> {
+    const p = await this.get(planId);
+    if (!p) return null;
+    const sectionIdx = p.state.sections.findIndex((s) => s.id === sectionId);
+    if (sectionIdx === -1) return null;
+    const section = p.state.sections[sectionIdx];
+    const selIdx = section.selected.findIndex((sel) => sel.fragment_id === fragmentId);
+    if (selIdx === -1) return null;
+
+    const updatedSections = p.state.sections.map((s, i) => {
+      if (i !== sectionIdx) return s;
+      const newSelected = s.selected.map((sel, j) => {
+        if (j !== selIdx) return sel;
+        return { ...sel, body, edited: true };
+      });
+      return { ...s, selected: newSelected };
+    });
+
     return this.update(planId, { sections: updatedSections });
   }
 }
