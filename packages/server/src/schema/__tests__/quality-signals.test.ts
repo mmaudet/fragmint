@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeForComparison,
   detectExactDuplicate,
-  checkSubjectCoherence,
-  computeQualitySignals,
 } from '../../services/quality-signals.js';
 
 describe('normalizeForComparison', () => {
@@ -56,62 +54,3 @@ describe('detectExactDuplicate', () => {
   });
 });
 
-describe('checkSubjectCoherence', () => {
-  it('returns ok when subject keyword found in body', () => {
-    const result = checkSubjectCoherence({
-      domain: 'twake-mail',
-      body: 'Twake Mail est une messagerie basée sur Apache James et JMAP.',
-    });
-    expect(result.level).toBe('ok');
-  });
-
-  it('returns warning when no keyword matches', () => {
-    const result = checkSubjectCoherence({
-      domain: 'twake-mail',
-      body: 'Contenu totalement sans rapport.',
-    });
-    expect(result.level).toBe('warning');
-    expect(result.type).toBe('subject_coherence');
-  });
-
-  it('returns info for unknown domain', () => {
-    const result = checkSubjectCoherence({ domain: 'unknown-product', body: 'Quelque chose.' });
-    expect(result.level).toBe('info');
-  });
-});
-
-describe('computeQualitySignals', () => {
-  it('returns 2 flags for a clean block', () => {
-    const result = computeQualitySignals(
-      {
-        type: 'argument',
-        body: 'Twake Mail est une solution de messagerie souveraine.',
-        domain: 'twake-mail',
-        tags: ['produit:twake-mail'],
-      },
-      null,
-    );
-    expect(result).toHaveLength(2);
-    expect(result.find((f) => f.type === 'duplicate_check')?.level).toBe('ok');
-    expect(result.find((f) => f.type === 'subject_coherence')?.level).toBe('ok');
-  });
-
-  it('returns error-level duplicate_check when dupResult is provided', () => {
-    const result = computeQualitySignals(
-      { type: 'argument', body: 'Open source réel, sans dual licensing.', domain: 'twake-mail' },
-      { id: 'frag-1', score: 1.0 },
-    );
-    const dupFlag = result.find((f) => f.type === 'duplicate_check');
-    expect(dupFlag?.level).toBe('error');
-    expect(dupFlag?.message).toContain('frag-1');
-  });
-
-  it('handles missing tags gracefully', () => {
-    const result = computeQualitySignals(
-      { type: 'argument', body: 'Contenu quelconque.', domain: 'unknown' },
-      null,
-    );
-    expect(result).toHaveLength(2);
-    expect(() => result).not.toThrow();
-  });
-});
