@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -263,7 +264,17 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
           />
         ) : (
           <div className="text-sm bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[35vh] prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1">
-            <ReactMarkdown>{edits.body}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ href, children }) =>
+                  href?.startsWith('#') ? (
+                    <span>{children}</span>
+                  ) : (
+                    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                  ),
+              }}
+            >{edits.body}</ReactMarkdown>
           </div>
         )}
       </div>

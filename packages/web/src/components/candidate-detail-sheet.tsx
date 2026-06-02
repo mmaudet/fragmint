@@ -141,13 +141,15 @@ export function CandidateDetailSheet({
                   <span className="opacity-70"> ({candidate.duplicate_method})</span>
                 )}
                 {' avec '}
-                <Link
-                  to={`/fragments?fragment=${candidate.duplicate_of}`}
+                <a
+                  href={`/ui/fragments?fragment=${candidate.duplicate_of}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="font-mono text-xs underline underline-offset-2 hover:opacity-70"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {candidate.duplicate_of.slice(0, 8)}…
-                </Link>
+                </a>
               </span>
             </div>
           );

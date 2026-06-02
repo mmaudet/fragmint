@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { Check, X, AlertTriangle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
+import { PayloadEditor } from '@/components/payload-editor';
 
 function getSimilarityLevel(
   score: number | null | undefined,
@@ -136,7 +137,30 @@ export function CandidateCard({
             📄 {candidate.source_section}
           </span>
         )}
-        <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
+        {/^\|.+\|/.test(candidate.body?.split('\n')[0] ?? '') ? (
+          <p className="text-xs text-muted-foreground italic">📊 Tableau structuré ({candidate.payload_schema ?? 'données'})</p>
+        ) : (
+          <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
+        )}
+
+        {candidate.payload_schema && candidate.payload && (() => {
+          let parsed: Record<string, unknown> = {};
+          try { parsed = JSON.parse(candidate.payload); } catch { /* ignore */ }
+          return (
+            <div className="space-y-1 pt-1 border-t">
+              <p className="text-xs text-muted-foreground font-medium">
+                Données structurées{' '}
+                <span className="bg-muted px-1.5 py-0.5 rounded text-xs">{candidate.payload_schema}</span>
+              </p>
+              <PayloadEditor
+                schemaId={candidate.payload_schema}
+                value={parsed}
+                onChange={() => {}}
+                disabled={true}
+              />
+            </div>
+          );
+        })()}
 
         {simLevel && candidate.duplicate_of && pct != null && (
           <div
@@ -159,13 +183,15 @@ export function CandidateCard({
               {' — '}<strong>{pct}%</strong>
               {candidate.duplicate_method && <span className="opacity-70"> ({candidate.duplicate_method})</span>}
               {' avec '}
-              <Link
-                to={`/fragments?fragment=${candidate.duplicate_of}`}
+              <a
+                href={`/ui/fragments?fragment=${candidate.duplicate_of}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="font-mono underline underline-offset-2 hover:opacity-80"
                 onClick={(e) => e.stopPropagation()}
               >
                 {candidate.duplicate_of.slice(0, 8)}…
-              </Link>
+              </a>
             </span>
           </div>
         )}
