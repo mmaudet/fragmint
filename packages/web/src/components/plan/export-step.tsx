@@ -149,12 +149,13 @@ export function ExportStep({ plan }: { plan: Plan }) {
                     <SelectItem value="__none__">
                       <span className="flex items-center gap-2">
                         {isDocxFormat && defaultName
-                          ? <>{defaultName} <span className="text-xs text-muted-foreground">(par défaut)</span></>
+                          ? defaultName
                           : <span className="text-muted-foreground">Sans modèle</span>
                         }
-                        <span className="text-xs font-mono text-muted-foreground">
-                          .{exportFormat}
-                        </span>
+                        <span className="text-xs font-mono text-muted-foreground">.{exportFormat}</span>
+                        {isDocxFormat && defaultName && (
+                          <span className="text-xs text-muted-foreground">(par défaut)</span>
+                        )}
                       </span>
                     </SelectItem>
                     {visibleTemplates.map((tpl) => (
