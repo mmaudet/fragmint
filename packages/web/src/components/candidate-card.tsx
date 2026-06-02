@@ -6,7 +6,8 @@ import { useI18n } from '@/lib/i18n';
 import { Check, X, AlertTriangle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
-import { PayloadEditor } from '@/components/payload-editor';
+import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent } from '@/components/payload-editor';
+import { tagDisplayLabel } from '@/lib/tag-display';
 
 function getSimilarityLevel(
   score: number | null | undefined,
@@ -129,6 +130,15 @@ export function CandidateCard({
               {candidate.domain}
             </Badge>
           )}
+          {candidate.tags?.filter((t) => t.includes(':')).map((tag) => (
+            <Badge
+              key={tag}
+              variant="outline"
+              className="text-xs border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-300"
+            >
+              {tagDisplayLabel(tag)}
+            </Badge>
+          ))}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -137,15 +147,16 @@ export function CandidateCard({
             📄 {candidate.source_section}
           </span>
         )}
-        {/^\|.+\|/.test(candidate.body?.split('\n')[0] ?? '') ? (
+        {(/^\|.+\|/.test(candidate.body?.split('\n')[0] ?? '') || /<table[\s>]/i.test(candidate.body ?? '')) ? (
           <p className="text-xs text-muted-foreground italic">📊 Tableau structuré ({candidate.payload_schema ?? 'données'})</p>
         ) : (
           <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
         )}
 
-        {candidate.payload_schema && candidate.payload && (() => {
+        {candidate.payload_schema && candidate.payload && STRUCTURED_SCHEMAS.has(candidate.payload_schema) && (() => {
           let parsed: Record<string, unknown> = {};
           try { parsed = JSON.parse(candidate.payload); } catch { /* ignore */ }
+          if (!hasPayloadContent(candidate.payload_schema, parsed)) return null;
           return (
             <div className="space-y-1 pt-1 border-t">
               <p className="text-xs text-muted-foreground font-medium">

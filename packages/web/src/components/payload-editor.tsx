@@ -1,8 +1,22 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// Field definitions per schema id
 type FieldDef = { key: string; label: string; type: 'text' | 'number' };
+
+// Schemas with known, useful structured fields (shown in UI as "Données structurées")
+// Generic/fallback schemas like generic-row-v1 are excluded — their data is already
+// visible as a rendered HTML table in the Corps field.
+export const STRUCTURED_SCHEMAS = new Set(['pricing-line-v1', 'sla-row-v1', 'reference-v1']);
+
+/** Returns true only if the payload has at least one non-empty value for a known schema field. */
+export function hasPayloadContent(schemaId: string, value: Record<string, unknown>): boolean {
+  const fields = SCHEMA_FIELDS[schemaId];
+  if (!fields) return Object.values(value).some((v) => v != null && v !== '');
+  return fields.some((f) => {
+    const v = value[f.key];
+    return v != null && v !== '';
+  });
+}
 
 const SCHEMA_FIELDS: Record<string, FieldDef[]> = {
   'pricing-line-v1': [
@@ -28,6 +42,16 @@ const SCHEMA_FIELDS: Record<string, FieldDef[]> = {
   ],
 };
 
+function displayValue(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'object') return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
+function isComplex(v: unknown): boolean {
+  return typeof v === 'object' && v !== null;
+}
+
 interface Props {
   schemaId: string;
   value: Record<string, unknown>;
@@ -37,8 +61,6 @@ interface Props {
 
 export function PayloadEditor({ schemaId, value, onChange, disabled = false }: Props) {
   const knownFields = SCHEMA_FIELDS[schemaId];
-
-  // For generic-row-v1 or unknown schemas: show all keys as text inputs
   const fields: FieldDef[] = knownFields ?? Object.keys(value).map((k) => ({
     key: k,
     label: k,
@@ -54,18 +76,28 @@ export function PayloadEditor({ schemaId, value, onChange, disabled = false }: P
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-      {fields.map((f) => (
-        <div key={f.key} className="space-y-1">
-          <Label className="text-xs text-muted-foreground">{f.label}</Label>
-          <Input
-            type={f.type === 'number' ? 'number' : 'text'}
-            value={value[f.key] != null ? String(value[f.key]) : ''}
-            onChange={(e) => handleChange(f.key, e.target.value, f.type)}
-            disabled={disabled}
-            className="h-7 text-xs"
-          />
-        </div>
-      ))}
+      {fields.map((f) => {
+        const val = value[f.key];
+        const complex = isComplex(val);
+        return (
+          <div key={f.key} className={`space-y-1 ${complex ? 'col-span-2' : ''}`}>
+            <Label className="text-xs text-muted-foreground">{f.label}</Label>
+            {complex ? (
+              <pre className="text-xs bg-muted/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">
+                {displayValue(val)}
+              </pre>
+            ) : (
+              <Input
+                type={f.type === 'number' ? 'number' : 'text'}
+                value={val != null ? String(val) : ''}
+                onChange={(e) => handleChange(f.key, e.target.value, f.type)}
+                disabled={disabled}
+                className="h-7 text-xs"
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -62,7 +62,7 @@ function Pagination({
 }) {
   const { t } = useI18n();
   const pageCount = Math.ceil(total / pageSize);
-  if (pageCount <= 1) return null;
+  if (total <= PAGE_SIZE_OPTIONS[0]) return null;
   return (
     <div className="flex items-center justify-between pt-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -81,27 +81,29 @@ function Pagination({
         </Select>
         <span>{t('common', 'perPage')}</span>
       </div>
-      <div className="flex items-center gap-3">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page === 0}
-          onClick={() => onChange(page - 1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Page {page + 1} / {pageCount}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page >= pageCount - 1}
-          onClick={() => onChange(page + 1)}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      {pageCount > 1 && (
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => onChange(page - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} / {pageCount}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount - 1}
+            onClick={() => onChange(page + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

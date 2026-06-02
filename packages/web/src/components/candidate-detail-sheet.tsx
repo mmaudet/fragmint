@@ -67,7 +67,11 @@ export function CandidateDetailSheet({
       ...edits,
       ...(s.type && { type: s.type }),
       ...(s.domain && { domain: s.domain }),
-      ...(s.tags && { tags: s.tags }),
+      ...(s.tags && {
+        // Merge: judge suggestions + any prefixed tags from body-scan/hints
+        // Fall back to candidate.tags when no user edits exist yet
+        tags: [...new Set([...s.tags, ...(edits.tags ?? candidate?.tags ?? []).filter((t) => t.includes(':'))])],
+      }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate?.id]);

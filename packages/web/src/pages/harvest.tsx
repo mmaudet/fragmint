@@ -138,14 +138,37 @@ export default function HarvestPage() {
     }
   });
   const [selectedCandidate, setSelectedCandidate] = useState<HarvestCandidate | null>(null);
-  const [candidatePage, setCandidatePage] = useState(0);
+  const candidatePage = Math.max(0, Number(searchParams.get('page') ?? '1') - 1);
+  const setCandidatePage = useCallback(
+    (p: number | ((prev: number) => number)) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const resolved = typeof p === 'function' ? p(Math.max(0, Number(prev.get('page') ?? '1') - 1)) : p;
+          if (resolved <= 0) next.delete('page');
+          else next.set('page', String(resolved + 1));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [candidatePageSize, setCandidatePageSize] = useState(24);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const jobId = urlJobId;
   const setJobId = (id: string | null) => {
-    if (id) setSearchParams({ job: id }, { replace: true });
-    else setSearchParams({}, { replace: true });
+    if (id) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('job', id);
+        next.delete('page');
+        return next;
+      }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const setDecisions = (
@@ -475,7 +498,7 @@ export default function HarvestPage() {
       )}
 
       {candidates.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={acceptAll}>
             <CheckCircle className="h-4 w-4 mr-1" />
             {t('harvest', 'acceptAll')}
@@ -519,7 +542,7 @@ export default function HarvestPage() {
                 />
               ))}
             </div>
-            {pageCount > 1 && (
+            {candidates.length > 24 && (
               <div className="flex items-center justify-between pt-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>{t('common', 'show')}</span>
@@ -539,27 +562,29 @@ export default function HarvestPage() {
                   </select>
                   <span>{t('common', 'perPage')}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={candidatePage === 0}
-                    onClick={() => setCandidatePage((p) => p - 1)}
-                  >
-                    {t('common', 'previous')}
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {candidatePage + 1} / {pageCount}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={candidatePage >= pageCount - 1}
-                    onClick={() => setCandidatePage((p) => p + 1)}
-                  >
-                    {t('common', 'next')}
-                  </Button>
-                </div>
+                {pageCount > 1 && (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={candidatePage === 0}
+                      onClick={() => setCandidatePage((p) => p - 1)}
+                    >
+                      {t('common', 'previous')}
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {candidatePage + 1} / {pageCount}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={candidatePage >= pageCount - 1}
+                      onClick={() => setCandidatePage((p) => p + 1)}
+                    >
+                      {t('common', 'next')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </>
