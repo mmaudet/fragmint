@@ -527,6 +527,16 @@ export function createDb(path: string | ':memory:') {
     CREATE INDEX IF NOT EXISTS idx_fc_created_by ON fragment_collections(created_by);
   `);
 
+  // Migration 019 — doc_position for harvest candidates ordering
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN doc_position INTEGER');
+  } catch (_) {}
+
+  // Migration 020 — source_position: 1-based rank in source document for harvested fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN source_position INTEGER');
+  } catch (_) {}
+
   // Seed 001 — default Linagora product domains (INSERT OR IGNORE — safe on every boot).
   // Intentional: once seeded, domains are admin-owned. Label/description changes in this
   // file will NOT update existing rows — edit via the admin UI or a manual migration.

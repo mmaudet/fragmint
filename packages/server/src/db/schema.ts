@@ -32,6 +32,7 @@ export const fragments = sqliteTable('fragments', {
   supersedes: text('supersedes'),
   payload: text('payload'),           // JSON-serialized payload, nullable
   payload_schema: text('payload_schema'), // e.g. 'pricing-line-v1', nullable
+  source_position: integer('source_position'), // 1-based rank in source document (from harvest)
 });
 
 export const auditLog = sqliteTable('audit_log', {
@@ -164,6 +165,7 @@ export const harvestCandidates = sqliteTable('harvest_candidates', {
   judge_result: text('judge_result'), // JSON: JudgeResult | null
   payload: text('payload'),
   payload_schema: text('payload_schema'),
+  doc_position: integer('doc_position'),  // document order: (chunk_idx+1)*10000 + block_idx
 });
 
 export const jobs = sqliteTable('jobs', {
