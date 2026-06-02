@@ -150,11 +150,11 @@ export function ExportStep({ plan }: { plan: Plan }) {
                       <span className="flex items-center gap-2">
                         {isDocxFormat && defaultName
                           ? defaultName
-                          : <span className="text-muted-foreground">Modèle Pandoc (défaut)</span>
+                          : <span className="text-muted-foreground">{t('planGeneration', 'pandocDefault')}</span>
                         }
                         <span className="text-xs font-mono text-muted-foreground">.{exportFormat}</span>
                         {isDocxFormat && defaultName && (
-                          <span className="text-xs text-muted-foreground">(par défaut)</span>
+                          <span className="text-xs text-muted-foreground">{t('planGeneration', 'builtinDefault')}</span>
                         )}
                       </span>
                     </SelectItem>
