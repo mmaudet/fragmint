@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { AlertTriangle, Save, Trash2 } from 'lucide-react';
-import { PayloadEditor } from '@/components/payload-editor';
+import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent } from '@/components/payload-editor';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
@@ -309,9 +309,10 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 }}
               />
 
-              {fragment.payload && fragment.payload_schema && (() => {
+              {fragment.payload && fragment.payload_schema && STRUCTURED_SCHEMAS.has(fragment.payload_schema) && (() => {
                 let parsed: Record<string, unknown> = {};
                 try { parsed = JSON.parse(fragment.payload); } catch { /* ignore */ }
+                if (!hasPayloadContent(fragment.payload_schema, parsed)) return null;
                 return (
                   <>
                     <Separator />

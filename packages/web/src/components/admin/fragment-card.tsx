@@ -21,6 +21,7 @@ export interface AdminFragment {
   uses: number;
   updated_at: string;
   author: string;
+  payload_schema?: string | null;
 }
 
 interface Props {
@@ -44,7 +45,7 @@ export function AdminFragmentCard({
   const handleApprove = async () => {
     setLoading(true);
     try {
-      await apiRequest('POST', '/v1/fragments/bulk-approve', { ids: [fragment.id] });
+      await apiRequest('POST', `/v1/fragments/${fragment.id}/approve`);
       onActionComplete();
     } catch (e: any) {
       alert(`Erreur : ${e.message}`);
@@ -56,7 +57,7 @@ export function AdminFragmentCard({
   const handleArchive = async () => {
     setLoading(true);
     try {
-      await apiRequest('POST', '/v1/admin/fragments/bulk-archive', { ids: [fragment.id] });
+      await apiRequest('POST', `/v1/fragments/${fragment.id}/deprecate`);
       setPendingAction(null);
       onActionComplete();
     } catch (e: any) {
@@ -108,6 +109,11 @@ export function AdminFragmentCard({
             </span>
             <StatusBadge quality={fragment.quality} />
             <OriginBadge origin={fragment.origin} />
+            {(fragment.payload_schema || /^\|.+\|/.test(fragment.body_excerpt?.split('\n')[0] ?? '')) && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-700 dark:text-teal-300">
+                📊 Tableau
+              </span>
+            )}
           </div>
 
           {fragment.body_excerpt && (

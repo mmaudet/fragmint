@@ -1,6 +1,16 @@
 import { useState, useRef } from 'react';
+
+const TAG_PREFIXES = [
+  { value: 'client', label: 'Client' },
+  { value: 'produit', label: 'Produit' },
+  { value: 'tech', label: 'Technologie' },
+  { value: 'partner', label: 'Partenaire' },
+  { value: 'cert', label: 'Certification' },
+  { value: 'reg', label: 'Règlementation' },
+];
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,6 +75,7 @@ interface Props {
 
 export function FragmentMetaEditor({ edits, types, domains, availableTags, onChange }: Props) {
   const [tagInput, setTagInput] = useState('');
+  const [pendingTag, setPendingTag] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -75,13 +86,25 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
 
   const addTag = (raw: string) => {
     const tag = raw.trim().toLowerCase().replace(/\s+/g, '-');
-    if (tag && !edits.tags.includes(tag)) {
-      set({ tags: [...edits.tags, tag] });
-    }
     setTagInput('');
     setShowSuggestions(false);
     setActiveSuggestion(0);
     setSimilarTag(null);
+    if (!tag) return;
+    // If tag already has a prefix or is being selected from suggestions, add directly
+    if (tag.includes(':') || availableTags?.includes(tag)) {
+      if (!edits.tags.includes(tag)) set({ tags: [...edits.tags, tag] });
+    } else {
+      setPendingTag(tag);
+    }
+  };
+
+  const confirmPending = (prefix: string | null) => {
+    if (!pendingTag) return;
+    const final = prefix ? `${prefix}:${pendingTag}` : pendingTag;
+    if (!edits.tags.includes(final)) set({ tags: [...edits.tags, final] });
+    setPendingTag(null);
+    inputRef.current?.focus();
   };
 
   const handleTagInputChange = (value: string) => {
@@ -235,6 +258,32 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
             </ul>
           )}
         </div>
+        {pendingTag && (
+          <div className="mt-1 p-2 border rounded-md bg-muted/40 space-y-1.5">
+            <p className="text-xs text-muted-foreground">
+              Catégorie pour <code className="font-medium text-foreground">{pendingTag}</code> ?
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {TAG_PREFIXES.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50"
+                  onMouseDown={() => confirmPending(p.value)}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground hover:bg-muted/80"
+                onMouseDown={() => confirmPending(null)}
+              >
+                Sans catégorie
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -266,6 +315,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
           <div className="text-sm bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[35vh] prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
               components={{
                 a: ({ href, children }) =>
                   href?.startsWith('#') ? (

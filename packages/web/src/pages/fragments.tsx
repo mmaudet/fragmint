@@ -313,24 +313,22 @@ export default function FragmentsPage() {
       {/* Pagination */}
       {!search && total !== undefined && total > PAGE_SIZE_OPTIONS[0] && (
         <div className="flex items-center justify-between gap-4">
-          {totalPages !== undefined && totalPages > 1 && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>{t('common', 'show')}</span>
-              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-8 w-20 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((s) => (
-                    <SelectItem key={s} value={String(s)} className="text-xs">
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span>{t('common', 'perPage')}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{t('common', 'show')}</span>
+            <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="h-8 w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={String(s)} className="text-xs">
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span>{t('common', 'perPage')}</span>
+          </div>
           <div className="flex items-center gap-3 ml-auto">
             <Button
               variant="outline"
