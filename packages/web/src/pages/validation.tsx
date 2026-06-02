@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { useFragments, useSearchFragments } from '@/api/hooks/use-fragments';
 import { apiRequest, apiRequestFull, collectionApiUrl } from '@/api/client';
@@ -29,8 +29,24 @@ export default function ValidationPage() {
   const { user } = useAuth();
   const role = user?.role ?? 'reader';
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Page 1-indexed in URL, 0-indexed internally.
+  const page = Math.max(0, Number(searchParams.get('page') ?? '1') - 1);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (p <= 0) next.delete('page');
+          else next.set('page', String(p + 1));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(24);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

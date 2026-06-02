@@ -27,8 +27,23 @@ const KIND_DESC_KEYS: Record<ProposalKind, string> = {
 export function UnifiedMetadataList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[1]);
+  // Page 1-indexed in URL.
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (p <= 1) next.delete('page');
+          else next.set('page', String(p));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const { t } = useI18n();
   const bulkAction = useBulkAction();
   const queryClient = useQueryClient();
@@ -54,12 +69,12 @@ export function UnifiedMetadataList() {
               next.set(key, val);
             }
           });
+          next.delete('page'); // reset to page 1 on filter change
           return next;
         },
         { replace: true },
       );
       setSelectedIds(new Set());
-      setPage(1);
     },
     [setSearchParams],
   );
@@ -431,7 +446,7 @@ export function UnifiedMetadataList() {
                     variant="outline"
                     size="sm"
                     disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
+                    onClick={() => setPage(page - 1)}
                   >
                     {t('common', 'previous')}
                   </Button>
@@ -442,7 +457,7 @@ export function UnifiedMetadataList() {
                     variant="outline"
                     size="sm"
                     disabled={page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
+                    onClick={() => setPage(page + 1)}
                   >
                     {t('common', 'next')}
                   </Button>

@@ -3,6 +3,15 @@ import type { Plan, PlanSection, SectionFragmentSelection } from '@/api/types';
 import { useSectionSearch, useUpdatePlan, useValidateFragments } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
@@ -86,6 +95,71 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                     {active.description}
                   </p>
+
+                  {/* Render mode selector */}
+                  <div className="grid grid-cols-2 gap-3 pt-1 border-t">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Mode de rendu</Label>
+                      <Select
+                        value={active.render_mode ?? 'prose'}
+                        onValueChange={(v) =>
+                          updateSection(active.id, (s) => ({
+                            ...s,
+                            render_mode: v as PlanSection['render_mode'],
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="prose">Prose</SelectItem>
+                          <SelectItem value="table">Tableau</SelectItem>
+                          <SelectItem value="list">Liste</SelectItem>
+                          <SelectItem value="data_point">Point de donnée</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {active.render_mode === 'table' && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Collection source</Label>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="ex: twake-commercial"
+                          value={active.table_source?.collection_id ?? ''}
+                          onChange={(e) =>
+                            updateSection(active.id, (s) => ({
+                              ...s,
+                              table_source: { ...s.table_source, collection_id: e.target.value || undefined },
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+
+                    {active.render_mode === 'table' && (
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Colonnes (séparées par des virgules)
+                        </Label>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="ex: libelle, quantite, prix_unitaire"
+                          value={(active.columns ?? []).join(', ')}
+                          onChange={(e) =>
+                            updateSection(active.id, (s) => ({
+                              ...s,
+                              columns: e.target.value
+                                ? e.target.value.split(',').map((c) => c.trim()).filter(Boolean)
+                                : [],
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex gap-2">
                     <Button
                       size="sm"

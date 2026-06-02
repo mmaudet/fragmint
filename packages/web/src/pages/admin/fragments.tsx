@@ -93,7 +93,22 @@ export default function AdminFragmentsPage() {
       { replace: true },
     );
   }, [setSearchParams]);
-  const [page, setPage] = useState(0);
+  // Page derived from URL — 1-indexed in URL, 0-indexed internally.
+  const page = Math.max(0, Number(searchParams.get('page') ?? '1') - 1);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (p <= 0) next.delete('page');
+          else next.set('page', String(p + 1));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // Filters derived directly from URL — no separate React state.
   // No quality param → default to 'reviewed'. 'quality=all' → no filter.
@@ -127,12 +142,12 @@ export default function AdminFragmentsPage() {
               next.delete(key);
             }
           });
+          next.delete('page'); // reset to page 1 on filter change
           return next;
         },
         { replace: true },
       );
       setSelectedIds(new Set());
-      setPage(0);
     },
     [setSearchParams],
   );

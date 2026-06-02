@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
 import { CollectionSelector } from '@/components/collection-selector';
-import { useStartHarvest, useHarvestJob, useValidateCandidates } from '@/api/hooks/use-harvest';
+import { useStartHarvest, useHarvestJob, useValidateCandidates, useDeleteHarvestJob } from '@/api/hooks/use-harvest';
 import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
 import { CandidateCard } from '@/components/candidate-card';
 import { CandidateDetailSheet } from '@/components/candidate-detail-sheet';
@@ -27,6 +27,7 @@ import {
   Tags,
   ShieldCheck,
   X,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
@@ -177,6 +178,25 @@ export default function HarvestPage() {
   const startHarvest = useStartHarvest(activeCollection);
   const { data: job, isLoading: jobLoading } = useHarvestJob(activeCollection, jobId);
   const validateMutation = useValidateCandidates(activeCollection);
+  const deleteJob = useDeleteHarvestJob(activeCollection);
+
+  const handleAbandon = () => {
+    if (!jobId) return;
+    if (!window.confirm('Abandonner cette ingestion ? Le job et tous ses candidats seront supprimés.')) return;
+    deleteJob.mutate(jobId, {
+      onSuccess: () => {
+        sessionStorage.removeItem(`harvest-decisions-${jobId}`);
+        sessionStorage.removeItem(`harvest-mods-${jobId}`);
+        queryClient.removeQueries({ queryKey: ['harvest-job', activeCollection, jobId] });
+        toast.success('Ingestion abandonnée');
+        navigate('/harvest');
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+        toast.error(msg);
+      },
+    });
+  };
 
   if (job?.collection_slug && job.collection_slug !== activeCollection) {
     setActiveCollection(job.collection_slug);
@@ -405,6 +425,20 @@ export default function HarvestPage() {
         <div className="flex items-center gap-6">
           <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
           <CollectionSelector />
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto text-destructive border-destructive/40 hover:bg-destructive/10"
+            onClick={handleAbandon}
+            disabled={deleteJob.isPending}
+          >
+            {deleteJob.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            Abandonner l'ingestion
+          </Button>
         </div>
         {job?.files && job.files.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

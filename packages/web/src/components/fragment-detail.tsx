@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { AlertTriangle, Save, Trash2 } from 'lucide-react';
+import { PayloadEditor } from '@/components/payload-editor';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
@@ -241,6 +242,14 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     <Badge variant="outline" className="text-xs">
                       {fragment.lang}
                     </Badge>
+                    {(fragment.payload_schema || /^\|.+\|/.test(fragment.body ?? fragment.body_excerpt ?? '')) && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      >
+                        📊 {fragment.payload_schema ?? 'tableau'}
+                      </Badge>
+                    )}
                   </div>
                 </SheetDescription>
               </SheetHeader>
@@ -300,6 +309,28 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 }}
               />
 
+              {fragment.payload && fragment.payload_schema && (() => {
+                let parsed: Record<string, unknown> = {};
+                try { parsed = JSON.parse(fragment.payload); } catch { /* ignore */ }
+                return (
+                  <>
+                    <Separator />
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Données structurées{' '}
+                        <span className="ml-2 bg-muted px-1.5 py-0.5 rounded text-xs">{fragment.payload_schema}</span>
+                      </p>
+                      <PayloadEditor
+                        schemaId={fragment.payload_schema}
+                        value={parsed}
+                        onChange={() => {}}
+                        disabled={true}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
+
               <Separator />
 
               <div>
@@ -319,6 +350,15 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                         ],
                         [t('common', 'uses'), String(fragment.uses)],
                         [t('common', 'file'), fragment.file_path],
+                        ...(fragment.origin_source
+                          ? [
+                              [
+                                'Source',
+                                fragment.origin_source +
+                                  (fragment.origin_page != null ? ` · p. ${fragment.origin_page}` : ''),
+                              ] as const,
+                            ]
+                          : []),
                       ] as const
                     ).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">

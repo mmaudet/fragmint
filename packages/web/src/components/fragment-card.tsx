@@ -85,9 +85,21 @@ export function FragmentCard({
             );
           })()}
         </div>
-        <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-          {fragment.body_excerpt || '—'}
-        </p>
+        {fragment.origin_source && (
+          <span className="text-xs text-muted-foreground truncate block max-w-full mt-2">
+            📄 {fragment.origin_source}
+            {fragment.origin_page != null && ` · p. ${fragment.origin_page}`}
+          </span>
+        )}
+        {/^\|.+\|/.test(fragment.body_excerpt?.split('\n')[0] ?? '') || fragment.payload_schema ? (
+          <p className="text-xs text-muted-foreground italic mt-2">
+            📊 Tableau structuré ({fragment.payload_schema ?? 'données'})
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+            {fragment.body_excerpt || '—'}
+          </p>
+        )}
         {fragment.harvest_near_dup && (() => {
           const score = fragment.harvest_near_dup.score ?? 0;
           const pct = Math.round(score * 100);

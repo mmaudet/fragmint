@@ -35,9 +35,25 @@ export default function FragmentsPage() {
   const [domain, setDomain] = useState('');
   const [lang, setLang] = useState('');
   const [quality, setQuality] = useState('');
-  const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(24);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Page 1-indexed in URL. Derive offset for API.
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
+  const offset = (page - 1) * pageSize;
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (p <= 1) next.delete('page');
+          else next.set('page', String(p));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   // Derive selectedId from the URL — makes <Link to="?fragment=xxx"> work correctly.
   const selectedId = searchParams.get('fragment');
   const setSelectedId = useCallback(
@@ -80,16 +96,18 @@ export default function FragmentsPage() {
   const isLoading = search ? searchQuery.isLoading : fragmentsQuery.isLoading;
 
   const totalPages = total !== undefined ? Math.ceil(total / pageSize) : undefined;
-  const page = Math.floor(offset / pageSize) + 1;
 
   const totalCount = search ? (data?.length ?? 0) : (total ?? 0);
   const isAllSelected = totalCount > 0 && selectedIds.size >= totalCount;
 
-  const handleSearch = useCallback((value: string) => {
-    setSearch(value);
-    setOffset(0);
-    setSelectedIds(new Set());
-  }, []);
+  const handleSearch = useCallback(
+    (value: string) => {
+      setSearch(value);
+      setPage(1);
+      setSelectedIds(new Set());
+    },
+    [setPage],
+  );
 
   const handleSelectAll = async () => {
     if (isAllSelected) {
@@ -146,7 +164,7 @@ export default function FragmentsPage() {
 
   const handlePageSizeChange = (value: string) => {
     setPageSize(Number(value));
-    setOffset(0);
+    setPage(1);
     setSelectedIds(new Set());
   };
 
@@ -216,7 +234,7 @@ export default function FragmentsPage() {
             value={val || '__all__'}
             onValueChange={(v) => {
               set(v === '__all__' ? '' : v);
-              setOffset(0);
+              setPage(1);
               setSelectedIds(new Set());
             }}
           >
@@ -317,8 +335,8 @@ export default function FragmentsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={offset === 0}
-              onClick={() => setOffset((o) => Math.max(0, o - pageSize))}
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
             >
               {t('common', 'previous')}
             </Button>
@@ -330,7 +348,7 @@ export default function FragmentsPage() {
               variant="outline"
               size="sm"
               disabled={!data || data.length < pageSize}
-              onClick={() => setOffset((o) => o + pageSize)}
+              onClick={() => setPage(page + 1)}
             >
               {t('common', 'next')}
             </Button>
