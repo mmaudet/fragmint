@@ -1,5 +1,19 @@
 import type { PlanFilters } from '../schema/plan.js';
 
+/**
+ * Enrich a section query text with domain/tag context as soft hints.
+ * Domain and tags are NOT passed as hard search filters — they are prepended
+ * to the query so the embedding naturally biases toward matching fragments,
+ * without excluding non-matching ones. Lang remains a hard filter.
+ */
+export function enrichQueryWithFilters(text: string, filters: PlanFilters): string {
+  const parts: string[] = [];
+  if (filters.domain?.length) parts.push(`Domaine : ${filters.domain.join(', ')}`);
+  if (filters.tags?.length) parts.push(`Tags : ${filters.tags.join(', ')}`);
+  if (parts.length === 0) return text;
+  return `${parts.join('. ')}.\n${text}`;
+}
+
 export interface SectionQuery {
   text: string;
   filters: PlanFilters;
@@ -42,6 +56,7 @@ export interface RetrievedFragment {
   title: string | null;
   body_excerpt: string | null;
   quality: string;
+  type?: string;
   justification?: string;
   score_breakdown?: ScoreBreakdown;
 }

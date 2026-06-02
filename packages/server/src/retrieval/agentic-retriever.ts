@@ -318,6 +318,7 @@ function buildResult(
     body?: string | null;
     body_excerpt?: string | null;
     quality: string;
+    type?: string;
   },
   rawScore: number,
   reason?: string,
@@ -328,6 +329,7 @@ function buildResult(
     title: frag.title ?? null,
     body_excerpt: ((frag.body ?? frag.body_excerpt) ?? '').slice(0, 200),
     quality: frag.quality,
+    type: frag.type,
     justification: reason,
     score_breakdown: {
       method: 'agentic' as const,

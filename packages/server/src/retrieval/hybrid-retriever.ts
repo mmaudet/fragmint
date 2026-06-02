@@ -7,6 +7,7 @@ import type {
   ScoreBreakdown,
   SectionQuery,
 } from './fragment-retriever.js';
+import { enrichQueryWithFilters } from './fragment-retriever.js';
 
 const PHASE1_MULTIPLIER = 4; // phase1 candidates = limit × PHASE1_MULTIPLIER
 const LLM_NEUTRAL_SCORE = 5;
@@ -36,24 +37,24 @@ export class HybridRetriever implements FragmentRetriever {
   }
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
-    const { text, filters, collectionSlug } = query;
+    const { filters, collectionSlug } = query;
+    // Domain and tags are soft hints — injected into query text, not hard filters.
+    const enrichedText = enrichQueryWithFilters(query.text, filters);
 
     // Step 1 — Vector candidates (limit × PHASE1_MULTIPLIER), already sorted by cosine desc
     const phase1Count = Math.max(limit * PHASE1_MULTIPLIER, 8);
     const vectorCandidates = await this.searchService.search(
-      text,
+      enrichedText,
       {
-        domain: filters.domain?.length ? filters.domain : undefined,
         type: filters.type ? [filters.type] : undefined,
         lang: filters.lang,
-        tags: filters.tags,
         collectionSlug: collectionSlug ?? undefined,
         quality_min: 'approved',
       },
       phase1Count,
     );
     console.debug(
-      `[retrieval][hybrid] section "${text.slice(0, 50)}" → ${vectorCandidates.length} vector candidates`,
+      `[retrieval][hybrid] section "${enrichedText.slice(0, 50)}" → ${vectorCandidates.length} vector candidates`,
     );
 
     if (vectorCandidates.length === 0) return [];
@@ -120,12 +121,13 @@ export class HybridRetriever implements FragmentRetriever {
         title: c.title,
         body_excerpt: c.body_excerpt,
         quality: c.quality,
+        type: c.type,
         score_breakdown: breakdown,
       } satisfies RetrievedFragment;
     });
 
     console.debug(
-      `[retrieval][hybrid] section "${text.slice(0, 50)}" → returning top ${results.length} after RRF`,
+      `[retrieval][hybrid] section "${enrichedText.slice(0, 50)}" → returning top ${results.length} after RRF`,
     );
     return results;
   }

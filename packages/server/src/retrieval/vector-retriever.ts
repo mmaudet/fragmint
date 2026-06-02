@@ -5,6 +5,7 @@ import type {
   ScoreBreakdown,
   SectionQuery,
 } from './fragment-retriever.js';
+import { enrichQueryWithFilters } from './fragment-retriever.js';
 
 const SCORE_THRESHOLD = 0.2;
 
@@ -12,14 +13,14 @@ export class VectorRetriever implements FragmentRetriever {
   constructor(private searchService: SearchService) {}
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
-    const { text, filters, collectionSlug } = query;
+    const { filters, collectionSlug } = query;
+    // Domain and tags are soft hints — injected into query text, not hard filters.
+    const enrichedText = enrichQueryWithFilters(query.text, filters);
     const results = await this.searchService.search(
-      text,
+      enrichedText,
       {
-        domain: filters.domain?.length ? filters.domain : undefined,
         type: filters.type ? [filters.type] : undefined,
         lang: filters.lang,
-        tags: filters.tags,
         collectionSlug: collectionSlug ?? undefined,
         quality_min: 'approved',
       },
@@ -42,12 +43,13 @@ export class VectorRetriever implements FragmentRetriever {
           title: r.title,
           body_excerpt: r.body_excerpt,
           quality: r.quality,
+          type: r.type,
           score_breakdown: breakdown,
         } satisfies RetrievedFragment;
       });
 
     console.debug(
-      `[retrieval][vector-only] section "${text.slice(0, 50)}" → ${filtered.length} candidates after threshold`,
+      `[retrieval][vector-only] section "${enrichedText.slice(0, 50)}" → ${filtered.length} candidates after threshold`,
     );
     return filtered;
   }
