@@ -262,13 +262,27 @@ search_fragments_by_payload({ payload_schema: "pricing-line-v1", limit: 20 })
 compose_table_slot({ fragment_ids: ["id1", "id2"], columns: ["libelle", "prix_unitaire"] })
 ```
 
-### Scenario C — Prose reuse of a tabular fragment
+### Scenario C — Extract a specific value from a tabular fragment
 
-Use its `body` field with `render_mode: "prose"` (default). The same fragment can appear in two sections with different render modes.
+When the user asks for a specific data point ("total budget", "prix unitaire", "durée SLA critique"), use a two-step lookup:
 
-**Rules**: always inspect payload keys via `get_collection_members` before specifying `columns`. If no collection exists, suggest a harvest first.
+```tool
+// Step 1: find the fragment by semantic search
+fragment_search({ query: "budget total estimation EONA-X", type: "pricing", collection_slug: "ira" })
+// → returns fragment_id
+
+// Step 2: get full fragment including payload JSON
+fragment_get({ id: "<fragment_id>", collection_slug: "ira" })
+// → returns { payload: "[{\"Trimestre\":\"T2 2026\",\"Total HT\":\"15 450,00 €\"}, ...]", ... }
+```
+
+Then read the `payload` JSON, extract or aggregate the requested field, and answer directly.
+
+**MANDATORY**: `fragment_search` only returns `body_excerpt` (200 chars — incomplete). NEVER compute totals, prices, or any numerical value from `fragment_search` results alone. You MUST call `fragment_get` first to access the full `payload`. If you skip `fragment_get`, your answer will be wrong.
 
 **Tested prompts:**
+✅ "Donne moi le budget total de l'estimation EONA-X" → `fragment_search` → `fragment_get` → sum `Total HT` from payload rows
+✅ "Quel est le montant du trimestre T1 2027 ?" → `fragment_search` → `fragment_get` → filter row where `Trimestre === "T1 2027"`
 ✅ "Crée un tableau SLA pour la propale CNB" → `list_collections` → `get_collection_members` → `compose_table_slot`
 ✅ "Reprends la collection SLA mais seulement Critique et Majeur" → filter member_ids → `compose_table_slot(fragment_ids=[…])`
 ✅ "Dans l'intro, cite notre engagement critique en prose" → use `body` field → `render_mode: "prose"`
