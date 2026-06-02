@@ -59,9 +59,6 @@ export async function validate(
         valid_from: null,
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        function_type: candidate.function_type ?? null,
-        audience: candidate.audience ? JSON.parse(candidate.audience) : [],
-        maturity: candidate.maturity ?? null,
         harvest_confidence: candidate.confidence,
       } as any,
       userId,
@@ -111,9 +108,6 @@ export async function validate(
         valid_from: null,
         valid_until: null,
         access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        function_type: candidate.function_type ?? null,
-        audience: candidate.audience ? JSON.parse(candidate.audience) : [],
-        maturity: candidate.maturity ?? null,
         harvest_confidence: candidate.confidence,
       } as any,
       userId,
@@ -183,6 +177,21 @@ export async function bulkAccept(
     .where(jobIds.length === 1 ? eq(harvestJobs.id, jobIds[0]!) : inArray(harvestJobs.id, jobIds));
   const jobCollectionMap = new Map(jobRows.map((j) => [j.id, j.collection_slug ?? undefined]));
 
+  // Compute source_position: 1-based rank of each candidate within its job by doc_position.
+  // Fetch all candidates per job (ordered by doc_position) to build a stable rank map.
+  const allJobCandidates = await db
+    .select({ id: harvestCandidates.id, job_id: harvestCandidates.job_id, doc_position: harvestCandidates.doc_position })
+    .from(harvestCandidates)
+    .where(inArray(harvestCandidates.job_id, jobIds));
+
+  const sourcePositionMap = new Map<string, number>();
+  for (const jid of jobIds) {
+    const jobCands = allJobCandidates
+      .filter((c) => c.job_id === jid)
+      .sort((a, b) => (a.doc_position ?? 999999) - (b.doc_position ?? 999999));
+    jobCands.forEach((c, i) => sourcePositionMap.set(c.id, i + 1));
+  }
+
   const items = candidates.map((candidate) => ({
     type: candidate.type,
     domain: candidate.domain,
@@ -190,10 +199,8 @@ export async function bulkAccept(
     body: candidate.body,
     tags: tagsFromCandidate(candidate),
     origin: 'harvested' as const,
-    function_type: candidate.function_type ?? null,
-    audience: candidate.audience ? (JSON.parse(candidate.audience) as string[]) : [],
-    maturity: candidate.maturity ?? null,
     harvest_confidence: candidate.confidence,
+    source_position: sourcePositionMap.get(candidate.id) ?? null,
     collectionSlug: jobCollectionMap.get(candidate.job_id),
   }));
 

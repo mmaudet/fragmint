@@ -1,6 +1,6 @@
 // packages/server/src/services/harvester-service.ts
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { harvestJobs, harvestCandidates } from '../db/schema.js';
 import type { LlmClient } from './llm-client.js';
@@ -8,6 +8,7 @@ import type { SearchService } from '../search/index.js';
 import type { FragmentBulkService } from './fragment-bulk-service.js';
 import type { UploadHints } from '../schema/trust-source.js';
 import type { CoherenceFlag } from './quality-signals.js';
+import type { FragmentCollectionService } from './fragment-collection-service.js';
 import type { JudgeResult } from './quality-judge.js';
 import {
   runPipeline,
@@ -44,9 +45,6 @@ export interface HarvestCandidate {
   domain: string;
   lang: string;
   tags: string[];
-  function_type: string | null;
-  audience: string[];
-  maturity: string | null;
   confidence: number;
   origin_source: string;
   origin_page: number | null;
@@ -86,6 +84,7 @@ export class HarvesterService {
     private fragmentService: FragmentBulkService,
     private storePath: string,
     private options: { dupeShinglesThreshold?: number } = {},
+    private collectionService?: FragmentCollectionService,
   ) {}
 
   async harvest(
@@ -141,6 +140,7 @@ export class HarvesterService {
       minConfidence,
       uploadHints,
       this.options.dupeShinglesThreshold,
+      this.collectionService,
     );
   }
 
@@ -157,7 +157,8 @@ export class HarvesterService {
     const candidateRows = await this.db
       .select()
       .from(harvestCandidates)
-      .where(eq(harvestCandidates.job_id, jobId));
+      .where(eq(harvestCandidates.job_id, jobId))
+      .orderBy(asc(harvestCandidates.doc_position));
 
     return {
       id: job.id,
@@ -180,9 +181,6 @@ export class HarvesterService {
         domain: c.domain,
         lang: c.lang,
         tags: c.tags ? (JSON.parse(c.tags) as string[]) : [],
-        function_type: c.function_type ?? null,
-        audience: c.audience ? (JSON.parse(c.audience) as string[]) : [],
-        maturity: c.maturity ?? null,
         confidence: c.confidence,
         origin_source: c.origin_source,
         origin_page: c.origin_page,

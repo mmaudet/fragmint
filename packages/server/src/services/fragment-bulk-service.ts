@@ -63,7 +63,7 @@ export class FragmentBulkService extends FragmentService {
           const item = indexData.get(id);
           if (!item) return [];
           const { body, frontmatter: fm } = item;
-          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'reviewed', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now, function_type: fm.function_type ?? null, audience: fm.audience ?? [], maturity: fm.maturity ?? null } }];
+          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'reviewed', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now } }];
         });
         if (batch.length > 0) await this.searchService.indexBatch(batch).catch((e) => console.error('[bulkReview] vector index failed:', e));
         done += gIds.length;
@@ -141,7 +141,7 @@ export class FragmentBulkService extends FragmentService {
           const item = indexData.get(id);
           if (!item) return [];
           const { body, frontmatter: fm } = item;
-          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'approved', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now, function_type: fm.function_type ?? null, audience: fm.audience ?? [], maturity: fm.maturity ?? null } }];
+          return [{ id, body, metadata: { type: fm.type, domain: fm.domain, lang: fm.lang, quality: 'approved', author: fm.author, tags: fm.tags ?? [], access_read: fm.access?.read ?? ['*'], created_at: fm.created_at, updated_at: now } }];
         });
         if (batch.length > 0) await this.searchService.indexBatch(batch).catch((e) => console.error('[bulkApprove] vector index failed:', e));
         done += gIds.length;
@@ -286,9 +286,6 @@ export class FragmentBulkService extends FragmentService {
       body: string;
       tags: string[];
       origin: 'manual' | 'harvested' | 'generated';
-      function_type: string | null;
-      audience: string[];
-      maturity: string | null;
       harvest_confidence?: number;
       collectionSlug?: string;
     }>,
@@ -333,9 +330,6 @@ export class FragmentBulkService extends FragmentService {
           last_used: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
           origin: item.origin,
-          function_type: item.function_type,
-          audience: item.audience,
-          maturity: item.maturity,
           harvest_confidence: item.harvest_confidence ?? null,
         };
 
@@ -383,9 +377,6 @@ export class FragmentBulkService extends FragmentService {
             tags: item.tags.length > 0 ? JSON.stringify(item.tags) : null,
             valid_from: null,
             valid_until: null,
-            function_type: item.function_type,
-            audience: item.audience ? JSON.stringify(item.audience) : null,
-            maturity: item.maturity,
             harvest_confidence: item.harvest_confidence ?? null,
           })),
         );

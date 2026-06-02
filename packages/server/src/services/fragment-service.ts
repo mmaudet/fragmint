@@ -112,9 +112,6 @@ export class FragmentService {
       origin: input.origin,
       origin_source: input.origin_source ?? null,
       origin_page: input.origin_page ?? null,
-      function_type: input.function_type ?? null,
-      audience: input.audience ?? [],
-      maturity: input.maturity ?? null,
     };
 
     const filePath = writeFragment(fragmentsDir, frontmatter, input.body);
@@ -156,10 +153,8 @@ export class FragmentService {
       tags: input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null,
       valid_from: input.valid_from ?? null,
       valid_until: input.valid_until ?? null,
-      function_type: input.function_type ?? null,
-      audience: input.audience ? JSON.stringify(input.audience) : null,
-      maturity: input.maturity ?? null,
       harvest_confidence: (input as any).harvest_confidence ?? null,
+      source_position: (input as any).source_position ?? null,
       readable_id: readableId,
     });
 
@@ -190,9 +185,6 @@ export class FragmentService {
       access_read: input.access.read,
       created_at: now,
       updated_at: now,
-      function_type: input.function_type ?? null,
-      audience: input.audience ?? [],
-      maturity: input.maturity ?? null,
     });
 
     return { id, readable_id: readableId, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
@@ -265,24 +257,12 @@ export class FragmentService {
     filePathPrefix?: string;
     collectionSlug?: string;
     valid_at?: string;
-    function_type?: string[];
-    audience?: string[];
-    maturity?: string[];
   }) {
     const conditions = [];
     if (filters?.type) conditions.push(eq(fragments.type, filters.type));
     if (filters?.domain) conditions.push(eq(fragments.domain, filters.domain));
     if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
     if (filters?.quality) conditions.push(eq(fragments.quality, filters.quality));
-    if (filters?.function_type?.length) {
-      conditions.push(inArray(fragments.function_type, filters.function_type));
-    }
-    if (filters?.audience?.length) {
-      conditions.push(or(...filters.audience.map((aud) => like(fragments.audience, `%"${aud}"%`))));
-    }
-    if (filters?.maturity?.length) {
-      conditions.push(inArray(fragments.maturity, filters.maturity));
-    }
     if (filters?.collectionSlug) {
       if (filters.collectionSlug === 'common') {
         // Match both collection_slug='common' and NULL (legacy fragments)
@@ -419,9 +399,6 @@ export class FragmentService {
       if (input.quality === 'reviewed') updatedFrontmatter.reviewed_by = userId;
     }
     if (input.access) updatedFrontmatter.access = input.access;
-    if (input.function_type !== undefined) updatedFrontmatter.function_type = input.function_type;
-    if (input.audience !== undefined) updatedFrontmatter.audience = input.audience;
-    if (input.maturity !== undefined) updatedFrontmatter.maturity = input.maturity;
     updatedFrontmatter.updated_at = new Date().toISOString();
 
     const newAbsPath = writeFragment(
@@ -466,9 +443,6 @@ export class FragmentService {
         body_excerpt: newBody.slice(0, 200),
         git_hash: commitHash,
         file_path: newRelPath,
-        function_type: updatedFrontmatter.function_type ?? null,
-        audience: updatedFrontmatter.audience ? JSON.stringify(updatedFrontmatter.audience) : null,
-        maturity: updatedFrontmatter.maturity ?? null,
       })
       .where(eq(fragments.id, id));
 
@@ -538,9 +512,6 @@ export class FragmentService {
       access_read: updatedFrontmatter.access.read,
       created_at: updatedFrontmatter.created_at,
       updated_at: updatedFrontmatter.updated_at,
-      function_type: updatedFrontmatter.function_type ?? null,
-      audience: updatedFrontmatter.audience ?? [],
-      maturity: updatedFrontmatter.maturity ?? null,
     });
 
     if (input.quality === 'reviewed' && this.llmClient) {
@@ -609,9 +580,6 @@ export class FragmentService {
       access_read: frontmatter.access.read,
       created_at: frontmatter.created_at,
       updated_at: frontmatter.updated_at,
-      function_type: frontmatter.function_type ?? null,
-      audience: frontmatter.audience ?? [],
-      maturity: frontmatter.maturity ?? null,
     });
     this.indexService?.invalidateCache();
 
@@ -962,9 +930,6 @@ export class FragmentService {
               access_read: frontmatter.access?.read ?? ['*'],
               created_at: frontmatter.created_at,
               updated_at: frontmatter.updated_at,
-              function_type: frontmatter.function_type ?? null,
-              audience: frontmatter.audience ?? [],
-              maturity: frontmatter.maturity ?? null,
             },
           });
           indexed++;

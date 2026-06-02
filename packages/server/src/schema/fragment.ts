@@ -55,9 +55,6 @@ export const fragmentFrontmatterSchema = z.object({
   generation: z.number().int().min(0),
   uses: z.number().int().default(0),
   last_used: z.string().nullable(),
-  function_type: z.string().nullable().optional().default(null),
-  audience: z.array(z.string()).optional().default([]),
-  maturity: z.string().nullable().optional().default(null),
   contexts: z.array(z.string()).optional(),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   origin_source: z.string().nullable().optional(),
@@ -83,10 +80,8 @@ export const createFragmentSchema = z.object({
   generation: z.number().int().min(0).default(0),
   valid_from: z.string().nullable().default(null),
   valid_until: z.string().nullable().default(null),
-  function_type: z.string().nullable().default(null),
-  audience: z.array(z.string()).default([]),
-  maturity: z.string().nullable().default(null),
   harvest_confidence: z.number().min(0).max(1).nullable().default(null),
+  source_position: z.number().int().min(1).nullable().default(null),
   origin: z.enum(['manual', 'harvested', 'generated']).default('manual'),
   origin_source: z.string().nullable().default(null),
   origin_page: z.number().nullable().default(null),
@@ -118,9 +113,6 @@ export const updateFragmentSchema = z.object({
       approve: z.array(z.string()),
     })
     .optional(),
-  function_type: z.string().nullable().optional(),
-  audience: z.array(z.string()).optional(),
-  maturity: z.string().nullable().optional(),
 });
 
 export type UpdateFragmentInput = z.infer<typeof updateFragmentSchema>;
