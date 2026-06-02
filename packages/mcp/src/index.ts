@@ -35,9 +35,35 @@ import {
   planGenerateHandler,
   planSectionSearchDefinition,
   planSectionSearchHandler,
+  planValidateOutlineDefinition,
+  planValidateOutlineHandler,
+  planSearchAllSectionsDefinition,
+  planSearchAllSectionsHandler,
+  planGenerateAllSectionsDefinition,
+  planGenerateAllSectionsHandler,
   planExportDefinition,
   planExportHandler,
 } from './tools/plan-tools.js';
+import {
+  planUpdateDefinition,
+  planUpdateHandler,
+  planAssembleDefinition,
+  planAssembleHandler,
+  planAddFragmentDefinition,
+  planAddFragmentHandler,
+  planAddReferenceDefinition,
+  planAddReferenceHandler,
+  planEditSectionFragmentDefinition,
+  planEditSectionFragmentHandler,
+  planGenerateSectionDefinition,
+  planGenerateSectionHandler,
+  planHarvestReferenceDefinition,
+  planHarvestReferenceHandler,
+  planApproveFragmentsDefinition,
+  planApproveFragmentsHandler,
+  planSectionAddReferenceDefinition,
+  planSectionAddReferenceHandler,
+} from './tools/plan-tools-actions.js';
 import {
   cacheStatusDefinition,
   cacheStatusHandler,
@@ -47,6 +73,23 @@ import {
   cacheClearHandler,
 } from './tools/cache-tools.js';
 import { templateUploadDefinition, templateUploadHandler } from './tools/template-upload.js';
+import { templateListDefinition, templateListHandler } from './tools/template-list.js';
+import {
+  retrievalModeGetDefinition,
+  retrievalModeGetHandler,
+  retrievalModeSetDefinition,
+  retrievalModeSetHandler,
+} from './tools/retrieval-mode.js';
+import {
+  listCollectionsDefinition,
+  listCollectionsHandler,
+  getCollectionMembersDefinition,
+  getCollectionMembersHandler,
+  searchFragmentsByPayloadDefinition,
+  searchFragmentsByPayloadHandler,
+  composeTableSlotDefinition,
+  composeTableSlotHandler,
+} from './tools/collection-tools.js';
 
 // Configuration from environment
 const FRAGMINT_URL = process.env.FRAGMINT_URL ?? 'http://localhost:3210';
@@ -78,12 +121,31 @@ const tools: Array<{ definition: ToolDefinition; handler: ToolHandler }> = [
   { definition: planListDefinition, handler: planListHandler(client) },
   { definition: planGetDefinition, handler: planGetHandler(client) },
   { definition: planGenerateDefinition, handler: planGenerateHandler(client) },
+  { definition: planUpdateDefinition, handler: planUpdateHandler(client) },
+  { definition: planAssembleDefinition, handler: planAssembleHandler(client) },
   { definition: planSectionSearchDefinition, handler: planSectionSearchHandler(client) },
+  { definition: planValidateOutlineDefinition, handler: planValidateOutlineHandler(client) },
+  { definition: planSearchAllSectionsDefinition, handler: planSearchAllSectionsHandler(client) },
+  { definition: planGenerateAllSectionsDefinition, handler: planGenerateAllSectionsHandler(client) },
+  { definition: planAddFragmentDefinition, handler: planAddFragmentHandler(client) },
+  { definition: planAddReferenceDefinition, handler: planAddReferenceHandler(client) },
+  { definition: planEditSectionFragmentDefinition, handler: planEditSectionFragmentHandler(client) },
+  { definition: planGenerateSectionDefinition, handler: planGenerateSectionHandler(client) },
+  { definition: planHarvestReferenceDefinition, handler: planHarvestReferenceHandler(client) },
+  { definition: planApproveFragmentsDefinition, handler: planApproveFragmentsHandler(client) },
+  { definition: planSectionAddReferenceDefinition, handler: planSectionAddReferenceHandler(client) },
   { definition: planExportDefinition, handler: planExportHandler(client) },
   { definition: cacheStatusDefinition, handler: cacheStatusHandler(client) },
   { definition: cacheSyncDefinition, handler: cacheSyncHandler(client) },
   { definition: cacheClearDefinition, handler: cacheClearHandler(client) },
   { definition: templateUploadDefinition, handler: templateUploadHandler(client) },
+  { definition: templateListDefinition, handler: templateListHandler(client) },
+  { definition: retrievalModeGetDefinition, handler: retrievalModeGetHandler(client) },
+  { definition: retrievalModeSetDefinition, handler: retrievalModeSetHandler(client) },
+  { definition: listCollectionsDefinition, handler: listCollectionsHandler(client) },
+  { definition: getCollectionMembersDefinition, handler: getCollectionMembersHandler(client) },
+  { definition: searchFragmentsByPayloadDefinition, handler: searchFragmentsByPayloadHandler(client) },
+  { definition: composeTableSlotDefinition, handler: composeTableSlotHandler(client) },
 ];
 
 const handlerMap = new Map<string, ToolHandler>(tools.map((t) => [t.definition.name, t.handler]));

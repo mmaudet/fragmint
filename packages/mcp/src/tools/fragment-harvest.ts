@@ -8,7 +8,7 @@ import { cache } from '../cache/cache-manager.js';
 export const harvestDefinition: ToolDefinition = {
   name: 'fragment_harvest',
   description:
-    'Harvest fragments from a DOCX file. Uploads the file, runs the LLM pipeline, and returns candidate fragments for human review.',
+    'Harvest fragments from a DOCX file. Uploads the file, runs the LLM pipeline, and returns candidate fragments for human review.\n\nAlso use this tool when the user provides a reference document to enrich the fragment library before composing a plan: harvest the reference doc first, then the newly created fragments will automatically appear as candidates when searching sections (plan_section_search).',
   inputSchema: {
     type: 'object',
     properties: {

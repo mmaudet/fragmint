@@ -18,6 +18,10 @@ export class FragmintApiClient {
     return this.request<T>('PUT', path, body);
   }
 
+  async patch<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, body);
+  }
+
   async getText(path: string): Promise<string> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       headers: { Authorization: `Bearer ${this.token}` },
@@ -73,17 +77,25 @@ export class FragmintApiClient {
     return json.data;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, timeoutMs = 600_000): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${this.token}`,
     };
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     let json: { data: T; meta: unknown; error: string | null };
     try {
