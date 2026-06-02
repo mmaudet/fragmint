@@ -9,8 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -20,6 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   BookOpen,
   CheckCircle,
+  Check,
   Upload,
   LogOut,
   ChevronDown,
@@ -186,29 +185,24 @@ export default function AppLayout() {
                       )}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
-                      <DropdownMenuRadioGroup
-                        value={modeData?.mode ?? ''}
-                        onValueChange={(v) => {
-                          const mode = v as RetrievalMode;
-                          setMode.mutate(mode, {
-                            onSuccess: () => toast.success(`Mode ${RETRIEVAL_LABELS[mode]} activé`),
+                      {([
+                        { value: 'vector-only', label: 'Vectoriel', timing: '~100ms' },
+                        { value: 'hybrid', label: 'Hybride ⭐', timing: '1–3s' },
+                        { value: 'agentic-only', label: 'Agentique', timing: '2–5s' },
+                      ] as const).map((m) => (
+                        <DropdownMenuItem
+                          key={m.value}
+                          onClick={() => setMode.mutate(m.value, {
+                            onSuccess: () => toast.success(`Mode ${RETRIEVAL_LABELS[m.value]} activé`),
                             onError: () => toast.error('Erreur lors du changement de mode'),
-                          });
-                        }}
-                      >
-                        <DropdownMenuRadioItem value="vector-only">
-                          Vectoriel
-                          <span className="ml-1.5 text-xs text-muted-foreground">~100ms</span>
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="hybrid">
-                          Hybride ⭐
-                          <span className="ml-1.5 text-xs text-muted-foreground">1–3s</span>
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="agentic-only">
-                          Agentique
-                          <span className="ml-1.5 text-xs text-muted-foreground">2–5s</span>
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
+                          })}
+                          className="flex items-center gap-2"
+                        >
+                          <Check className={`h-3.5 w-3.5 shrink-0 ${modeData?.mode === m.value ? 'opacity-100' : 'opacity-0'}`} />
+                          <span>{m.label}</span>
+                          <span className="ml-auto text-xs text-muted-foreground">{m.timing}</span>
+                        </DropdownMenuItem>
+                      ))}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                   <Separator className="my-1" />
