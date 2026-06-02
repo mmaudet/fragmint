@@ -14,18 +14,39 @@ import {
 //    Mutates hintTagsFound in place.
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns indices of blocks whose domain was overridden from "other" to the hint domain.
+ * Override only fires when: hint domain is new (not in existingDomains), LLM returned "other",
+ * and the block body contains the hint domain word — avoids broad-stroke labeling.
+ */
 export function applyUploadHintsInPlace(
   blocks: CombinedBlock[],
   uploadHints: UploadHints,
   hintTagsFound: Set<string>,
-): void {
-  for (const block of blocks) {
+  existingDomains: string[] = [],
+): Set<number> {
+  const domainOverridden = new Set<number>();
+
+  const hintDomain = uploadHints.domain;
+  const isNewDomain = hintDomain && !existingDomains.includes(hintDomain);
+  const domainWord = isNewDomain ? hintDomain.toLowerCase() : null;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+
     if (uploadHints.tags?.length) {
       for (const tag of uploadHints.tags) {
         if ((block.tags ?? []).includes(tag)) hintTagsFound.add(tag);
       }
     }
+
+    if (domainWord && block.domain === 'other' && block.body?.toLowerCase().includes(domainWord)) {
+      block.domain = hintDomain!;
+      domainOverridden.add(i);
+    }
   }
+
+  return domainOverridden;
 }
 
 // ---------------------------------------------------------------------------

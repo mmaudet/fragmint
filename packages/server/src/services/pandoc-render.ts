@@ -51,11 +51,13 @@ function runPandoc(args: string[]): Promise<void> {
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
-    child.on('error', (err) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (child as unknown as NodeJS.EventEmitter).on('error', (err: Error) => {
       clearTimeout(timer);
       reject(new Error(`Pandoc spawn error: ${err.message}`));
     });
-    child.on('close', (code) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (child as unknown as NodeJS.EventEmitter).on('close', (code: number | null) => {
       clearTimeout(timer);
       if (code === 0) return resolve();
       const truncated = stderr.length > 500 ? stderr.slice(0, 500) + '\n[truncated]' : stderr;

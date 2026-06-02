@@ -14,7 +14,6 @@ import {
   fragmentTypes,
   fragmentDomains,
   fragmentTags,
-  fragmentFunctions,
   fragments,
 } from '../db/schema.js';
 import { computeQualitySignals } from './quality-signals.js';
@@ -33,6 +32,9 @@ import {
 } from './harvest-hint-processor.js';
 import { semanticChunk } from './harvest-chunker.js';
 import { isJunky } from './dedupe/junkiness-filter.js';
+import { extractTablesFromMarkdown, flushTableCandidates } from './harvest-table-extractor.js';
+import type { DetectedTableSpec } from './harvest-table-extractor.js';
+import type { FragmentCollectionService } from './fragment-collection-service.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -53,6 +55,7 @@ export async function runPipeline(
   _minConfidence: number,
   uploadHints: UploadHints = {},
   dupeShinglesThreshold = 0.70,
+  collectionService?: FragmentCollectionService,
 ): Promise<void> {
   try {
     const existingTypes = (await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map(
@@ -70,13 +73,6 @@ export async function runPipeline(
       .from(fragmentTags)
       .where(eq(fragmentTags.validated, 1));
     const knownTags = knownTagRows.map((r) => r.slug);
-
-    // Load validated referentials for LLM prompt
-    const validFunctionRows = await db
-      .select({ slug: fragmentFunctions.slug })
-      .from(fragmentFunctions)
-      .where(eq(fragmentFunctions.validated, 1));
-    const validFunctions = validFunctionRows.map((r) => r.slug);
 
     const hintTagsFound = new Set<string>();
 
@@ -115,6 +111,8 @@ export async function runPipeline(
     let duplicatesCount = 0;
     let lowConfidenceCount = 0;
     let l3Skipped = false;
+    const pendingTableSpecs: DetectedTableSpec[] = [];
+    let lastLang = 'fr';
 
     for (let i = 0; i < files.length; i++) {
       const buffer = files[i];
@@ -132,7 +130,7 @@ export async function runPipeline(
           '--from',
           'docx',
           '--to',
-          'markdown+pipe_tables',
+          'gfm',
           tempFile,
         ]);
         markdown = stdout;
@@ -150,9 +148,49 @@ export async function runPipeline(
         .replace(/[ \t]+\n/g, '\n')
         .replace(/\n{3,}/g, '\n\n');
       const lang = detectLanguage(markdown);
+      lastLang = lang || lastLang;
+
+      // Strip table of contents sections (Pandoc outputs ToC as link lists under a Contents-Heading)
+      // These create many useless "title-only" fragments when passed to the LLM
+      markdown = markdown.replace(
+        /#{1,6}\s+[^\n]*?\.Contents-Heading\}[^\n]*\n((?:\[.*?\]\(#[^\)]+\)\n?)+)/g,
+        ''
+      );
+
+      // Phase 1: detect tables, strip from markdown — do NOT insert yet (order matters)
+      const { specs, cleanedMarkdown } = extractTablesFromMarkdown(markdown);
+      if (specs.length > 0) {
+        markdown = cleanedMarkdown;
+      }
 
       // Parallel LLM calls — one segmentAndClassify per semantic chunk
-      const semanticChunks = semanticChunk(markdown);
+      // Skip table-of-contents chunks (Word ToC → Pandoc heading with .Contents-Heading class)
+      const semanticChunks = semanticChunk(markdown).filter(
+        (chunk) => !/(Contents-Heading|table.*mati.res)/i.test(chunk.sourceSection ?? ''),
+      );
+
+      // Assign doc_position to table specs.
+      // The chunker merges L2/L3 subsections into their L1 parent, so sourceSection is the
+      // L1 title, not the L2 heading preceding the table. We match in two passes:
+      //   1. exact sourceSection match (L1 tables like "# Facturation")
+      //   2. heading appears as an ATX line inside the chunk text (L2/L3 tables)
+      if (specs.length > 0) {
+        const norm = (h: string) =>
+          h.replace(/\{[^}]+\}/g, '').replace(/^\d+(?:\.\d+)*\.?\s+/, '').trim().toLowerCase();
+        const chunkContainsHeading = (chunk: { text: string }, h: string): boolean =>
+          chunk.text.split('\n').some((line) => {
+            const m = line.match(/^#{1,6}\s+(.+)$/);
+            return m != null && norm(m[1]) === norm(h);
+          });
+        for (const spec of specs) {
+          const heading = spec.table.precedingHeading ?? null;
+          if (!heading) { spec.docPosition = 999999; continue; }
+          let matchIdx = semanticChunks.findIndex((c) => norm(c.sourceSection) === norm(heading));
+          if (matchIdx < 0) matchIdx = semanticChunks.findIndex((c) => chunkContainsHeading(c, heading));
+          spec.docPosition = matchIdx >= 0 ? (matchIdx + 1) * 10000 + 9999 : 999999;
+        }
+        pendingTableSpecs.push(...specs);
+      }
       console.log(
         `[harvest:${jobId}] ${filename}: ${markdown.length} chars → ${semanticChunks.length} chunk(s)`,
       );
@@ -167,19 +205,18 @@ export async function runPipeline(
             existingDomains,
             knownTags,
             domainHints,
-            validFunctions,
             uploadHints,
           );
           console.log(
             `[harvest:${jobId}] chunk ${ci + 1}/${semanticChunks.length} [${chunk.sourceSection || 'root'}]: ${result.length} block(s) in ${((Date.now() - tc) / 1000).toFixed(1)}s`,
           );
-          // Tag each result block with its source section
-          return result.map(b => ({ ...b, _sourceSection: chunk.sourceSection }));
+          // Tag each result block with its source section and chunk index for doc ordering
+          return result.map((b, bi) => ({ ...b, _sourceSection: chunk.sourceSection, _chunkIndex: ci, _blockIndexInChunk: bi }));
         }),
       );
       console.log(`[harvest:${jobId}] LLM total: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
-      type TaggedBlock = CombinedBlock & { _sourceSection: string };
+      type TaggedBlock = CombinedBlock & { _sourceSection: string; _chunkIndex: number; _blockIndexInChunk: number };
       const allBlocks = chunkResults.flat() as TaggedBlock[];
       const dedupedTagged = deduplicateL1L2(allBlocks);
       const l1l2Blocks: TaggedBlock[] = dedupedTagged.filter((b) => !isJunky(b.body ?? ''));
@@ -231,8 +268,8 @@ export async function runPipeline(
         else if (b.confidence < 0.7) lowConfidenceCount++;
       });
 
-      // Track coherent hint tags
-      applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound);
+      // Track coherent hint tags + apply hint-domain override for unknown domains
+      const domainOverridden = applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound, existingDomains);
 
       // Compute quality signals for all blocks
       const qualitySignalsPerBlock = blocks.map((block, j) =>
@@ -241,7 +278,6 @@ export async function runPipeline(
             type: block.type,
             body: block.body,
             domain: block.domain,
-            function_type: block.function_type,
             tags: block.tags,
           },
           dupeChecks[j],
@@ -260,9 +296,7 @@ export async function runPipeline(
               title: block.title || 'Untitled',
               body: block.body,
               domain: block.domain,
-              function_type: block.function_type,
               type: block.type,
-              audience: block.audience,
             },
             signals,
             judgeTaxonomy,
@@ -276,18 +310,20 @@ export async function runPipeline(
           uploadHints,
           {
             domain: block.domain,
-            function_type: block.function_type ?? '',
-            audience: block.audience ?? [],
-            maturity: block.maturity ?? '',
             tags: block.tags ?? [],
           },
           {
             domain: existingDomains,
-            function_type: validFunctions,
             tags: knownTags,
           },
         ),
       );
+
+      // Patch trust source for hint-domain overrides — human provided this, not the LLM
+      for (const idx of domainOverridden) {
+        const ts = trustSourcesPerBlock[idx];
+        if (ts) ts.domain = 'human-direct';
+      }
 
       // Batch insert all candidates
       if (blocks.length > 0) {
@@ -302,9 +338,6 @@ export async function runPipeline(
             lang: block.lang || lang,
             tags: JSON.stringify(block.tags),
             confidence: block.confidence,
-            function_type: block.function_type ?? null,
-            audience: JSON.stringify(block.audience ?? []),
-            maturity: block.maturity ?? null,
             new_proposals: JSON.stringify(block.new_proposals ?? {}),
             metadata_status: getMetadataStatus(block),
             trust_sources_json: JSON.stringify(trustSourcesPerBlock[j]),
@@ -316,6 +349,7 @@ export async function runPipeline(
             duplicate_of: dupeChecks[j]?.id ?? null,
             duplicate_score: dupeChecks[j]?.score ?? null,
             duplicate_method: dupeChecks[j]?.method ?? null,
+            doc_position: ((block as TaggedBlock)._chunkIndex + 1) * 10000 + (block as TaggedBlock)._blockIndexInChunk,
             status: 'pending',
           })),
         );
@@ -325,6 +359,14 @@ export async function runPipeline(
       }
 
       totalCandidates += blocks.length;
+    }
+
+    // Phase 2: insert table candidates AFTER all LLM blocks — preserves document order
+    if (pendingTableSpecs.length > 0) {
+      const tableCount = await flushTableCandidates(
+        db, pendingTableSpecs, jobId, filenames[0] ?? '', lastLang, uploadHints, existingDomains, collectionService,
+      );
+      totalCandidates += tableCount;
     }
 
     // Post-pipeline: surface coherent hints to admin referential queues

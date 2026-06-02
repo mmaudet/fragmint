@@ -131,7 +131,7 @@ function splitByHeaders(markdown: string): Section[] {
       }
       if (atxMatch) {
         currentLevel = atxMatch[1].length as 1 | 2 | 3;
-        currentTitle = atxMatch[2].trim();
+        currentTitle = atxMatch[2].replace(/\{[^}]+\}/g, '').trim();
       } else {
         // Determine level by counting numeric segments after unescaping:
         //   "1\. Title" → unescaped "1. Title" → prefix "1"  → 1 segment → level 1

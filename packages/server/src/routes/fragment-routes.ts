@@ -6,8 +6,11 @@ import { FragmentBulkService } from '../services/fragment-bulk-service.js';
 import { JobService } from '../services/job-service.js';
 import { createFragmentSchema, updateFragmentSchema } from '../schema/fragment.js';
 import { searchQuerySchema, inventoryQuerySchema } from '../schema/api.js';
+import { inArray } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { fragmentTypes } from '../db/schema.js';
+import { fragmentTypes, fragments } from '../db/schema.js';
+import { getCurrentRetriever } from '../retrieval/factory.js';
+import type { PlanFilters } from '../schema/plan.js';
 
 export function fragmentRoutes(
   app: FastifyInstance,
@@ -57,9 +60,6 @@ export function fragmentRoutes(
             quality: { type: 'string' },
             limit: { type: 'string' },
             offset: { type: 'string' },
-            function_type: { type: 'string' },
-            audience: { type: 'string' },
-            maturity: { type: 'string' },
           },
           additionalProperties: false,
         },
@@ -76,9 +76,6 @@ export function fragmentRoutes(
         limit: query.limit ? parseInt(query.limit) : undefined,
         offset: query.offset ? parseInt(query.offset) : undefined,
         collectionSlug: collection?.slug,
-        function_type: query.function_type ? query.function_type.split(',') : undefined,
-        audience: query.audience ? query.audience.split(',') : undefined,
-        maturity: query.maturity ? query.maturity.split(',') : undefined,
       });
       return { data: rows, meta: { count: rows.length, total }, error: null };
     },
@@ -97,9 +94,6 @@ export function fragmentRoutes(
             domain: { type: 'string' },
             lang: { type: 'string' },
             quality: { type: 'string' },
-            function_type: { type: 'string' },
-            audience: { type: 'string' },
-            maturity: { type: 'string' },
           },
           additionalProperties: false,
         },
@@ -114,9 +108,6 @@ export function fragmentRoutes(
         lang: query.lang,
         quality: query.quality,
         collectionSlug: collection?.slug,
-        function_type: query.function_type ? query.function_type.split(',') : undefined,
-        audience: query.audience ? query.audience.split(',') : undefined,
-        maturity: query.maturity ? query.maturity.split(',') : undefined,
       });
 
       const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
@@ -188,6 +179,63 @@ export function fragmentRoutes(
       ...parsed.data.filters,
       valid_at: new Date().toISOString().slice(0, 10),
     };
+
+    // Use the active retrieval mode (vector-only / agentic-only / hybrid) when available.
+    // PlanFilters supports domain[], lang, type (single), tags — advanced search filters
+    // (quality_min, function_type, audience, maturity) are not forwarded to agentic/hybrid.
+    const retriever = getCurrentRetriever();
+    if (retriever && db) {
+      const sectionFilters: PlanFilters = {
+        domain: parsed.data.filters?.domain?.length ? parsed.data.filters.domain : undefined,
+        lang: parsed.data.filters?.lang,
+        type: parsed.data.filters?.type?.[0],
+        tags: parsed.data.filters?.tags,
+      };
+      const retrieved = await retriever.searchForSection(
+        { text: parsed.data.query, filters: sectionFilters, collectionSlug: null },
+        parsed.data.limit,
+      );
+      if (retrieved.length > 0) {
+        const ids = retrieved.map((r) => r.fragment_id);
+        const rows = await db
+          .select({
+            id: fragments.id,
+            type: fragments.type,
+            domain: fragments.domain,
+            lang: fragments.lang,
+            author: fragments.author,
+            uses: fragments.uses,
+            updated_at: fragments.updated_at,
+          })
+          .from(fragments)
+          .where(inArray(fragments.id, ids));
+        const rowMap = new Map(rows.map((r) => [r.id, r]));
+        const enriched = retrieved
+          .map((r) => {
+            const row = rowMap.get(r.fragment_id);
+            if (!row) return null;
+            return {
+              id: r.fragment_id,
+              score: r.score,
+              title: r.title,
+              body_excerpt: r.body_excerpt,
+              quality: r.quality,
+              type: row.type,
+              domain: row.domain,
+              lang: row.lang,
+              author: row.author,
+              uses: row.uses,
+              updated_at: row.updated_at,
+              score_breakdown: r.score_breakdown,
+              justification: r.justification,
+            };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+        return { data: enriched, meta: { count: enriched.length }, error: null };
+      }
+    }
+
+    // Fallback: vector-only path via FragmentService (also used when db not injected)
     const results = await fragmentService.search(parsed.data.query, filters, parsed.data.limit);
     return { data: results, meta: { count: results.length }, error: null };
   });
