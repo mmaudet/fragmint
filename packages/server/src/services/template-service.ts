@@ -149,6 +149,60 @@ export class TemplateService {
     return { id, template_path: relDocxPath };
   }
 
+  async createMarp(
+    mdBuffer: Buffer,
+    mdFilename: string,
+    name: string,
+    description: string | null,
+    author: string,
+    authorRole: string,
+    ip?: string,
+  ) {
+    if (mdFilename.includes('..') || mdFilename.includes('/')) {
+      throw new Error('Invalid filename: must not contain ".." or "/"');
+    }
+
+    const id = `tpl_marp_${randomUUID()}`;
+    const now = new Date().toISOString();
+    const templatesDir = join(this.storePath, 'templates');
+    mkdirSync(templatesDir, { recursive: true });
+
+    const safeName = `${id}-${mdFilename}`;
+    const mdPath = join(templatesDir, safeName);
+    writeFileSync(mdPath, mdBuffer);
+    const relMdPath = relative(this.storePath, mdPath);
+
+    const commitHash = await this.git.commitFiles(
+      [relMdPath],
+      `template: create marp ${name} (${id})`,
+    );
+
+    await this.db.insert(templates).values({
+      id,
+      name,
+      description,
+      output_format: 'slides',
+      version: '1.0.0',
+      template_path: relMdPath,
+      yaml_path: '',
+      author,
+      created_at: now,
+      updated_at: now,
+      git_hash: commitHash,
+      kind: 'marp',
+    });
+
+    await this.audit.log({
+      user_id: author,
+      role: authorRole,
+      action: 'template:create_marp',
+      fragment_id: id,
+      ip_source: ip,
+    });
+
+    return { id, template_path: relMdPath };
+  }
+
   async syncFromVault(): Promise<number> {
     const templatesDir = join(this.storePath, 'templates');
     if (!existsSync(templatesDir)) return 0;

@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import yaml from 'js-yaml';
+import { eq } from 'drizzle-orm';
+import { templates } from '../db/schema.js';
 import { createDb } from '../db/connection.js';
 import { GitRepository } from '../git/git-repository.js';
 import { AuditService } from './audit-service.js';
@@ -166,6 +168,55 @@ describe('TemplateService.createStyleReference', () => {
     const docx = Buffer.from('PK\x03\x04');
     await expect(
       svc.createStyleReference(docx, '../evil.docx', 'X', null, 'a', 'contributor'),
+    ).rejects.toThrow();
+  });
+});
+
+describe('TemplateService.createMarp', () => {
+  let storePath: string;
+  let service: TemplateService;
+  let db: ReturnType<typeof createDb>;
+
+  beforeEach(async () => {
+    storePath = mkdtempSync(join(tmpdir(), 'fragmint-tpl-marp-'));
+    db = createDb(':memory:');
+    const git = new GitRepository(storePath);
+    await git.init();
+    const audit = new AuditService(db);
+    service = new TemplateService(db, storePath, audit);
+  });
+
+  afterEach(() => {
+    rmSync(storePath, { recursive: true, force: true });
+  });
+
+  it('insère un template marp avec kind=marp et output_format=slides', async () => {
+    const mdBuffer = Buffer.from('---\nmarp: true\n---\n# Slide 1\n');
+    const result = await service.createMarp(
+      mdBuffer,
+      'deck.md',
+      'Test Deck',
+      'Un deck de test',
+      'alice',
+      'expert',
+    );
+
+    expect(result.id).toMatch(/^tpl_marp_/);
+    expect(result.template_path).toMatch(/templates\//);
+
+    const rows = await db.select().from(templates).where(eq(templates.id, result.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe('marp');
+    expect(rows[0].output_format).toBe('slides');
+    expect(rows[0].name).toBe('Test Deck');
+    expect(rows[0].description).toBe('Un deck de test');
+    expect(rows[0].version).toBe('1.0.0');
+  });
+
+  it('rejects filenames containing path-traversal sequences', async () => {
+    const md = Buffer.from('---\nmarp: true\n---\n');
+    await expect(
+      service.createMarp(md, '../evil.md', 'X', null, 'a', 'expert'),
     ).rejects.toThrow();
   });
 });

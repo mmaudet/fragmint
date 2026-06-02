@@ -150,6 +150,55 @@ export function templateRoutes(
     },
   );
 
+  // Upload Marp template (.md file + name + optional description)
+  app.post(
+    `${prefix}/templates/marp`,
+    { preHandler: expertHandlers },
+    async (request, reply) => {
+      let fileBuf: Buffer | null = null;
+      let filename = '';
+      let name = '';
+      let description: string | null = null;
+
+      for await (const part of request.parts()) {
+        if (part.type === 'file' && part.fieldname === 'file') {
+          const chunks: Buffer[] = [];
+          for await (const c of part.file) chunks.push(c);
+          fileBuf = Buffer.concat(chunks);
+          filename = part.filename;
+        } else if (part.type === 'field') {
+          const val = part.value as string;
+          if (part.fieldname === 'name') name = val;
+          if (part.fieldname === 'description') description = val;
+        }
+      }
+
+      if (!fileBuf || fileBuf.length === 0 || !filename) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Missing file part' });
+      }
+      if (!name) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Missing name field' });
+      }
+      if (!filename.endsWith('.md')) {
+        return reply
+          .status(400)
+          .send({ data: null, meta: null, error: 'File must be a .md Marp template' });
+      }
+
+      const result = await templateService.createMarp(
+        fileBuf,
+        filename,
+        name,
+        description,
+        request.user.login,
+        request.user.role,
+        request.ip,
+      );
+
+      return reply.status(201).send({ data: result, meta: null, error: null });
+    },
+  );
+
   // Update template (multipart: optional .docx and/or .yaml)
   app.put(`${prefix}/templates/:id`, { preHandler: expertHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
