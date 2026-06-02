@@ -27,7 +27,7 @@ export function adminMetadataLookupRoutes(
       const maxResults = Math.min(parseInt(limitStr ?? '10', 10) || 10, 50);
 
       if (kind === 'domain') {
-        const conditions: any[] = [eq(fragmentDomains.validated, 1)];
+        const conditions: any[] = [eq(fragmentDomains.status, 'active')];
         if (search)
           conditions.push(
             or(
@@ -48,7 +48,7 @@ export function adminMetadataLookupRoutes(
       }
 
       if (kind === 'tag') {
-        const conditions: any[] = [eq(fragmentTags.validated, 1)];
+        const conditions: any[] = [eq(fragmentTags.status, 'active')];
         if (search)
           conditions.push(
             or(like(fragmentTags.slug, `%${search}%`), like(fragmentTags.label, `%${search}%`)),
@@ -66,7 +66,7 @@ export function adminMetadataLookupRoutes(
       }
 
       if (kind === 'function') {
-        const conditions: any[] = [eq(fragmentFunctions.validated, 1)];
+        const conditions: any[] = [eq(fragmentFunctions.status, 'active')];
         if (search)
           conditions.push(
             or(

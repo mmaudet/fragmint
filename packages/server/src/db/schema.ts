@@ -33,6 +33,7 @@ export const fragments = sqliteTable('fragments', {
   payload: text('payload'),           // JSON-serialized payload, nullable
   payload_schema: text('payload_schema'), // e.g. 'pricing-line-v1', nullable
   source_position: integer('source_position'), // 1-based rank in source document (from harvest)
+  body: text('body'),                 // full body text for search
 });
 
 export const auditLog = sqliteTable('audit_log', {
@@ -204,7 +205,6 @@ export const fragmentTypes = sqliteTable('fragment_types', {
   label: text('label').notNull(),
   description: text('description'),
   created_at: text('created_at').notNull(),
-  validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
@@ -219,7 +219,6 @@ export const fragmentDomains = sqliteTable('fragment_domains', {
   label: text('label').notNull(),
   description: text('description'),
   created_at: text('created_at').notNull(),
-  validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
@@ -234,7 +233,6 @@ export const fragmentTags = sqliteTable('fragment_tags', {
   label: text('label').notNull(),
   category: text('category'),
   created_at: text('created_at').notNull(),
-  validated: integer('validated').notNull().default(1),
   proposedBy: text('proposed_by').notNull().default('admin'),
   trustSource: text('trust_source').notNull().default('human-direct'),
   status: text('status')
@@ -259,7 +257,6 @@ export const fragmentFunctions = sqliteTable('fragment_functions', {
   slug: text('slug').primaryKey(),
   label: text('label').notNull(),
   description: text('description'),
-  validated: integer('validated').notNull().default(1),
   usageCount: integer('usage_count').notNull().default(0),
   proposedBy: text('proposed_by').notNull().default('admin'),
   createdAt: text('created_at').notNull(),

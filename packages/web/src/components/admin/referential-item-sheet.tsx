@@ -137,7 +137,9 @@ export function ReferentialItemSheet({
   const renameHistory: any[] = data?.rename_history ?? [];
   const fragmentsLoaded = !!data;
   const actualUsageCount = fragmentsLoaded ? linkedFragments.length : (item?.usageCount ?? 0);
-  const currentCategory = (data?.item ?? item)?.category;
+  const rawCategory = (data?.item ?? item)?.category;
+  const slugPrefix = String(item.id).includes(':') ? String(item.id).split(':')[0] : null;
+  const currentCategory = (rawCategory && rawCategory !== 'proposed') ? rawCategory : (slugPrefix ?? rawCategory);
 
   const proposalForDialogs = item
     ? {
@@ -147,7 +149,6 @@ export function ReferentialItemSheet({
         label: item.label?.replace(/^NEW:\s*/i, ''),
         entity_type: currentCategory,
         usage_count: actualUsageCount,
-        validated: item.status !== 'pending',
         proposed_by: item.proposedBy ?? '',
         created_at: item.createdAt ?? '',
         flags: item.flags ?? [],

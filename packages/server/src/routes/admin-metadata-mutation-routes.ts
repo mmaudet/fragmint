@@ -26,16 +26,22 @@ export function adminMetadataMutationRoutes(
             action === 'approve'
               ? await db
                   .update(fragmentTags)
-                  .set({ validated: 1, status: 'active', label: stripNew(String(item.id)) })
+                  .set({ status: 'active', label: stripNew(String(item.id)) })
                   .where(eq(fragmentTags.slug, String(item.id)))
-              : await db.delete(fragmentTags).where(eq(fragmentTags.slug, String(item.id)));
+              : await db
+                  .update(fragmentTags)
+                  .set({ status: 'rejected' })
+                  .where(eq(fragmentTags.slug, String(item.id)));
           } else if (item.kind === 'domain') {
             action === 'approve'
               ? await db
                   .update(fragmentDomains)
-                  .set({ validated: 1, status: 'active', label: stripNew(String(item.id)) })
+                  .set({ status: 'active', label: stripNew(String(item.id)) })
                   .where(eq(fragmentDomains.slug, String(item.id)))
-              : await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, String(item.id)));
+              : await db
+                  .update(fragmentDomains)
+                  .set({ status: 'rejected' })
+                  .where(eq(fragmentDomains.slug, String(item.id)));
           }
           results.push({ id: item.id, success: true });
         } catch (e: any) {

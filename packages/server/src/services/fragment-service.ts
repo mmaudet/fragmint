@@ -140,6 +140,7 @@ export class FragmentService {
       author,
       title,
       body_excerpt: input.body.slice(0, 200),
+      body: input.body,
       created_at: now,
       updated_at: now,
       file_path: relPath,
@@ -155,6 +156,8 @@ export class FragmentService {
       valid_until: input.valid_until ?? null,
       harvest_confidence: (input as any).harvest_confidence ?? null,
       source_position: (input as any).source_position ?? null,
+      payload: input.payload ?? null,
+      payload_schema: input.payload_schema ?? null,
       readable_id: readableId,
     });
 
@@ -441,6 +444,7 @@ export class FragmentService {
         updated_at: updatedFrontmatter.updated_at,
         title: deriveTitle(newBody),
         body_excerpt: newBody.slice(0, 200),
+        body: newBody,
         git_hash: commitHash,
         file_path: newRelPath,
       })
@@ -465,13 +469,12 @@ export class FragmentService {
           slug: input.domain,
           label: input.domain,
           created_at: now,
-          validated: 1,
           proposedBy: userId,
           trustSource: 'human-direct',
         })
         .onConflictDoUpdate({
           target: fragmentDomains.slug,
-          set: { trustSource: 'human-direct', validated: 1 },
+          set: { trustSource: 'human-direct' },
         });
     }
     if (input.tags && input.tags.length > 0) {
@@ -482,13 +485,12 @@ export class FragmentService {
             slug: tag,
             label: tag,
             created_at: now,
-            validated: 1,
             proposedBy: userId,
             trustSource: 'human-direct',
           })
           .onConflictDoUpdate({
             target: fragmentTags.slug,
-            set: { trustSource: 'human-direct', validated: 1 },
+            set: { trustSource: 'human-direct' },
           });
       }
     }
@@ -879,6 +881,7 @@ export class FragmentService {
               author: frontmatter.author,
               title,
               body_excerpt: body.slice(0, 200),
+              body,
               created_at: frontmatter.created_at,
               updated_at: frontmatter.updated_at,
               file_path: relPath,
@@ -897,6 +900,7 @@ export class FragmentService {
                 updated_at: frontmatter.updated_at,
                 title,
                 body_excerpt: body.slice(0, 200),
+                body,
                 file_path: relPath,
                 collection_slug: collectionSlug,
                 valid_from: frontmatter.valid_from ?? null,

@@ -16,7 +16,6 @@ import {
   fragmentTags,
   fragments,
 } from '../db/schema.js';
-import { computeQualitySignals } from './quality-signals.js';
 import { generateShingles } from './dedupe/shingles.js';
 import { deduplicateL1L2, deduplicateL3 } from './dedupe/dedup-pipeline.js';
 import { detectDuplicate } from './dedupe/duplicate-detector.js';
@@ -56,6 +55,7 @@ export async function runPipeline(
   uploadHints: UploadHints = {},
   dupeShinglesThreshold = 0.70,
   collectionService?: FragmentCollectionService,
+  userId?: string,
 ): Promise<void> {
   try {
     const existingTypes = (await db.select({ slug: fragmentTypes.slug }).from(fragmentTypes)).map(
@@ -71,7 +71,7 @@ export async function runPipeline(
     const knownTagRows = await db
       .select({ slug: fragmentTags.slug })
       .from(fragmentTags)
-      .where(eq(fragmentTags.validated, 1));
+      .where(eq(fragmentTags.status, 'active'));
     const knownTags = knownTagRows.map((r) => r.slug);
 
     const hintTagsFound = new Set<string>();
@@ -271,25 +271,11 @@ export async function runPipeline(
       // Track coherent hint tags + apply hint-domain override for unknown domains
       const domainOverridden = applyUploadHintsInPlace(blocks, uploadHints, hintTagsFound, existingDomains);
 
-      // Compute quality signals for all blocks
-      const qualitySignalsPerBlock = blocks.map((block, j) =>
-        computeQualitySignals(
-          {
-            type: block.type,
-            body: block.body,
-            domain: block.domain,
-            tags: block.tags,
-          },
-          dupeChecks[j],
-        ),
-      );
-
       // Run LLM-as-judge on all non-duplicate fragments — provides quality verdict + metadata suggestions
       const judgeTaxonomy = { domains: existingDomains, types: existingTypes, tags: knownTags };
       const judgeResults: (JudgeResult | null)[] = await Promise.all(
         blocks.map(async (block, j) => {
-          const signals = qualitySignalsPerBlock[j];
-          if (!shouldRunJudge(signals, !!dupeChecks[j])) return null;
+          if (!shouldRunJudge(!!dupeChecks[j])) return null;
           return runQualityJudge(
             llmClient,
             {
@@ -298,7 +284,6 @@ export async function runPipeline(
               domain: block.domain,
               type: block.type,
             },
-            signals,
             judgeTaxonomy,
           );
         }),
@@ -341,7 +326,7 @@ export async function runPipeline(
             new_proposals: JSON.stringify(block.new_proposals ?? {}),
             metadata_status: getMetadataStatus(block),
             trust_sources_json: JSON.stringify(trustSourcesPerBlock[j]),
-            quality_signals: JSON.stringify(qualitySignalsPerBlock[j]),
+            quality_signals: '[]',
             judge_result: judgeResults[j] ? JSON.stringify(judgeResults[j]) : null,
             origin_source: filename,
             origin_page: null,
@@ -375,6 +360,7 @@ export async function runPipeline(
       uploadHints,
       hintTagsFound,
       existingDomains,
+      userId,
     );
 
     const stats = {

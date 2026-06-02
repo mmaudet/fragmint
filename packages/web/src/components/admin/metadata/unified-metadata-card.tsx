@@ -146,7 +146,6 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
     name: cleanLabel,
     label: cleanLabel,
     usage_count: item.usageCount,
-    validated: !isPending,
     proposed_by: item.proposedBy ?? '',
     created_at: item.createdAt ?? '',
     flags: item.flags,
@@ -203,11 +202,15 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
               <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">
                 {tagDisplayLabel(cleanLabel)}
               </code>
-              {tagPrefix && (
+              {tagPrefix ? (
                 <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 font-medium">
                   {TAG_PREFIX_LABELS[tagPrefix]}
                 </span>
-              )}
+              ) : kind === 'tag' && !String(item.id).includes(':') ? (
+                <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 font-medium">
+                  ⚠ {t('admin', 'tagNoPrefixWarning')}
+                </span>
+              ) : null}
               {item.usageCount > 0 && (
                 <Badge variant="secondary">
                   {item.category && item.category !== 'proposed' && (

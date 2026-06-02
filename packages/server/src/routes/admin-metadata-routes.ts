@@ -47,7 +47,7 @@ export function adminMetadataRoutes(
       const proposals: any[] = [];
 
       if (!kind || kind === 'tag') {
-        const conditions: any[] = [eq(fragmentTags.validated, 0)];
+        const conditions: any[] = [eq(fragmentTags.status, 'pending')];
         if (search) conditions.push(like(fragmentTags.label, `%${search}%`));
         if (trust_source) conditions.push(eq(fragmentTags.trustSource, trust_source));
         const tags = await db
@@ -56,7 +56,6 @@ export function adminMetadataRoutes(
             label: fragmentTags.label,
             category: fragmentTags.category,
             created_at: fragmentTags.created_at,
-            validated: fragmentTags.validated,
             proposedBy: fragmentTags.proposedBy,
             trustSource: fragmentTags.trustSource,
             status: fragmentTags.status,
@@ -69,7 +68,7 @@ export function adminMetadataRoutes(
         const cachedValidatedTags = await db
           .select({ slug: fragmentTags.slug, label: fragmentTags.label })
           .from(fragmentTags)
-          .where(eq(fragmentTags.validated, 1));
+          .where(eq(fragmentTags.status, 'active'));
         for (const tag of tags) {
           const preview = await getPreviewForTag(db, tag.slug);
           const flags = await computeFlagsForTag(db, tag, cachedValidatedTags);
@@ -79,7 +78,6 @@ export function adminMetadataRoutes(
             name: tag.slug,
             label: tag.label,
             usage_count: tag.usageCount,
-            validated: !!tag.validated,
             proposed_by: tag.proposedBy,
             created_at: tag.created_at,
             trust_source: tag.trustSource ?? 'llm-inferred',
@@ -90,7 +88,7 @@ export function adminMetadataRoutes(
       }
 
       if (!kind || kind === 'domain') {
-        const conditions: any[] = [eq(fragmentDomains.validated, 0)];
+        const conditions: any[] = [eq(fragmentDomains.status, 'pending')];
         if (search) conditions.push(like(fragmentDomains.label, `%${search}%`));
         if (trust_source) conditions.push(eq(fragmentDomains.trustSource, trust_source));
         const domains = await db
@@ -106,7 +104,6 @@ export function adminMetadataRoutes(
             name: d.slug,
             label: d.label,
             usage_count: d.usageCount ?? 0,
-            validated: !!d.validated,
             proposed_by: d.proposedBy,
             created_at: d.created_at,
             trust_source: d.trustSource ?? 'llm-inferred',
@@ -166,13 +163,13 @@ export function adminMetadataRoutes(
         const cleanLabel = stripNew(id);
         await db
           .update(fragmentTags)
-          .set({ validated: 1, status: 'active', label: cleanLabel })
+          .set({ status: 'active', label: cleanLabel })
           .where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
         const cleanLabel = stripNew(id);
         await db
           .update(fragmentDomains)
-          .set({ validated: 1, status: 'active', label: cleanLabel })
+          .set({ status: 'active', label: cleanLabel })
           .where(eq(fragmentDomains.slug, id));
       }
       return { success: true, id, kind };
@@ -191,22 +188,9 @@ export function adminMetadataRoutes(
       let affectedFragments = 0;
 
       if (kind === 'tag') {
-        const fragmentsUsing = await db
-          .select()
-          .from(fragments)
-          .where(like(fragments.tags, `%"${id}"%`));
-        for (const f of fragmentsUsing) {
-          const tagsArr = JSON.parse(f.tags ?? '[]').filter((t: string) => t !== id);
-          await db
-            .update(fragments)
-            .set({ tags: JSON.stringify(tagsArr) })
-            .where(eq(fragments.id, f.id));
-        }
-        affectedFragments = fragmentsUsing.length;
-        await db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.tag_slug, id));
-        await db.delete(fragmentTags).where(eq(fragmentTags.slug, id));
+        await db.update(fragmentTags).set({ status: 'rejected' }).where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
-        await db.delete(fragmentDomains).where(eq(fragmentDomains.slug, id));
+        await db.update(fragmentDomains).set({ status: 'rejected' }).where(eq(fragmentDomains.slug, id));
       }
       return { success: true, rejected_id: id, affected_fragments: affectedFragments };
     },
@@ -242,13 +226,13 @@ export function adminMetadataRoutes(
         }
         await db
           .update(fragmentTags)
-          .set({ slug: new_name, label: new_label ?? new_name, validated: 1 })
+          .set({ slug: new_name, label: new_label ?? new_name, status: 'active' })
           .where(eq(fragmentTags.slug, id));
       } else if (kind === 'domain') {
         await db.update(fragments).set({ domain: new_name }).where(eq(fragments.domain, id));
         await db
           .update(fragmentDomains)
-          .set({ slug: new_name, label: new_label ?? new_name, validated: 1 })
+          .set({ slug: new_name, label: new_label ?? new_name, status: 'active' })
           .where(eq(fragmentDomains.slug, id));
       }
       return { success: true, updated: { id: new_name, name: new_name } };
@@ -319,15 +303,14 @@ export function adminMetadataRoutes(
             label: fragmentTags.label,
             category: fragmentTags.category,
             status: fragmentTags.status,
-            validated: fragmentTags.validated,
             usageCount: sql<number>`(SELECT COUNT(*) FROM fragment_tag_links WHERE tag_slug = fragment_tags.slug)`,
           })
           .from(fragmentTags)
-          .where(eq(fragmentTags.validated, 1));
+          .where(eq(fragmentTags.status, 'active'));
         // Normalize: tags use `slug` as PK — expose it as `id` so the merge picker can use v.id
         rows = raw.map((r) => ({ ...r, id: r.slug, usage_count: r.usageCount }));
       } else if (kind === 'domain') {
-        const raw = await db.select().from(fragmentDomains).where(eq(fragmentDomains.validated, 1));
+        const raw = await db.select().from(fragmentDomains).where(eq(fragmentDomains.status, 'active'));
         rows = raw.map((r) => ({ ...r, id: r.slug, usage_count: r.usageCount }));
       } else {
         rows = [];

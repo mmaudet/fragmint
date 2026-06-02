@@ -175,7 +175,6 @@ export function harvestRoutes(
             .values({
               slug: parsed.data.domain,
               label: parsed.data.domain,
-              validated: 1,
               proposedBy: `user:${userLogin}`,
               created_at: now,
             })
@@ -187,7 +186,6 @@ export function harvestRoutes(
             .values({
               slug: tag,
               label: tag,
-              validated: 1,
               proposedBy: `user:${userLogin}`,
               created_at: now,
             })

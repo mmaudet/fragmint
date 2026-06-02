@@ -1,4 +1,4 @@
-import { eq, like, count } from 'drizzle-orm';
+import { eq, ne, like, count } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments, fragmentTags, fragmentDomains } from '../db/schema.js';
 
@@ -46,7 +46,7 @@ export async function computeFlagsForTag(
     (await db
       .select({ slug: fragmentTags.slug, label: fragmentTags.label })
       .from(fragmentTags)
-      .where(eq(fragmentTags.validated, 1)));
+      .where(eq(fragmentTags.status, 'active')));
   for (const vt of validatedTags) {
     const vtNorm = vt.slug.replace(/^NEW:/i, '');
     if (vtNorm === tag.slug) continue;
@@ -60,8 +60,8 @@ export async function computeFlagsForTag(
 
 export async function computeCounts(db: FragmintDb) {
   const [tagCount, domainCount] = await Promise.all([
-    db.select({ value: count() }).from(fragmentTags).where(eq(fragmentTags.validated, 0)),
-    db.select({ value: count() }).from(fragmentDomains).where(eq(fragmentDomains.validated, 0)),
+    db.select({ value: count() }).from(fragmentTags).where(ne(fragmentTags.status, 'active')),
+    db.select({ value: count() }).from(fragmentDomains).where(ne(fragmentDomains.status, 'active')),
   ]);
   return {
     tags: tagCount[0]?.value ?? 0,

@@ -1,5 +1,6 @@
 // packages/server/src/services/harvest-hint-processor.ts
 // Hint-processing helpers for the harvester pipeline — extracted to stay under 500-line limit.
+import { sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragmentDomains, fragmentTags } from '../db/schema.js';
 import type { CombinedBlock } from './llm-client.js';
@@ -10,8 +11,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // 2. applyUploadHintsInPlace
-//    Per-block body-scan: track coherent hint tags.
-//    Mutates hintTagsFound in place.
+//    Per-block body-scan: force-apply hint tags when body mentions the keyword.
+//    Mirrors domain override logic — hint tags are not just LLM suggestions.
+//    Mutates blocks and hintTagsFound in place.
 // ---------------------------------------------------------------------------
 
 /**
@@ -36,7 +38,16 @@ export function applyUploadHintsInPlace(
 
     if (uploadHints.tags?.length) {
       for (const tag of uploadHints.tags) {
-        if ((block.tags ?? []).includes(tag)) hintTagsFound.add(tag);
+        // Keyword to search for in body: "client:canut" → "canut", "canut" → "canut"
+        const keyword = tag.includes(':') ? tag.split(':')[1] : tag;
+        const alreadyTagged = (block.tags ?? []).includes(tag);
+        const bodyMentions = keyword && block.body?.toLowerCase().includes(keyword.toLowerCase());
+        if (alreadyTagged || bodyMentions) {
+          if (!alreadyTagged) {
+            block.tags = [...(block.tags ?? []), tag];
+          }
+          hintTagsFound.add(tag);
+        }
       }
     }
 
@@ -81,7 +92,6 @@ export async function insertNewProposals(
           label: slug,
           category: 'proposed',
           status: tagAutoValidated ? 'active' : 'pending',
-          validated: tagAutoValidated,
           proposedBy: 'llm-auto',
           trustSource: tagTrust,
           created_at: now,
@@ -102,7 +112,6 @@ export async function insertNewProposals(
           label: slug,
           description: 'LLM-proposed',
           status: domainAutoValidated ? 'active' : 'pending',
-          validated: domainAutoValidated,
           proposedBy: 'llm-auto',
           trustSource: domainTrust,
           created_at: now,
@@ -122,8 +131,10 @@ export async function flushHintReferentials(
   uploadHints: UploadHints,
   hintTagsFound: Set<string>,
   existingDomains: string[],
+  userId?: string,
 ): Promise<void> {
   const now = new Date().toISOString();
+  const proposedBy = userId ?? 'harvest-hint';
 
   // Create pending domain entry if hint domain is new (not yet in referential)
   if (uploadHints.domain && !existingDomains.includes(uploadHints.domain)) {
@@ -133,27 +144,38 @@ export async function flushHintReferentials(
         slug: uploadHints.domain,
         label: uploadHints.domain,
         description: 'Hint-proposed',
-        validated: 0,
-        proposedBy: 'harvest-hint',
+        proposedBy,
         trustSource: 'human-direct',
         created_at: now,
       })
       .onConflictDoNothing();
   }
 
-  // Create pending tag entries for hint tags applied to ≥1 fragment by the LLM
+  // Create pending tag entries for hint tags applied to ≥1 fragment.
+  // If the tag was previously rejected, restore it to pending (human intent overrides rejection).
+  // Also update category if it changed (e.g. slug was re-entered with a prefix).
   for (const tag of hintTagsFound) {
+    const prefix = tag.includes(':') ? tag.split(':')[0] : null;
     await db
       .insert(fragmentTags)
       .values({
         slug: tag,
         label: tag,
-        validated: 0,
         status: 'pending',
-        proposedBy: 'harvest-hint',
+        proposedBy,
         trustSource: 'human-direct',
+        category: prefix ?? undefined,
         created_at: now,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: fragmentTags.slug,
+        set: {
+          // Restore rejected tags to pending — human hint is explicit intent
+          status: sql`CASE WHEN ${fragmentTags.status} = 'rejected' THEN 'pending' ELSE ${fragmentTags.status} END`,
+          // Update category if prefix changed
+          category: prefix ?? null,
+          trustSource: 'human-direct',
+        },
+      });
   }
 }

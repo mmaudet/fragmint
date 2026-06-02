@@ -76,7 +76,9 @@ export function adminReferentialRoutes(
     // Prefix filter: only applies to tags (slug format is "prefix:name")
     const prefixFilter =
       refType === 'tag' && prefixParam && prefixParam !== 'all'
-        ? like(fragmentTags.slug, `${prefixParam}:%`)
+        ? prefixParam === 'none'
+          ? sql`${fragmentTags.slug} NOT LIKE '%:%'`
+          : like(fragmentTags.slug, `${prefixParam}:%`)
         : undefined;
 
     const conditions = [statusFilter, trustFilter, searchFilter, prefixFilter].filter(
@@ -118,7 +120,6 @@ export function adminReferentialRoutes(
           label: fragmentTags.label,
           category: fragmentTags.category,
           created_at: fragmentTags.created_at,
-          validated: fragmentTags.validated,
           proposedBy: fragmentTags.proposedBy,
           trustSource: fragmentTags.trustSource,
           status: fragmentTags.status,
@@ -157,7 +158,7 @@ export function adminReferentialRoutes(
         cachedValidatedTags = await db
           .select({ slug: fragmentTags.slug, label: fragmentTags.label })
           .from(fragmentTags)
-          .where(eq(fragmentTags.validated, 1));
+          .where(eq(fragmentTags.status, 'active'));
       }
     }
 
@@ -442,7 +443,7 @@ export function adminReferentialRoutes(
 
     await db
       .update(table)
-      .set({ status: 'archived', validated: 0 })
+      .set({ status: 'archived' })
       .where(eq(idField, lookupValue));
 
     await db.insert(auditLog).values({
@@ -483,7 +484,7 @@ export function adminReferentialRoutes(
 
     await db
       .update(table)
-      .set({ status: 'active', validated: 1, trustSource: 'human-direct' })
+      .set({ status: 'active', trustSource: 'human-direct' })
       .where(eq(idField, lookupValue));
 
     await db.insert(auditLog).values({

@@ -15,7 +15,6 @@ export interface MetadataProposal {
   name: string;
   label?: string;
   usage_count: number;
-  validated: boolean;
   proposed_by: string;
   proposed_by_role?: string | null;
   proposed_by_display?: string | null;

@@ -537,6 +537,22 @@ export function createDb(path: string | ':memory:') {
     sqlite.exec('ALTER TABLE fragments ADD COLUMN source_position INTEGER');
   } catch (_) {}
 
+  // Migration 021 — full body text for search (SQLite fallback when Milvus is disabled)
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN body TEXT');
+  } catch (_) {}
+
+  // Migration 022 — drop redundant `validated` boolean — status='active' is the single source of truth
+  const validatedExistsOnTags = sqlite.prepare(
+    "SELECT COUNT(*) as c FROM pragma_table_info('fragment_tags') WHERE name='validated'"
+  ).get() as { c: number };
+  if (validatedExistsOnTags.c > 0) {
+    sqlite.exec('ALTER TABLE fragment_tags DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_domains DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_types DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_functions DROP COLUMN validated');
+  }
+
   // Seed 001 — default Linagora product domains (INSERT OR IGNORE — safe on every boot).
   // Intentional: once seeded, domains are admin-owned. Label/description changes in this
   // file will NOT update existing rows — edit via the admin UI or a manual migration.
