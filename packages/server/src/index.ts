@@ -154,10 +154,10 @@ export async function createServer(options?: {
   }
   const domainCount = await db.select({ c: count() }).from(fragmentDomains);
   if (domainCount[0].c === 0) {
-    for (const { slug, description } of HARVESTER_DOMAINS) {
+    for (const { slug, label, description } of HARVESTER_DOMAINS) {
       await db
         .insert(fragmentDomains)
-        .values({ slug, label: slug, description, created_at: now })
+        .values({ slug, label: label ?? slug, description, created_at: now })
         .onConflictDoNothing();
     }
   }
@@ -173,12 +173,12 @@ export async function createServer(options?: {
     }
   }
 
-  // Seed granular domain slugs (add new ones, keep existing)
+  // Seed granular domain slugs — update label on conflict so display names stay current
   for (const { slug, label, description } of HARVESTER_DOMAINS_GRANULAR) {
     await db
       .insert(fragmentDomains)
       .values({ slug, label, description, created_at: now })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({ target: fragmentDomains.slug, set: { label, description } });
   }
 
   // Seed initial validated tags

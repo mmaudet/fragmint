@@ -68,7 +68,7 @@ export default function AppLayout() {
     ...(hasRole('contributor')
       ? [{ to: '/validation', label: t('nav', 'validation'), icon: CheckCircle }]
       : []),
-    { to: '/plan-generation', label: t('nav', 'planGeneration'), icon: PenLine },
+    { to: '/plans', label: t('nav', 'planGeneration'), icon: PenLine },
   ];
 
   return (

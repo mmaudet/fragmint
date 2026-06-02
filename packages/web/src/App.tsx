@@ -87,7 +87,7 @@ export default function App() {
                         <Route path="/validation" element={<ValidationPage />} />
                         <Route path="/harvest" element={<HarvestPage />} />
                         <Route path="/harvest/:jobId/debrief" element={<HarvestDebriefPage />} />
-                        <Route path="/plan-generation" element={<PlanGenerationPage />} />
+                        <Route path="/plans" element={<PlanGenerationPage />} />
                       </Route>
                       <Route
                         path="/admin"

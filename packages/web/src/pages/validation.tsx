@@ -48,7 +48,21 @@ export default function ValidationPage() {
   );
   const [search, setSearch] = useState('');
   const [pageSize, setPageSize] = useState(24);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = searchParams.get('fragment');
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set('fragment', id);
+          else next.delete('fragment');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);

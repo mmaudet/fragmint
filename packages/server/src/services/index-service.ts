@@ -1,5 +1,5 @@
 // packages/server/src/services/index-service.ts
-import { eq, and, type SQL } from 'drizzle-orm';
+import { eq, and, inArray, type SQL } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 

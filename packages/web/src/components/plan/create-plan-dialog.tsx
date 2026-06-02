@@ -31,7 +31,7 @@ export function CreatePlanDialog({
     onOpenChange(false);
     setTitle('');
     setSpecPrompt('');
-    nav(`/plan-generation?id=${plan.id}`);
+    nav(`/plans?id=${plan.id}`);
   }
 
   return (

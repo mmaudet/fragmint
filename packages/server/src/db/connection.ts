@@ -223,9 +223,6 @@ export function createDb(path: string | ':memory:') {
 
   // Enrich fragment_tags
   try {
-    sqlite.exec('ALTER TABLE fragment_tags ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
-  } catch (_) {}
-  try {
     sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
   } catch (_) {}
 

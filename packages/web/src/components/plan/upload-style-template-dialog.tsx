@@ -23,7 +23,7 @@ export function UploadStyleTemplateDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onUploaded: (id: string) => void;
+  onUploaded: (id: string, outputFormat: string) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
@@ -44,8 +44,9 @@ export function UploadStyleTemplateDialog({
   }
 
   function handleConfirm() {
-    if (!uploadedId) return;
-    onUploaded(uploadedId);
+    if (!uploadedId || !file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'docx';
+    onUploaded(uploadedId, ext === 'pptx' ? 'pptx' : 'docx');
     handleClose();
   }
 
@@ -72,7 +73,7 @@ export function UploadStyleTemplateDialog({
             <div className="space-y-3">
               <Input
                 type="file"
-                accept=".docx"
+                accept=".docx,.pptx"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <Input placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} />

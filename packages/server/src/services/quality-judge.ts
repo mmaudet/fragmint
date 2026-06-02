@@ -1,7 +1,6 @@
 // packages/server/src/services/quality-judge.ts
 // LLM-as-judge: quality evaluation + metadata suggestions for harvest candidates
 import type { LlmClient } from './llm-client.js';
-import type { CoherenceFlag } from './quality-signals.js';
 
 export interface JudgeVerdict {
   verdict: 'pass' | 'partial' | 'fail';
@@ -24,10 +23,8 @@ export interface JudgeResult {
   suggested_metadata?: SuggestedMetadata;
 }
 
-// Run only on fragments with warnings or errors — clean fragments don't need a second LLM pass
-export function shouldRunJudge(signals: CoherenceFlag[], hasDuplicate: boolean): boolean {
-  if (hasDuplicate) return false;
-  return signals.some((s) => s.level === 'warning' || s.level === 'error');
+export function shouldRunJudge(hasDuplicate: boolean): boolean {
+  return !hasDuplicate;
 }
 
 export async function runQualityJudge(
@@ -38,14 +35,8 @@ export async function runQualityJudge(
     domain: string;
     type: string;
   },
-  signals: CoherenceFlag[],
   taxonomy?: { domains: string[]; types: string[]; tags: string[] },
 ): Promise<JudgeResult | null> {
-  const signalsSummary =
-    signals.length > 0
-      ? signals.map((s) => `- [${s.level.toUpperCase()}] ${s.type}: ${s.message}`).join('\n')
-      : '- No issues detected';
-
   const taxonomySection = taxonomy
     ? `
 # Corpus referential (validated values in the library)
@@ -62,9 +53,6 @@ Body: ${block.body}
 
 # Metadata assigned by ingestion
 Domain: ${block.domain} / Type: ${block.type}
-
-# Quality signals already detected
-${signalsSummary}
 ${taxonomySection}
 
 # Your task

@@ -113,7 +113,7 @@ export class HarvesterService {
 
     // Launch pipeline async without awaiting
     setImmediate(() => {
-      this._runPipeline(jobId, files, filenames, options.min_confidence, uploadHints ?? {}).catch(
+      this._runPipeline(jobId, files, filenames, options.min_confidence, uploadHints ?? {}, userId).catch(
         (err) => {
           console.error(`Pipeline error for job ${jobId}:`, err);
         },
@@ -129,6 +129,7 @@ export class HarvesterService {
     filenames: string[],
     minConfidence: number,
     uploadHints: UploadHints = {},
+    userId?: string,
   ): Promise<void> {
     return runPipeline(
       this.db,
@@ -141,6 +142,7 @@ export class HarvesterService {
       uploadHints,
       this.options.dupeShinglesThreshold,
       this.collectionService,
+      userId,
     );
   }
 

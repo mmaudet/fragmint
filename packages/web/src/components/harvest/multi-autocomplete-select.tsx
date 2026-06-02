@@ -7,6 +7,15 @@ import { useReferenceLookup } from '@/api/hooks/use-reference-lookup';
 import type { ReferenceItem } from '@/api/hooks/use-reference-lookup';
 import { tagDisplayLabel } from '@/lib/tag-display';
 
+const TAG_PREFIXES = [
+  { value: 'client', label: 'Client' },
+  { value: 'produit', label: 'Produit' },
+  { value: 'tech', label: 'Technologie' },
+  { value: 'partner', label: 'Partenaire' },
+  { value: 'cert', label: 'Certification' },
+  { value: 'reg', label: 'Règlementation' },
+];
+
 interface Props {
   kind: 'domain' | 'tag' | 'function';
   values: string[];
@@ -27,6 +36,7 @@ export function MultiAutocompleteSelect({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [pendingTag, setPendingTag] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(query, 300);
   const { data = [] } = useReferenceLookup(kind, debouncedQuery);
   const ref = useRef<HTMLDivElement>(null);
@@ -51,11 +61,22 @@ export function MultiAutocompleteSelect({
   };
 
   const addFreeText = () => {
-    const v = query.trim();
+    const v = query.trim().toLowerCase().replace(/\s+/g, '-');
     if (!v || values.includes(v)) return;
-    onChange([...values, v]);
     setQuery('');
     setOpen(false);
+    if (kind === 'tag' && !v.includes(':')) {
+      setPendingTag(v);
+    } else {
+      onChange([...values, v]);
+    }
+  };
+
+  const confirmPending = (prefix: string | null) => {
+    if (!pendingTag) return;
+    const final = prefix ? `${prefix}:${pendingTag}` : pendingTag;
+    if (!values.includes(final)) onChange([...values, final]);
+    setPendingTag(null);
   };
 
   const remove = (slug: string) => onChange(values.filter((v) => v !== slug));
@@ -128,6 +149,32 @@ export function MultiAutocompleteSelect({
         placeholder={placeholder}
         className="text-sm"
       />
+      {pendingTag && (
+        <div className="mt-1 p-2 border rounded-md bg-muted/40 space-y-1.5">
+          <p className="text-xs text-muted-foreground">
+            Catégorie pour <code className="font-medium text-foreground">{pendingTag}</code> ?
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {TAG_PREFIXES.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50"
+                onMouseDown={() => confirmPending(p.value)}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground hover:bg-muted/80"
+              onMouseDown={() => confirmPending(null)}
+            >
+              Sans catégorie
+            </button>
+          </div>
+        </div>
+      )}
       {open && (filteredItems.length > 0 || showCreate) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
           {filteredItems.map((item, idx) => (

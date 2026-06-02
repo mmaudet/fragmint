@@ -116,7 +116,7 @@ export function AddFragmentDialog({
                         {f.title ?? f.id}
                       </span>
                       <span className="text-xs text-muted-foreground shrink-0">
-                        {f.type} · {f.quality}
+                        {f.type}
                       </span>
                     </div>
                     {f.body_excerpt && (

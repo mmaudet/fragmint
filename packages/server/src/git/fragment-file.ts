@@ -10,9 +10,14 @@ export function generateId(): string {
 
 export function deriveTitle(body: string): string {
   if (!body.trim()) return 'Untitled';
-  const headingMatch = body.match(/^#\s+(.+)$/m);
+  // For HTML content (pandoc output), strip tags to extract meaningful text
+  const text = body.trimStart().startsWith('<')
+    ? body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    : body;
+  if (!text) return 'Tableau';
+  const headingMatch = text.match(/^#\s+(.+)$/m);
   if (headingMatch) return headingMatch[1].trim();
-  const firstLine = body.trim().split('\n')[0].trim();
+  const firstLine = text.trim().split('\n')[0].trim();
   if (!firstLine) return 'Untitled';
   // If the first "line" is very long (paragraph with no line breaks),
   // extract only the first sentence to avoid using the whole body as title.
