@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePlan, useUpdatePlan } from '@/api/hooks/use-plans';
+import { usePlan, useUpdatePlan, useSearchAllSections } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { X, Info, Lock, ArrowLeft } from 'lucide-react';
+import { X, Info, Lock, ArrowLeft, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { SpecStep } from './spec-step';
 import { FragmentsStep } from './fragments-step';
@@ -69,6 +69,7 @@ export function Workspace({ planId }: { planId: string }) {
   const [, forceRender] = useState(0);
   const [globalOverride, setGlobalOverride] = useState(plan?.state.writer_prompt_override ?? '');
   const update = useUpdatePlan(planId);
+  const searchAll = useSearchAllSections(planId);
 
   if (isLoading || !plan) return <p className="p-6 text-muted-foreground">Loading…</p>;
 
@@ -88,7 +89,7 @@ export function Workspace({ planId }: { planId: string }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => nav('/plan-generation')}
+          onClick={() => nav('/plans')}
           className="flex-shrink-0 text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -132,6 +133,26 @@ export function Workspace({ planId }: { planId: string }) {
               <X className="h-4 w-4" />
             </button>
           </div>
+          {activeStep === 1 && (
+            <div className="pl-7 space-y-3">
+              <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
+                <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'matchStrong')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'matchMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'matchWeak')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'matchUnscored')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => searchAll.mutate()}
+                disabled={searchAll.isPending}
+              >
+                {searchAll.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                {t('planGeneration', 'searchAllSections')}
+              </Button>
+            </div>
+          )}
           {activeStep === 2 && (
             <div className="pl-7 space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
