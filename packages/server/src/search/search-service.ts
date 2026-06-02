@@ -40,6 +40,8 @@ export interface SearchResult {
   author: string;
   uses: number;
   updated_at: string;
+  payload: string | null;
+  payload_schema: string | null;
 }
 
 const QUALITY_ORDER = ['draft', 'reviewed', 'approved'];
@@ -248,6 +250,8 @@ export class SearchService {
             author: row.author,
             uses: row.uses,
             updated_at: row.updated_at,
+            payload: row.payload ?? null,
+            payload_schema: row.payload_schema ?? null,
           };
         })
         .filter((r): r is SearchResult => r !== null);
@@ -323,6 +327,8 @@ export class SearchService {
                 author: row.author,
                 uses: row.uses,
                 updated_at: row.updated_at,
+                payload: row.payload ?? null,
+                payload_schema: row.payload_schema ?? null,
               };
             })
             .filter((r): r is SearchResult => r !== null);
@@ -379,14 +385,18 @@ export class SearchService {
         query
           .split(/\s+/)
           .map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase())
-          .filter((w) => w.length > 3),
+          .filter((w) => w.length > 1),
       ),
     ].slice(0, 8);
     if (keywords.length > 0) {
       conditions.push(
         or(
           ...keywords.map((kw) =>
-            or(like(fragments.title, `%${kw}%`), like(fragments.body_excerpt, `%${kw}%`)),
+            or(
+              like(fragments.title, `%${kw}%`),
+              like(fragments.body, `%${kw}%`),
+              like(fragments.body_excerpt, `%${kw}%`),
+            ),
           ),
         ),
       );
@@ -458,6 +468,8 @@ export class SearchService {
       author: row.author,
       uses: row.uses,
       updated_at: row.updated_at,
+      payload: row.payload ?? null,
+      payload_schema: row.payload_schema ?? null,
     }));
     // Do NOT call reRankResults — it multiplies score and null * number = NaN
     // Order by uses desc is already applied in the SQL query above

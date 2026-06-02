@@ -82,6 +82,8 @@ const SAMPLE_RESULT: SearchResult = {
   author: 'alice',
   uses: 3,
   updated_at: '2026-01-01',
+  payload: null,
+  payload_schema: null,
 };
 
 describe('VectorRetriever', () => {
@@ -109,7 +111,7 @@ describe('VectorRetriever', () => {
     expect(results).toHaveLength(0);
   });
 
-  it('passes lang, domain, type, tags, collectionSlug to SearchService', async () => {
+  it('passes lang, type, collectionSlug as hard filters; injects domain+tags into query text', async () => {
     const svc = fakeSearchService([]);
     const retriever = new VectorRetriever(svc);
     await retriever.searchForSection(
@@ -120,14 +122,19 @@ describe('VectorRetriever', () => {
       },
       3,
     );
+    // domain and tags are soft hints — injected into query text, NOT hard filters
     expect(vi.mocked(svc.search).mock.calls[0]![1]).toMatchObject({
       lang: 'fr',
-      domain: ['cloud'],
       type: ['argument'],
-      tags: ['sla'],
       collectionSlug: 'my-col',
       quality_min: 'approved',
     });
+    expect(vi.mocked(svc.search).mock.calls[0]![1]).not.toHaveProperty('domain');
+    expect(vi.mocked(svc.search).mock.calls[0]![1]).not.toHaveProperty('tags');
+    // query text enriched with domain/tag context
+    const enrichedQuery = vi.mocked(svc.search).mock.calls[0]![0] as string;
+    expect(enrichedQuery).toContain('cloud');
+    expect(enrichedQuery).toContain('sla');
     expect(vi.mocked(svc.search).mock.calls[0]![2]).toBe(3);
   });
 

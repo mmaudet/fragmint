@@ -241,6 +241,8 @@ describe('reRankResults', () => {
       author: 'test',
       uses: 0,
       updated_at: '2025-01-01',
+      payload: null,
+      payload_schema: null,
       ...overrides,
     };
   }
