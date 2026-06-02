@@ -28,6 +28,7 @@
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
     "marked": "^17.0.4",
+    "pptxgenjs": "^4.0.1",
     "reveal.js": "^6.0.0",
     "uuid": "^11.1.0",
     "xlsx-template": "^1.4.7",
