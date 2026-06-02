@@ -1,5 +1,5 @@
 # docker-compose.dev.yml
-# Full dev stack with hot reload — no server restart needed on code changes.
+# Full dev stack. Code changes require: docker restart fragmint-server
 # Start: docker compose -f docker-compose.dev.yml up
 name: fragmint-dev
 services:
@@ -36,6 +36,9 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: /data/vault
+    # tsx watch causes infinite restart loops on macOS bind mounts (delayed inotify events).
+    # Use plain tsx (no watch) — restart the container manually after code changes.
+    command: ["node_modules/.bin/tsx", "src/index.ts"]
     depends_on:
       milvus:
         condition: service_healthy
