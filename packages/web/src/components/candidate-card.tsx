@@ -130,7 +130,7 @@ export function CandidateCard({
               {candidate.domain}
             </Badge>
           )}
-          {candidate.tags?.filter((t) => t.includes(':')).map((tag) => (
+          {candidate.tags?.filter((t) => t.includes(':')).slice(0, 1).map((tag) => (
             <Badge
               key={tag}
               variant="outline"
