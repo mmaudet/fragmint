@@ -1,5 +1,5 @@
 // packages/server/src/services/collection-service.ts
-import { eq, and, like } from 'drizzle-orm';
+import { eq, and, like, sql } from 'drizzle-orm';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -18,7 +18,7 @@ const ROLE_HIERARCHY: Record<string, number> = {
 
 export type Collection = typeof collections.$inferSelect;
 
-export type CollectionWithRole = Collection & { role: string };
+export type CollectionWithRole = Collection & { role: string; fragment_count: number };
 
 export class CollectionService {
   constructor(
@@ -97,7 +97,24 @@ export class CollectionService {
   }
 
   async listAll(): Promise<CollectionWithRole[]> {
-    const rows = await this.db.select().from(collections);
+    const rows = await this.db
+      .select({
+        id: collections.id,
+        slug: collections.slug,
+        name: collections.name,
+        type: collections.type,
+        read_only: collections.read_only,
+        auto_assign: collections.auto_assign,
+        git_path: collections.git_path,
+        milvus_partition: collections.milvus_partition,
+        owner_id: collections.owner_id,
+        description: collections.description,
+        tags: collections.tags,
+        created_at: collections.created_at,
+        created_by: collections.created_by,
+        fragment_count: sql<number>`(SELECT COUNT(*) FROM fragments WHERE fragments.collection_slug = collections.slug)`,
+      })
+      .from(collections);
     return rows.map((r) => ({ ...r, role: 'owner' })) as CollectionWithRole[];
   }
 
@@ -118,12 +135,22 @@ export class CollectionService {
         created_at: collections.created_at,
         created_by: collections.created_by,
         role: collectionMemberships.role,
+        fragment_count: sql<number>`(SELECT COUNT(*) FROM fragments WHERE fragments.collection_slug = collections.slug)`,
       })
       .from(collections)
       .innerJoin(collectionMemberships, eq(collections.id, collectionMemberships.collection_id))
       .where(eq(collectionMemberships.user_id, userId));
 
     return rows as CollectionWithRole[];
+  }
+
+  async update(slug: string, fields: { name?: string; description?: string; read_only?: number }): Promise<void> {
+    const updates: Record<string, unknown> = {};
+    if (fields.name !== undefined) updates.name = fields.name;
+    if (fields.description !== undefined) updates.description = fields.description;
+    if (fields.read_only !== undefined) updates.read_only = fields.read_only;
+    if (Object.keys(updates).length === 0) return;
+    await this.db.update(collections).set(updates).where(eq(collections.slug, slug));
   }
 
   async getBySlug(slug: string): Promise<Collection | null> {

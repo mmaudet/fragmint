@@ -194,6 +194,7 @@ export interface CollectionWithRole {
   read_only: boolean;
   description: string | null;
   tags?: string[];
+  fragment_count: number;
 }
 
 export type PlanStatus = 'draft' | 'plan_generated' | 'plan_validated' | 'fragments_validated' | 'completed';

@@ -165,6 +165,7 @@ export default function AdminCollectionsPage() {
                 <TableHead>Nom</TableHead>
                 <TableHead className="w-32">Type</TableHead>
                 <TableHead className="w-36">Accès</TableHead>
+                <TableHead className="w-28 text-right">Fragments</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="w-20" />
               </TableRow>
@@ -192,6 +193,9 @@ export default function AdminCollectionsPage() {
                       ) : (
                         <span className="text-xs text-muted-foreground">Lecture/écriture</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">
+                      {col.fragment_count ?? 0}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
                       {col.description ?? '—'}
