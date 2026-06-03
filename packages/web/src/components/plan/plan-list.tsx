@@ -68,7 +68,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
     let list = plans;
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((p) => p.title.toLowerCase().includes(q));
+      list = list.filter((p) => p.title?.toLowerCase().includes(q));
     }
     if (statusFilter !== 'all') list = list.filter((p) => p.status === statusFilter);
     return [...list].sort((a, b) => {

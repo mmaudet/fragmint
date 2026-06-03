@@ -232,7 +232,7 @@ export function CandidateDetailSheet({
                   'bg-red-50 text-red-800 dark:bg-red-950/30',
               )}
             >
-              {candidate.judge_result.overall_recommendation.toUpperCase()} —{' '}
+              {candidate.judge_result.overall_recommendation?.toUpperCase()} —{' '}
               {candidate.judge_result.overall_reason}
             </div>
             {(['reusability', 'semantic_coherence', 'classification_accuracy'] as const).map(
