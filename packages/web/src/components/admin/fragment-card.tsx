@@ -126,7 +126,7 @@ export function AdminFragmentCard({
             <code className="px-1.5 py-0.5 bg-muted rounded">{fragment.domain}</code>
             <span>{fragment.type}</span>
             <span>·</span>
-            <span>{fragment.lang.toUpperCase()}</span>
+            <span>{fragment.lang?.toUpperCase()}</span>
             {fragment.tags.length > 0 && (
               <>
                 <span>·</span>
