@@ -64,9 +64,10 @@ describe('FragmentRetriever interface', () => {
   });
 });
 
-function fakeSearchService(results: SearchResult[] = []): SearchService {
+function fakeSearchService(results: SearchResult[] = [], keywordResults: SearchResult[] = []): SearchService {
   return {
     search: vi.fn(async () => results),
+    keywordSearch: vi.fn(async () => keywordResults),
   } as unknown as SearchService;
 }
 
@@ -193,6 +194,50 @@ describe('VectorRetriever', () => {
     expect(results).toHaveLength(1);
     expect(results[0].score).toBeNull();
     expect(results[0].score_breakdown?.method).toBe('sqlite_like');
+  });
+
+  it('includes keyword-only fragments from keywordSearch when vector misses them', async () => {
+    const vectorResult: SearchResult = { ...SAMPLE_RESULT, id: 'vec-1', score: 0.8 };
+    const kwResult: SearchResult = { ...SAMPLE_RESULT, id: 'kw-1', score: null as unknown as number, domain: 'mirai' };
+    const svc = fakeSearchService([vectorResult], [kwResult]);
+    const retriever = new VectorRetriever(svc);
+    const results = await retriever.searchForSection(
+      { text: 'présentation MIRAI', filters: {}, collectionSlug: null },
+    );
+    const ids = results.map((r) => r.fragment_id);
+    expect(ids).toContain('vec-1');
+    expect(ids).toContain('kw-1');
+    expect(results.find((r) => r.fragment_id === 'kw-1')?.score_breakdown?.method).toBe('sqlite_like');
+  });
+
+  it('deduplicates fragments present in both vector and keyword results (VectorRetriever)', async () => {
+    const shared: SearchResult = { ...SAMPLE_RESULT, id: 'shared-1', score: 0.8 };
+    const svc = fakeSearchService([shared], [shared]);
+    const retriever = new VectorRetriever(svc);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+    );
+    expect(results.filter((r) => r.fragment_id === 'shared-1')).toHaveLength(1);
+  });
+
+  it('calls keywordSearch with the same filters as search', async () => {
+    const svc = fakeSearchService([], []);
+    const retriever = new VectorRetriever(svc);
+    await retriever.searchForSection(
+      {
+        text: 'security',
+        filters: { lang: 'fr', domain: ['cloud'], type: 'argument' },
+        collectionSlug: 'my-col',
+      },
+      3,
+    );
+    expect(vi.mocked(svc.keywordSearch).mock.calls[0]![1]).toMatchObject({
+      lang: 'fr',
+      type: ['argument'],
+      collectionSlug: 'my-col',
+      quality_min: 'approved',
+    });
+    expect(vi.mocked(svc.keywordSearch).mock.calls[0]![2]).toBe(3);
   });
 });
 
@@ -605,6 +650,51 @@ describe('HybridRetriever (RRF)', () => {
     expect(results[0].score_breakdown?.vector_score).toBeCloseTo(0.8);
     expect(results[0].score_breakdown?.vector_rank).toBe(1);
     expect(results[0].score_breakdown?.llm_rank).toBe(1);
+  });
+
+  it('includes SQLite-only fragments from keywordSearch when LLM scores them high', async () => {
+    const vectorResult: SearchResult = { ...SAMPLE_RESULT, id: 'fragmint-1', score: 0.8 };
+    const miraiResult: SearchResult = { ...SAMPLE_RESULT, id: 'mirai-1', score: null as unknown as number, domain: 'mirai' };
+    const svc = fakeSearchService([vectorResult], [miraiResult]);
+    const llmResp = JSON.stringify([
+      { id: 'fragmint-1', score: 2 }, // low — dropped by floor
+      { id: 'mirai-1', score: 9 },    // high — should surface
+    ]);
+    const llm = fakeLlmClient([llmResp]);
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'présentation MIRAI', filters: {}, collectionSlug: null },
+      2,
+    );
+    const ids = results.map((r) => r.fragment_id);
+    expect(ids).toContain('mirai-1');
+  });
+
+  it('deduplicates fragments present in both vector and keyword results (HybridRetriever)', async () => {
+    const shared: SearchResult = { ...SAMPLE_RESULT, id: 'shared-1', score: 0.8 };
+    const svc = fakeSearchService([shared], [shared]);
+    const llm = fakeLlmClient([JSON.stringify([{ id: 'shared-1', score: 7 }])]);
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      1,
+    );
+    expect(results.filter((r) => r.fragment_id === 'shared-1')).toHaveLength(1);
+  });
+
+  it('SQLite-only fragment has vector_score:0 and vector_rank:0 in score_breakdown', async () => {
+    const kwOnly: SearchResult = { ...SAMPLE_RESULT, id: 'kw-only', score: null as unknown as number };
+    const svc = fakeSearchService([], [kwOnly]);
+    const llm = fakeLlmClient([JSON.stringify([{ id: 'kw-only', score: 8 }])]);
+    const retriever = new HybridRetriever(svc, llm, 60, 'balanced', 0); // floor=0 to not drop it
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      1,
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].score_breakdown?.vector_score).toBe(0);
+    expect(results[0].score_breakdown?.vector_rank).toBe(0);
+    expect(results[0].score_breakdown?.llm_score).toBe(8);
   });
 });
 

@@ -16,16 +16,18 @@ export class VectorRetriever implements FragmentRetriever {
     const { filters, collectionSlug } = query;
     // Domain and tags are soft hints — injected into query text, not hard filters.
     const enrichedText = enrichQueryWithFilters(query.text, filters);
-    const results = await this.searchService.search(
-      enrichedText,
-      {
-        type: filters.type ? [filters.type] : undefined,
-        lang: filters.lang,
-        collectionSlug: collectionSlug ?? undefined,
-        quality_min: 'approved',
-      },
-      limit,
-    );
+    const searchFilters = {
+      type: filters.type ? [filters.type] : undefined,
+      lang: filters.lang,
+      collectionSlug: collectionSlug ?? undefined,
+      quality_min: 'approved' as const,
+    };
+
+    const vectorResults = await this.searchService.search(enrichedText, searchFilters, limit);
+    const keywordResults = await this.searchService.keywordSearch(enrichedText, searchFilters, limit);
+
+    const seen = new Set(vectorResults.map((r) => r.id));
+    const results = [...vectorResults, ...keywordResults.filter((r) => !seen.has(r.id))];
 
     const filtered = results
       // null score = SQLite LIKE result → always pass through (no threshold)

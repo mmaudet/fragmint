@@ -374,6 +374,10 @@ export class SearchService {
     };
   }
 
+  async keywordSearch(query: string, filters?: SearchFilters, limit = 20): Promise<SearchResult[]> {
+    return this.sqliteSearch(query, filters, limit);
+  }
+
   private async sqliteSearch(
     query: string,
     filters?: SearchFilters,

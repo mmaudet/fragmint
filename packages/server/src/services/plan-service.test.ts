@@ -82,7 +82,7 @@ function fakeLlm(responses: string[]): LlmClient {
 }
 
 function fakeSearch(results: any[]): SearchService {
-  return { search: vi.fn(async () => results) } as unknown as SearchService;
+  return { search: vi.fn(async () => results), keywordSearch: vi.fn(async () => []) } as unknown as SearchService;
 }
 
 function fakeFragments(createdId = 'frag_new'): FragmentService {
@@ -425,6 +425,7 @@ describe('PlanService.validatePlan — error tolerance', () => {
         if (i === 1) throw new Error('milvus exploded');
         return [{ id: 'f2', score: 0.9, title: 'F2', body_excerpt: 'b', quality: 'reviewed' }];
       }),
+      keywordSearch: vi.fn(async () => []),
     } as unknown as SearchService;
     const svc = makeServiceFull({ llm: fakeLlm([]), search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });

@@ -43,34 +43,37 @@ export class HybridRetriever implements FragmentRetriever {
 
     // Step 1 — Vector candidates (limit × PHASE1_MULTIPLIER), already sorted by cosine desc
     const phase1Count = Math.max(limit * PHASE1_MULTIPLIER, 8);
-    const vectorCandidates = await this.searchService.search(
-      enrichedText,
-      {
-        type: filters.type ? [filters.type] : undefined,
-        lang: filters.lang,
-        collectionSlug: collectionSlug ?? undefined,
-        quality_min: 'approved',
-      },
-      phase1Count,
-    );
+    const searchFilters = {
+      type: filters.type ? [filters.type] : undefined,
+      lang: filters.lang,
+      collectionSlug: collectionSlug ?? undefined,
+      quality_min: 'approved' as const,
+    };
+    const vectorCandidates = await this.searchService.search(enrichedText, searchFilters, phase1Count);
+
+    // Step 1b — Keyword candidates from SQLite LIKE (catches fragments the embedding model misses)
+    const keywordCandidates = await this.searchService.keywordSearch(enrichedText, searchFilters, phase1Count);
+    const seen = new Set(vectorCandidates.map((c) => c.id));
+    const allCandidates = [...vectorCandidates, ...keywordCandidates.filter((c) => !seen.has(c.id))];
+
     console.debug(
-      `[retrieval][hybrid] section "${enrichedText.slice(0, 50)}" → ${vectorCandidates.length} vector candidates`,
+      `[retrieval][hybrid] section "${enrichedText.slice(0, 50)}" → ${vectorCandidates.length} vector + ${allCandidates.length - vectorCandidates.length} keyword candidates`,
     );
 
-    if (vectorCandidates.length === 0) return [];
+    if (allCandidates.length === 0) return [];
 
     // Keep raw vector scores for breakdown (before any RRF transformation)
     const vectorScoreMap = new Map(vectorCandidates.map((c) => [c.id, c.score]));
 
-    // Step 2 — LLM batch judge → Map<id, llm_score_0_10>
-    const llmScoreMap = await this.batchJudge(query, vectorCandidates);
+    // Step 2 — LLM batch judge on ALL candidates → Map<id, llm_score_0_10>
+    const llmScoreMap = await this.batchJudge(query, allCandidates);
 
     // Step 3 — Build 2 ranked lists
-    // List 1: vector order (already sorted by cosine desc)
+    // List 1: vector order only (SQLite-only fragments absent → get 0 contribution from this list)
     const list1 = vectorCandidates.map((c) => ({ id: c.id, _data: c }));
 
-    // List 2: same candidates sorted by LLM score desc
-    const list2 = [...vectorCandidates]
+    // List 2: all candidates sorted by LLM score desc
+    const list2 = [...allCandidates]
       .sort((a, b) => (llmScoreMap.get(b.id) ?? LLM_NEUTRAL_SCORE) - (llmScoreMap.get(a.id) ?? LLM_NEUTRAL_SCORE))
       .map((c) => ({ id: c.id, _data: c }));
 
