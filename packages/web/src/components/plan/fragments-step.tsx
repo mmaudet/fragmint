@@ -7,11 +7,13 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
 import { AddFragmentDialog } from './add-fragment-dialog';
-import { Plus, Loader2 } from 'lucide-react';
+import { SectionBlocksEditor } from './section-blocks-editor';
+import type { SectionBlock } from '@/api/types';
+import { Plus, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?: () => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
   const update = useUpdatePlan(plan.id);
@@ -20,6 +22,14 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
 
   const sections = plan.state.sections;
   const active = sections[activeIdx];
+
+  // Derive section confidence from candidate confidence_level values (computed locally,
+  // not persisted, so always fresh regardless of when the plan was generated).
+  const sectionConfidence: 'good' | 'partial' | 'poor' | 'empty' | null = active == null ? null
+    : active.candidates.length === 0 ? 'empty'
+    : active.candidates.some(c => c.confidence_level === 'high') ? 'good'
+    : active.candidates.some(c => c.confidence_level === 'medium') ? 'partial'
+    : 'poor';
 
   function updateSection(sectionId: string, fn: (s: PlanSection) => PlanSection) {
     const next = sections.map((s) => (s.id === sectionId ? fn(s) : s));
@@ -87,6 +97,15 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                     {active.description}
                   </p>
 
+                  <div className="pt-2 border-t">
+                    <SectionBlocksEditor
+                      blocks={active.blocks ?? []}
+                      onChange={(blocks: SectionBlock[]) =>
+                        updateSection(active.id, (s) => ({ ...s, blocks }))
+                      }
+                    />
+                  </div>
+
                   <div className="flex gap-2 flex-wrap pt-1 border-t">
                     <Button
                       size="sm"
@@ -105,6 +124,34 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                 </CardContent>
               </Card>
 
+              {sectionConfidence === 'empty' && (
+                <div className="mt-3 flex items-start gap-2 rounded-md bg-muted border border-border px-3 py-2 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>{t('planGeneration', 'sectionConfidenceEmpty')}</span>
+                </div>
+              )}
+              {sectionConfidence === 'poor' && active.candidates.length > 0 && (
+                <div className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>{t('planGeneration', 'sectionConfidencePoor')}</span>
+                </div>
+              )}
+              {sectionConfidence === 'partial' && active.candidates.length > 0 && (
+                <div className="mt-3 flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>{t('planGeneration', 'sectionConfidencePartial')}</span>
+                </div>
+              )}
+              {active.candidates.length > 0 && active.candidates.length < 5 && (
+                <div className="mt-3 flex items-start gap-2 rounded-md bg-muted/60 border border-border px-3 py-2 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    {lang === 'fr'
+                      ? `${active.candidates.length} fragment${active.candidates.length > 1 ? 's' : ''} pertinent${active.candidates.length > 1 ? 's' : ''} trouvé${active.candidates.length > 1 ? 's' : ''} (sur 5 demandés). Le système n'a pas trouvé d'autres fragments suffisamment pertinents pour cette section.`
+                      : `${active.candidates.length} relevant fragment${active.candidates.length > 1 ? 's' : ''} found (out of 5 requested). The system did not find enough relevant fragments for this section.`}
+                  </span>
+                </div>
+              )}
               {active.candidates.length === 0 ? (
                 <p className="mt-4 text-sm text-muted-foreground">
                   {t('planGeneration', 'noCandidates')}

@@ -68,6 +68,10 @@ export interface BuildSectionArgs {
   plan_title?: string;
   spec_prompt?: string;
   reference_docs?: Array<{ name: string; content: string }>;
+  /** When true, a structured table will be inserted in the section alongside this prose. */
+  has_table_block?: boolean;
+  /** Role of this prose block relative to surrounding table blocks. */
+  prose_block_role?: 'intro' | 'conclusion' | 'standalone';
 }
 
 const WRITER_SYSTEM_BASE = `You are an expert technical writer producing one section of a larger
@@ -100,6 +104,13 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
   let system = WRITER_SYSTEM_BASE.replace('{LANG}', args.lang);
   if (args.writer_prompt_override && args.writer_prompt_override.trim() !== '') {
     system += `\n\nAdditional guidance: ${args.writer_prompt_override.trim()}`;
+  }
+  if (args.has_table_block) {
+    if (args.prose_block_role === 'intro') {
+      system += '\n\nNote: a structured data table will be inserted after this paragraph. Write only a brief introductory sentence or two — do not describe or repeat the tabular data.';
+    } else if (args.prose_block_role === 'conclusion') {
+      system += '\n\nNote: this paragraph follows a structured data table in the section. Write a brief conclusion that may reference the table above without repeating its data.';
+    }
   }
 
   const lines: string[] = [];

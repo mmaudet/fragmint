@@ -17,13 +17,14 @@ export const PlanFiltersSchema = z.object({
 });
 
 export const ScoreBreakdownSchema = z.object({
-  method: z.enum(['vector', 'agentic', 'hybrid_rrf', 'sqlite_like']),
+  method: z.enum(['vector', 'agentic', 'hybrid_rrf', 'sqlite_like', 'tag_match']),
   vector_score: z.number().optional(),
   vector_rank: z.number().optional(),
   llm_score: z.number().optional(),
   llm_rank: z.number().optional(),
   rrf_score: z.number().optional(),
   rrf_k: z.number().optional(),
+  final_score: z.number().optional(),
 });
 
 export const FragmentCandidateSchema = z.object({
@@ -36,6 +37,9 @@ export const FragmentCandidateSchema = z.object({
   type: z.string().optional(),
   score_breakdown: ScoreBreakdownSchema.optional(),
   justification: z.string().optional(),
+  retrieval_source: z.enum(['vector', 'tag', 'both']).optional(),
+  /** LLM judge confidence: high (llm≥9) / medium (7-8) / low (≤6) / unknown (no LLM score). */
+  confidence_level: z.enum(['high', 'medium', 'low', 'unknown']).optional(),
 });
 
 export const SectionFragmentSelectionSchema = z.object({
@@ -57,6 +61,19 @@ export const TableSourceSchema = z.object({
   }).optional(),
 });
 
+export const SectionBlockSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('prose'),
+    generated_markdown: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('table'),
+    collection_id: z.string(),
+    columns: z.array(z.string()).optional(),
+  }),
+]);
+export type SectionBlock = z.infer<typeof SectionBlockSchema>;
+
 export const PlanSectionSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -67,10 +84,13 @@ export const PlanSectionSchema = z.object({
   filters_override: PlanFiltersSchema.optional(),
   inferred_type: z.string().optional(),
   writer_instructions: z.string().optional(),
+  /** Section-level retrieval quality: good (top llm≥9) / partial (top llm 7-8) / poor (top llm≤6) / empty (no candidates). */
+  section_confidence: z.enum(['good', 'partial', 'poor', 'empty']).optional(),
   render_mode: z.enum(['prose', 'table', 'data_point', 'list']).optional(),
   table_source: TableSourceSchema.optional(),
   columns: z.array(z.string()).optional(),
   data_field: z.string().optional(),
+  blocks: z.array(SectionBlockSchema).optional(),
   reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).optional(),
 });
 

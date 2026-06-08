@@ -137,10 +137,10 @@ export function Workspace({ planId }: { planId: string }) {
             <div className="pl-7 space-y-3">
               <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
                 <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'matchStrong')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'matchMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'matchWeak')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'matchUnscored')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'confidenceHigh')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'confidenceMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'confidenceLow')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
+                <p><span className="font-medium">{t('planGeneration', 'confidenceUnknown')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
               </div>
               <Button
                 size="sm"

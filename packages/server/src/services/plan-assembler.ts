@@ -10,6 +10,7 @@ import { renderMarpFromString } from './render-marp.js';
 import { renderDocxWithTables, type DocxSection } from './render-docx-table.js';
 import { renderPptxWithTables, type PptxSection } from './render-pptx-table.js';
 import { buildGfmTable, buildMarkdownList } from './table-assembler.js';
+import { resolveTableRows, resolveRowsFromCollection } from './plan-table-resolver.js';
 import { PlanService, type PlanRecord } from './plan-service.js';
 
 // Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
@@ -137,23 +138,64 @@ export class PlanAssembler extends PlanService {
       }),
     );
 
-    const messages = buildSectionMessages({
-      section: { title: section.title, description: section.description },
-      fragments: fragments_for_writer,
-      lang: p.state.filters.lang ?? 'fr',
-      max_chars: this.config.fragmentMaxChars,
-      writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
-      plan_title: p.title,
-      spec_prompt: p.state.spec_prompt,
-      reference_docs: [
-        ...(p.state.reference_docs ?? []),
-        ...(section.reference_docs ?? []),
-      ].length ? [
-        ...(p.state.reference_docs ?? []),
-        ...(section.reference_docs ?? []),
-      ] : undefined,
-    });
-    const out = await this.requireLlm().chatMessages(messages);
+    const referenceDocs = [
+      ...(p.state.reference_docs ?? []),
+      ...(section.reference_docs ?? []),
+    ];
+    const hasTableBlock = (section.blocks ?? []).some((b) => b.type === 'table');
+
+    let updatedSections: typeof p.state.sections;
+
+    if (section.blocks && section.blocks.length > 0) {
+      // Blocks mode: generate each prose block independently
+      const proseIndices = section.blocks
+        .map((b, i) => (b.type === 'prose' ? i : -1))
+        .filter((i) => i !== -1);
+
+      const updatedBlocks = [...section.blocks];
+      for (const idx of proseIndices) {
+        const isFirst = idx === proseIndices[0];
+        const isLast = idx === proseIndices[proseIndices.length - 1];
+        const role = hasTableBlock
+          ? isFirst && proseIndices.length > 1 ? 'intro'
+            : isLast && proseIndices.length > 1 ? 'conclusion'
+            : 'standalone'
+          : 'standalone';
+        const messages = buildSectionMessages({
+          section: { title: section.title, description: section.description },
+          fragments: fragments_for_writer,
+          lang: p.state.filters.lang ?? 'fr',
+          max_chars: this.config.fragmentMaxChars,
+          writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
+          plan_title: p.title,
+          spec_prompt: p.state.spec_prompt,
+          reference_docs: referenceDocs.length ? referenceDocs : undefined,
+          has_table_block: hasTableBlock,
+          prose_block_role: role,
+        });
+        const out = await this.requireLlm().chatMessages(messages);
+        updatedBlocks[idx] = { type: 'prose', generated_markdown: out.trim() };
+      }
+      updatedSections = p.state.sections.map((s) =>
+        s.id === sectionId ? { ...s, blocks: updatedBlocks } : s,
+      );
+    } else {
+      // Legacy mode: generate section.generated_markdown
+      const messages = buildSectionMessages({
+        section: { title: section.title, description: section.description },
+        fragments: fragments_for_writer,
+        lang: p.state.filters.lang ?? 'fr',
+        max_chars: this.config.fragmentMaxChars,
+        writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
+        plan_title: p.title,
+        spec_prompt: p.state.spec_prompt,
+        reference_docs: referenceDocs.length ? referenceDocs : undefined,
+      });
+      const out = await this.requireLlm().chatMessages(messages);
+      updatedSections = p.state.sections.map((s) =>
+        s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
+      );
+    }
 
     const now = new Date().toISOString();
     await Promise.all(
@@ -172,18 +214,17 @@ export class PlanAssembler extends PlanService {
       }),
     );
 
-    const updatedSections = p.state.sections.map((s) =>
-      s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
-    );
     return this.update(planId, { sections: updatedSections });
   }
 
   async generateAllSections(planId: string): Promise<PlanRecord | null> {
     const p = await this.get(planId);
     if (!p) return null;
-    // Generate prose sections sequentially to avoid LLM rate limits
+    // Generate prose sections sequentially to avoid LLM rate limits.
+    // Blocks-based sections always run (generateSection handles table blocks internally).
+    // Legacy non-prose sections (render_mode set and not 'prose') are skipped.
     for (const section of p.state.sections) {
-      if (section.render_mode && section.render_mode !== 'prose') continue;
+      if (!section.blocks && section.render_mode && section.render_mode !== 'prose') continue;
       try {
         await this.generateSection(planId, section.id);
       } catch (err) {
@@ -193,92 +234,51 @@ export class PlanAssembler extends PlanService {
     return this.assemble(planId);
   }
 
-  private async resolveTableRows(section: PlanSection): Promise<Record<string, unknown>[]> {
-    const source = section.table_source;
-    const rows: Record<string, unknown>[] = [];
-
-    if (source?.collection_id && this.config.collectionService) {
-      const col = await this.config.collectionService.getById(source.collection_id);
-      if (col) {
-        // Use member fragment payloads
-        const fragmentsSvc = this.config.fragments;
-        if (fragmentsSvc && col.member_ids.length > 0) {
-          for (const fid of col.member_ids) {
-            const frag = await fragmentsSvc.getById(fid);
-            if (!frag) continue;
-            let payload: Record<string, unknown> = {};
-            if (frag.payload) {
-              try {
-                payload = JSON.parse(frag.payload) as Record<string, unknown>;
-              } catch {
-                payload = {};
-              }
-            }
-            rows.push(payload);
-          }
-        }
-      }
-    } else if (source?.fragment_ids && this.config.fragments) {
-      const fragmentsSvc = this.config.fragments;
-      for (const fid of source.fragment_ids) {
-        const frag = await fragmentsSvc.getById(fid);
-        if (!frag) continue;
-        let payload: Record<string, unknown> = {};
-        if (frag.payload) {
-          try {
-            payload = JSON.parse(frag.payload) as Record<string, unknown>;
-          } catch {
-            payload = {};
-          }
-        }
-        rows.push(payload);
-      }
-    } else {
-      // Fall back to selected fragment payloads
-      const fragmentsSvc = this.config.fragments;
-      if (fragmentsSvc) {
-        for (const sel of section.selected) {
-          const frag = await fragmentsSvc.getById(sel.fragment_id);
-          if (!frag) continue;
-          let payload: Record<string, unknown> = {};
-          if (frag.payload) {
-            try {
-              payload = JSON.parse(frag.payload) as Record<string, unknown>;
-            } catch {
-              payload = {};
-            }
-          }
-          rows.push(payload);
-        }
-      }
-    }
-    return rows;
+  private async resolveRows(section: PlanSection): Promise<Record<string, unknown>[]> {
+    return resolveTableRows(section, this.config.collectionService, this.config.fragments);
   }
 
   async assemble(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
     const parts: string[] = [`---\ntitle: "${p.title.replace(/"/g, '\\"')}"\n---`, ''];
+
     for (const s of p.state.sections) {
       parts.push(`# ${s.title}`);
       parts.push('');
 
-      if (s.render_mode === 'table') {
-        const rows = await this.resolveTableRows(s);
-        const columns = s.columns ?? [];
-        const table = buildGfmTable(rows, columns);
+      if (s.blocks && s.blocks.length > 0) {
+        // Blocks-based rendering: interleave prose and table blocks
+        for (const block of s.blocks) {
+          if (block.type === 'prose') {
+            if (block.generated_markdown) parts.push(block.generated_markdown.trim());
+          } else if (block.type === 'table') {
+            const cs = this.config.collectionService;
+            const fs = this.config.fragments;
+            if (cs && fs) {
+              const rows = await resolveRowsFromCollection(block.collection_id, cs, fs);
+              const cols = block.columns ?? (rows[0] ? Object.keys(rows[0]) : []);
+              const table = buildGfmTable(rows, cols);
+              if (table) parts.push(table);
+            }
+          }
+          parts.push('');
+        }
+      } else if (s.render_mode === 'table') {
+        const rows = await this.resolveRows(s);
+        const table = buildGfmTable(rows, s.columns ?? []);
         if (table) parts.push(table);
+        parts.push('');
       } else if (s.render_mode === 'list') {
-        const bodies = s.selected.map((sel) => sel.body).filter(Boolean);
-        const list = buildMarkdownList(bodies);
+        const list = buildMarkdownList(s.selected.map((sel) => sel.body).filter(Boolean));
         if (list) parts.push(list);
+        parts.push('');
       } else {
-        // prose (default) — use generated_markdown if available
         if (s.generated_markdown) parts.push(s.generated_markdown.trim());
+        parts.push('');
       }
-
-      parts.push('');
     }
+
     return this.update(id, { draft_markdown: parts.join('\n'), draft_dirty: false });
   }
 
@@ -302,14 +302,16 @@ export class PlanAssembler extends PlanService {
       throw new Error('No assembled draft to export — call /assemble first');
     }
 
-    const hasTableSection = p.state.sections.some((s) => s.render_mode === 'table');
+    const hasTableSection = p.state.sections.some(
+      (s) => s.render_mode === 'table' || (s.blocks ?? []).some((b) => b.type === 'table'),
+    );
     const tableTemplatePath = this.config.docxTableTemplatePath;
 
     if (hasTableSection && tableTemplatePath) {
       const docxSections: DocxSection[] = await Promise.all(
         p.state.sections.map(async (s) => {
           if (s.render_mode === 'table') {
-            const rows = await this.resolveTableRows(s);
+            const rows = await this.resolveRows(s);
             return {
               title: s.title,
               is_table: true,
@@ -348,13 +350,15 @@ export class PlanAssembler extends PlanService {
       throw new Error('No assembled draft to export — call /assemble first');
     }
 
-    const hasTableSection = p.state.sections.some((s) => s.render_mode === 'table');
+    const hasTableSection = p.state.sections.some(
+      (s) => s.render_mode === 'table' || (s.blocks ?? []).some((b) => b.type === 'table'),
+    );
 
     if (hasTableSection) {
       const pptxSections: PptxSection[] = await Promise.all(
         p.state.sections.map(async (s) => {
           if (s.render_mode === 'table') {
-            const rows = await this.resolveTableRows(s);
+            const rows = await this.resolveRows(s);
             return {
               title: s.title,
               render_mode: 'table' as const,

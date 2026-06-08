@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc, inArray, ne } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { plans, fragmentTypes, fragmentDomains, fragments } from '../db/schema.js';
 import {
@@ -22,10 +22,126 @@ import type {
   SectionQuery,
 } from '../retrieval/fragment-retriever.js';
 import { VectorRetriever } from '../retrieval/vector-retriever.js';
-import { getCurrentRetriever } from '../retrieval/factory.js';
+import { getCurrentRetriever, getCurrentMode } from '../retrieval/factory.js';
 import type { FragmentCollectionService } from './fragment-collection-service.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
+
+// When two sections compete for the same fragment and their score gap is below this
+// threshold, type affinity breaks the tie instead of raw score.
+const DEDUP_CLEAR_GAP = 0.15;
+
+// Compatible fragment types per section inferred_type (beyond exact match → 0.7 affinity).
+const INFERRED_TYPE_FRAGMENT_MAP: Record<string, string[]> = {
+  introduction: ['argument', 'use-case', 'engagement'],
+  conclusion: ['engagement', 'use-case', 'argument'],
+  argument: ['use-case', 'methodology', 'engagement'],
+  reference: ['testimonial', 'bio', 'use-case'],
+  engagement: ['argument', 'methodology', 'use-case'],
+  'use-case': ['reference', 'testimonial', 'argument'],
+  pricing: ['argument', 'clause'],
+  methodology: ['argument', 'engagement'],
+  faq: ['argument', 'use-case'],
+  clause: ['methodology', 'faq'],
+  testimonial: ['reference', 'bio'],
+  bio: ['testimonial', 'reference'],
+};
+
+function typeAlignment(fragmentType: string | undefined, sectionInferredType: string | undefined): number {
+  if (!fragmentType || !sectionInferredType) return 0.0;
+  if (fragmentType === sectionInferredType) return 1.0;
+  return INFERRED_TYPE_FRAGMENT_MAP[sectionInferredType]?.includes(fragmentType) ? 0.7 : 0.0;
+}
+
+function dedupCandidatesAcrossSections<T extends { candidates?: FragmentCandidate[]; inferred_type?: string }>(sections: T[]): T[] {
+  // Build appearance map: fragId → [{idx, score}], and a type lookup
+  const fragTypeMap = new Map<string, string | undefined>();
+  const allApps = new Map<string, Array<{ idx: number; score: number }>>();
+  for (let i = 0; i < sections.length; i++) {
+    for (const c of sections[i].candidates ?? []) {
+      if (!fragTypeMap.has(c.fragment_id)) fragTypeMap.set(c.fragment_id, c.type);
+      const apps = allApps.get(c.fragment_id) ?? [];
+      apps.push({ idx: i, score: c.score ?? 0 });
+      allApps.set(c.fragment_id, apps);
+    }
+  }
+
+  // Assign each fragment to exactly one section
+  const assignedIdx = new Map<string, number>();
+  for (const [fragId, apps] of allApps) {
+    if (apps.length === 1) { assignedIdx.set(fragId, apps[0].idx); continue; }
+    apps.sort((a, b) => b.score - a.score);
+    if (apps[0].score - apps[1].score >= DEDUP_CLEAR_GAP) {
+      assignedIdx.set(fragId, apps[0].idx);
+    } else {
+      // Scores are close — use type affinity as tiebreaker
+      const fragType = fragTypeMap.get(fragId);
+      let best = apps[0];
+      let bestAlign = typeAlignment(fragType, sections[apps[0].idx].inferred_type);
+      for (const app of apps.slice(1)) {
+        const align = typeAlignment(fragType, sections[app.idx].inferred_type);
+        if (align > bestAlign || (align === bestAlign && app.score > best.score)) {
+          best = app; bestAlign = align;
+        }
+      }
+      assignedIdx.set(fragId, best.idx);
+    }
+  }
+
+  const result = sections.map((s, i) => ({
+    ...s,
+    candidates: (s.candidates ?? []).filter((c) => assignedIdx.get(c.fragment_id) === i),
+  }));
+  const removed = sections.reduce((acc, s) => acc + (s.candidates?.length ?? 0), 0) -
+    result.reduce((acc, s) => acc + (s.candidates?.length ?? 0), 0);
+  if (removed > 0) console.log(`[plan-service] cross-section dedup removed ${removed} duplicate candidate(s)`);
+  return result;
+}
+
+export function computeConfidenceLevel(llmScore: number | undefined): 'high' | 'medium' | 'low' | 'unknown' {
+  if (llmScore === undefined) return 'unknown';
+  if (llmScore >= 9) return 'high';
+  if (llmScore >= 7) return 'medium';
+  return 'low';
+}
+
+export function computeSectionConfidence(candidates: FragmentCandidate[]): 'good' | 'partial' | 'poor' | 'empty' {
+  if (candidates.length === 0) return 'empty';
+  const topLlm = candidates
+    .map((c) => c.score_breakdown?.llm_score)
+    .filter((s): s is number => s !== undefined)
+    .reduce((max, s) => Math.max(max, s), -Infinity);
+  if (topLlm !== -Infinity) {
+    if (topLlm >= 9) return 'good';
+    if (topLlm >= 7) return 'partial';
+    return 'poor';
+  }
+  // No LLM score (vector-only mode) — fall back to top vector similarity score
+  const topVector = candidates
+    .map((c) => c.score)
+    .filter((s): s is number => s !== undefined && s !== null)
+    .reduce((max, s) => Math.max(max, s), -Infinity);
+  if (topVector === -Infinity) return 'poor';
+  if (topVector >= 0.80) return 'good';
+  if (topVector >= 0.65) return 'partial';
+  return 'poor';
+}
+
+function extractRelevantSpecContext(spec: string, maxChars: number, sectionTitle: string): string {
+  const paragraphs = spec.split(/\n\n+/);
+  const keywords = sectionTitle.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+  const scored = paragraphs.map((text) => ({
+    text,
+    score: keywords.filter((kw) => text.toLowerCase().includes(kw)).length,
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  let result = '';
+  for (const p of scored) {
+    if (result.length + p.text.length > maxChars) break;
+    result += p.text + '\n\n';
+  }
+  return (result.trim() || spec.slice(0, maxChars)).trim();
+}
 
 function normalizeTitle(raw: string | undefined, fallback: string): string {
   const t = raw?.trim();
@@ -199,27 +315,82 @@ export class PlanService {
     section: { title: string; description: string; inferred_type?: string },
     filters: PlanFilters,
     collectionSlug: string | null,
+    retriever: FragmentRetriever,
     specContext?: string,
     topK?: number,
+    planTitle?: string,
   ): Promise<FragmentCandidate[]> {
+    const specExtract = specContext
+      ? extractRelevantSpecContext(specContext, 1500, section.title)
+      : undefined;
+    const enrichedText = [section.title, section.description, specExtract]
+      .filter(Boolean)
+      .join('\n\n')
+      .slice(0, 2000);
+    console.debug(`[plan-service] query "${section.title.slice(0, 40)}" enriched=${enrichedText.slice(0, 200).replace(/\n/g, ' ')}`);
+
+    const limit = topK ?? this.config.sectionTopK ?? 5;
+
+    // Pool A — detect referential tags + domains in section text, fetch forced candidates
+    const sectionText = `${section.title} ${section.description}`.toLowerCase();
+    const [knownTags, knownDomains] = await Promise.all([
+      this.getKnownTags(),
+      this.getKnownDomains(),
+    ]);
+    const detectedTags = knownTags.filter((tag: string) => {
+      const kw = (tag.includes(':') ? tag.split(':')[1] : tag).toLowerCase();
+      return kw.length >= 3 && sectionText.includes(kw);
+    });
+    // Detect domain slugs whose lowercase name appears in the section TITLE.
+    // Title-only (not description) to avoid false positives like injecting Twake fragments
+    // for an MIRAI section whose description happens to mention "outils Twake".
+    const titleText = section.title.toLowerCase();
+    const detectedDomains = knownDomains.filter((domain) => {
+      const kw = domain.toLowerCase().replace(/-/g, ' ');
+      return kw.length >= 3 && (titleText.includes(kw) || titleText.includes(domain.toLowerCase()));
+    });
+
+    const searchFilters = { quality_min: 'approved' as const, collectionSlug: collectionSlug ?? undefined, lang: filters.lang };
+    const poolLimit = limit * 4;
+
+    // Fetch tag-forced and domain-forced candidates in parallel
+    const [tagForced, ...domainForcedArrays] = await Promise.all([
+      detectedTags.length > 0 && this.config.search
+        ? this.config.search.searchByTags(detectedTags, searchFilters, poolLimit)
+        : Promise.resolve([]),
+      ...detectedDomains.map((domain) =>
+        this.config.search
+          ? this.config.search.searchByDomain(domain, searchFilters, poolLimit)
+          : Promise.resolve([]),
+      ),
+    ]);
+
+    // Merge all pool-A candidates, deduplicating by fragment ID
+    const seenPoolA = new Set<string>();
+    const forcedCandidates = [...tagForced, ...domainForcedArrays.flat()].filter((c) => {
+      if (seenPoolA.has(c.id)) return false;
+      seenPoolA.add(c.id);
+      return true;
+    });
+
     const query: SectionQuery = {
-      text: `${section.title}\n${section.description}`,
+      text: enrichedText,
       filters,
       collectionSlug,
       inferred_type: section.inferred_type,
       spec_context: specContext,
+      forced_candidates: forcedCandidates,
     };
-    const limit = topK ?? this.config.sectionTopK ?? 5;
-    const results: RetrievedFragment[] = await this.requireRetriever().searchForSection(query, limit);
+    console.debug(
+      `[plan-service] "${section.title.slice(0, 30)}" detected_tags=${JSON.stringify(detectedTags)} detected_domains=${JSON.stringify(detectedDomains)} pool_a=${forcedCandidates.length}`,
+    );
+
+    const results: RetrievedFragment[] = await retriever.searchForSection(query, limit);
     const seenIds = new Set<string>();
     return results
-      .filter((r) => r.score == null || r.score >= SECTION_SCORE_THRESHOLD)
+      .filter((r) => r.retrieval_source === 'tag' || r.score == null || r.score >= SECTION_SCORE_THRESHOLD)
       .filter((r) => {
-        // Deduplicate by fragment_id — agentic Phase 1 may select same ID twice
-        if (seenIds.has(r.fragment_id)) {
-          console.debug(`[plan-service] dedup: fragment ${r.fragment_id.slice(0, 8)} returned twice, keeping first`);
-          return false;
-        }
+        if (seenIds.has(r.fragment_id)) return false;
         seenIds.add(r.fragment_id);
         return true;
       })
@@ -232,7 +403,21 @@ export class PlanService {
         type: r.type,
         score_breakdown: r.score_breakdown,
         justification: r.justification,
+        retrieval_source: r.retrieval_source,
+        confidence_level: computeConfidenceLevel(r.score_breakdown?.llm_score),
       }));
+  }
+
+  private async getKnownTags(): Promise<string[]> {
+    const rows = await this.db.selectDistinct({ tags: fragments.tags }).from(fragments);
+    return [...new Set(rows.flatMap((r) => { try { return r.tags ? JSON.parse(r.tags) as string[] : []; } catch { return []; } }))];
+  }
+
+  private async getKnownDomains(): Promise<string[]> {
+    const rows = await this.db.selectDistinct({ domain: fragments.domain }).from(fragments).where(
+      and(ne(fragments.domain, ''), ne(fragments.domain, 'other'))
+    );
+    return rows.map((r) => r.domain).filter((d): d is string => !!d);
   }
 
   private async inferSectionTypes(
@@ -309,6 +494,9 @@ export class PlanService {
     const parsed = parsePlanSections(p.state.plan_markdown);
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
+    const retrieverSnapshot = this.requireRetriever();
+    console.log(`[plan-service] validatePlan starting (mode=${getCurrentMode()}, sections=${parsed.length})`);
+
     const inferredById = await this.inferSectionTypes(parsed);
 
     const newSections = await Promise.all(
@@ -322,12 +510,23 @@ export class PlanService {
             { ...ps, inferred_type },
             filters,
             p.collection_slug,
-            p.state.spec_prompt, // spec_context — used by LLM retrievers for context-aware ranking
+            retrieverSnapshot,
+            p.state.spec_prompt,
+            undefined,
+            p.title,
           );
         } catch (err) {
           console.error(`Section "${ps.title}" search failed:`, err);
           candidates = [];
         }
+        const section_confidence = computeSectionConfidence(candidates);
+        const topLlm = candidates
+          .map((c) => c.score_breakdown?.llm_score)
+          .filter((s): s is number => s !== undefined)
+          .reduce((max, s) => Math.max(max, s), -Infinity);
+        console.log(
+          `[plan] section "${ps.title.slice(0, 40)}": top_llm=${topLlm === -Infinity ? 'none' : topLlm} → ${section_confidence}`,
+        );
         return {
           id: ps.id,
           title: ps.title,
@@ -337,11 +536,16 @@ export class PlanService {
           generated_markdown: previous?.generated_markdown,
           filters_override: previous?.filters_override,
           inferred_type,
+          section_confidence,
         };
       }),
     );
 
-    return this.update(id, { sections: newSections, status: 'plan_validated' });
+    const dedupedSections = dedupCandidatesAcrossSections(newSections).map((s) => ({
+      ...s,
+      section_confidence: computeSectionConfidence(s.candidates ?? []),
+    }));
+    return this.update(id, { sections: dedupedSections, status: 'plan_validated' });
   }
 
   async searchSection(
@@ -361,12 +565,15 @@ export class PlanService {
       inferred_type = inferred.get(section.id);
     }
 
+    const retrieverSnapshot = this.requireRetriever();
     const candidates = await this.runSectionSearch(
       { ...section, inferred_type },
       filters,
       p.collection_slug,
-      p.state.spec_prompt, // spec_context — used by LLM retrievers for context-aware ranking
+      retrieverSnapshot,
+      p.state.spec_prompt,
       args.top_k,
+      p.title,
     );
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId
@@ -375,6 +582,7 @@ export class PlanService {
             candidates,
             filters_override: args.filters_override ?? s.filters_override,
             inferred_type,
+            section_confidence: computeSectionConfidence(candidates),
           }
         : s,
     );
@@ -395,9 +603,10 @@ export class PlanService {
     const toInfer = sections.filter((s) => !s.inferred_type);
     const inferredById = toInfer.length > 0 ? await this.inferSectionTypes(toInfer) : new Map<string, string | undefined>();
 
-    // Sequential to avoid overwhelming the LLM with parallel requests
-    const updatedSections: typeof sections = [];
-    for (const s of sections) {
+    const retrieverSnapshot = this.requireRetriever();
+    console.log(`[plan-service] searchAllSections starting (mode=${getCurrentMode()}, sections=${sections.length})`);
+
+    const rawSections = await Promise.all(sections.map(async (s) => {
       const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
       const filters = s.filters_override ?? p.state.filters;
       let candidates: FragmentCandidate[] = s.candidates ?? [];
@@ -406,14 +615,28 @@ export class PlanService {
           { ...s, inferred_type },
           filters,
           p.collection_slug,
+          retrieverSnapshot,
           p.state.spec_prompt,
           args.top_k,
+          p.title,
         );
       } catch (err) {
         console.error(`[searchAllSections] section "${s.title}" failed:`, err);
       }
-      updatedSections.push({ ...s, candidates, inferred_type });
-    }
+      const section_confidence = computeSectionConfidence(candidates);
+      const topLlm = candidates
+        .map((c) => c.score_breakdown?.llm_score)
+        .filter((sc): sc is number => sc !== undefined)
+        .reduce((max, sc) => Math.max(max, sc), -Infinity);
+      console.log(
+        `[plan] section "${s.title.slice(0, 40)}": top_llm=${topLlm === -Infinity ? 'none' : topLlm} → ${section_confidence}`,
+      );
+      return { ...s, candidates, inferred_type, section_confidence };
+    }));
+    const updatedSections = dedupCandidatesAcrossSections(rawSections).map((s) => ({
+      ...s,
+      section_confidence: computeSectionConfidence(s.candidates ?? []),
+    }));
 
     // Batch fetch full bodies for all candidates in one query
     const allIds = updatedSections.flatMap((s) => (s.candidates ?? []).map((c) => c.fragment_id));
@@ -586,3 +809,4 @@ export class PlanService {
     return this.update(planId, { sections: updatedSections });
   }
 }
+

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
-import type { Plan, PlanFilters, PlanSection, PlanStatus } from '@/api/types';
+import type { Plan, PlanFilters, PlanSection, PlanStatus, FragmentCollection } from '@/api/types';
 
 export function usePlans() {
   return useQuery<Plan[]>({
@@ -138,6 +138,30 @@ export function useGenerateSection(id: string) {
     mutationFn: (sectionId: string) =>
       apiRequest<Plan>('POST', `/v1/plans/${id}/sections/${sectionId}/generate`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
+  });
+}
+
+export function useFragmentCollections() {
+  return useQuery<FragmentCollection[]>({
+    queryKey: ['fragment-collections'],
+    queryFn: () => apiRequest<FragmentCollection[]>('GET', '/v1/fragment-collections'),
+  });
+}
+
+export function useFragmentCollection(id: string | null) {
+  return useQuery<FragmentCollection>({
+    queryKey: ['fragment-collection', id],
+    enabled: !!id,
+    queryFn: () => apiRequest<FragmentCollection>('GET', `/v1/fragment-collections/${id}`),
+  });
+}
+
+export function useFragmentCollectionsByFragmentId(fragmentId: string | null) {
+  return useQuery<FragmentCollection[]>({
+    queryKey: ['fragment-collections-by-fragment', fragmentId],
+    enabled: !!fragmentId,
+    queryFn: () =>
+      apiRequest<FragmentCollection[]>('GET', `/v1/fragment-collections?fragment_id=${fragmentId}`),
   });
 }
 

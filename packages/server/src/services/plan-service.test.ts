@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createDb } from '../db/connection.js';
 import { PlanAssembler } from './plan-assembler.js';
+import { computeConfidenceLevel, computeSectionConfidence } from './plan-service.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
@@ -82,7 +83,7 @@ function fakeLlm(responses: string[]): LlmClient {
 }
 
 function fakeSearch(results: any[]): SearchService {
-  return { search: vi.fn(async () => results), keywordSearch: vi.fn(async () => []) } as unknown as SearchService;
+  return { search: vi.fn(async () => results) } as unknown as SearchService;
 }
 
 function fakeFragments(createdId = 'frag_new'): FragmentService {
@@ -425,7 +426,6 @@ describe('PlanService.validatePlan — error tolerance', () => {
         if (i === 1) throw new Error('milvus exploded');
         return [{ id: 'f2', score: 0.9, title: 'F2', body_excerpt: 'b', quality: 'reviewed' }];
       }),
-      keywordSearch: vi.fn(async () => []),
     } as unknown as SearchService;
     const svc = makeServiceFull({ llm: fakeLlm([]), search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
@@ -535,5 +535,75 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
     expect(input.lang).toBe('fr'); // fallback
     expect(input.tags).toEqual([]); // null tags → []
     expect(collectionSlug).toBe('common'); // null collection → 'common'
+  });
+});
+
+describe('computeConfidenceLevel', () => {
+  it('returns high for llm_score >= 9', () => {
+    expect(computeConfidenceLevel(9)).toBe('high');
+    expect(computeConfidenceLevel(10)).toBe('high');
+  });
+
+  it('returns medium for llm_score 7-8', () => {
+    expect(computeConfidenceLevel(7)).toBe('medium');
+    expect(computeConfidenceLevel(8)).toBe('medium');
+  });
+
+  it('returns low for llm_score <= 6', () => {
+    expect(computeConfidenceLevel(6)).toBe('low');
+    expect(computeConfidenceLevel(3)).toBe('low');
+    expect(computeConfidenceLevel(0)).toBe('low');
+  });
+
+  it('returns unknown when llm_score is undefined', () => {
+    expect(computeConfidenceLevel(undefined)).toBe('unknown');
+  });
+});
+
+describe('computeSectionConfidence', () => {
+  function makeCandidate(llmScore: number | undefined) {
+    return {
+      fragment_id: 'f',
+      score: 0.8,
+      title: null,
+      body_excerpt: null,
+      quality: 'approved',
+      score_breakdown: llmScore !== undefined ? { method: 'hybrid_rrf' as const, llm_score: llmScore } : undefined,
+    };
+  }
+
+  it('returns good when top llm_score >= 9', () => {
+    const candidates = [makeCandidate(9), makeCandidate(5), makeCandidate(3)];
+    expect(computeSectionConfidence(candidates)).toBe('good');
+  });
+
+  it('returns partial when top llm_score is 7-8', () => {
+    const candidates = [makeCandidate(8), makeCandidate(4)];
+    expect(computeSectionConfidence(candidates)).toBe('partial');
+  });
+
+  it('returns poor when top llm_score <= 6', () => {
+    const candidates = [makeCandidate(6), makeCandidate(3)];
+    expect(computeSectionConfidence(candidates)).toBe('poor');
+  });
+
+  it('returns good when no llm_score but top vector score >= 0.80 (vector-only mode)', () => {
+    const candidates = [makeCandidate(undefined), makeCandidate(undefined)];
+    // makeCandidate uses score: 0.8 by default → falls into vector fallback → good
+    expect(computeSectionConfidence(candidates)).toBe('good');
+  });
+
+  it('returns partial when no llm_score and top vector score 0.65-0.79', () => {
+    const candidate = { ...makeCandidate(undefined), score: 0.72 };
+    expect(computeSectionConfidence([candidate])).toBe('partial');
+  });
+
+  it('returns poor when no llm_score and top vector score < 0.65', () => {
+    const candidate = { ...makeCandidate(undefined), score: 0.60 };
+    expect(computeSectionConfidence([candidate])).toBe('poor');
+  });
+
+  it('returns empty for empty candidates', () => {
+    expect(computeSectionConfidence([])).toBe('empty');
   });
 });
