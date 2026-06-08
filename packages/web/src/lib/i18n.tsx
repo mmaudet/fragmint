@@ -408,6 +408,10 @@ const translations = {
     addFragment: { fr: 'Ajouter un fragment', en: 'Add a fragment' },
     addFromLibrary: { fr: 'Depuis la bibliothèque', en: 'From library' },
     addManually: { fr: 'Manuel', en: 'Manual' },
+    addFromCollection: { fr: 'Tableau', en: 'Table' },
+    collectionPickerHint: { fr: 'Rattacher un tableau de fragments à cette section.', en: 'Attach a fragment table to this section.' },
+    collectionPickerEmpty: { fr: 'Aucun tableau disponible.', en: 'No tables available.' },
+    collectionAttached: { fr: 'Tableau rattaché à la section.', en: 'Table attached to the section.' },
     libraryQueryPlaceholder: {
       fr: 'Rechercher dans la bibliothèque…',
       en: 'Search the library…',
@@ -437,8 +441,8 @@ const translations = {
       en: 'Describe the document you want to produce and generate a structured plan. Adjust the markdown plan, then click "Validate plan" to move on.',
     },
     step2Help: {
-      fr: 'Pour chaque section du plan, choisissez les fragments à utiliser. Cliquez « Approuver » pour valider un candidat proposé, ou utilisez « Ajouter un fragment » pour en sélectionner un depuis la bibliothèque ou en créer un manuellement.',
-      en: 'For each section, pick the fragments to use. Click "Approve" to validate a suggested candidate, or use "Add a fragment" to pick one from the library or create one manually.',
+      fr: 'Commencez par cliquer « Rechercher toutes les sections » pour que le système propose des candidats. Ensuite, approuvez les fragments pertinents ou ajoutez-en manuellement depuis la bibliothèque.',
+      en: 'Start by clicking "Search all sections" to let the system suggest candidates. Then approve the relevant fragments or add them manually from the library.',
     },
     step3Help: {
       fr: "Générez le brouillon de chaque section à partir des fragments sélectionnés. Vous pouvez générer toutes les sections d'un coup ou les éditer individuellement.",
@@ -449,6 +453,26 @@ const translations = {
       en: 'Assemble the final document, choose a style template, and download it as .md or .docx.',
     },
     helpClose: { fr: 'Masquer cette aide', en: 'Hide this help' },
+    typeHintIntroPre: {
+      fr: 'Relisez et ajustez les lignes ',
+      en: 'Review and adjust the ',
+    },
+    typeHintIntroPost: {
+      fr: " si nécessaire — elles orientent la recherche de fragments à l'étape suivante.",
+      en: ' lines if needed — they guide fragment retrieval in the next step.',
+    },
+    typeHintHybrid: {
+      fr: 'Mode hybride : similarité sémantique et recherche par mots-clés sont combinées, puis chaque candidat est jugé par le LLM sur une échelle de 1 à 10. Les fragments dont le type correspond à la section reçoivent +10 % sur ce score LLM avant classement final.',
+      en: 'Hybrid mode: semantic similarity and keyword search are combined, then each candidate is judged by the LLM on a scale of 1 to 10. Fragments whose type matches the section receive +10% on that LLM score before final ranking.',
+    },
+    typeHintVectorOnly: {
+      fr: 'Mode vectoriel : les fragments sont classés par similarité sémantique (cosine). Ceux dont le type correspond à la section reçoivent +10 % sur ce score avant classement final.',
+      en: 'Vector mode: fragments are ranked by semantic similarity (cosine). Those whose type matches the section receive +10% on that score before final ranking.',
+    },
+    typeHintAgentic: {
+      fr: 'Mode agentique : le corpus est filtré dès le départ aux fragments du même type que la section — seuls eux sont candidats. Les fragments retenus reçoivent ensuite un bonus de +10 % sur leur score de pertinence.',
+      en: 'Agentic mode: the corpus is filtered upfront to fragments of the same type as the section — only those are candidates. Retained fragments then receive a +10% bonus on their relevance score.',
+    },
     stepLocked: {
       fr: 'Terminez l’étape précédente pour débloquer celle-ci.',
       en: 'Finish the previous step to unlock this one.',
@@ -465,18 +489,18 @@ const translations = {
     },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
     filtersHint: {
-      fr: "Optionnel — permet d'affiner la sélection des fragments.",
-      en: 'Optional — helps narrow down fragment selection.',
+      fr: "Optionnel — Langue est un filtre strict ; Domaines et Tags orientent la recherche sans exclure.",
+      en: 'Optional — Language is a strict filter; Domains and Tags guide the search without excluding.',
     },
     filterDomain: { fr: 'Domaines', en: 'Domains' },
     filterDomainTooltip: {
-      fr: 'Sujet du fragment (ex. twake, lincloud, linagora). Séparer par des virgules pour inclure plusieurs domaines.',
-      en: 'Fragment subject matter (e.g. twake, lincloud, linagora). Separate with commas to include multiple domains.',
+      fr: "Hint sémantique (pas un filtre strict) — injecté comme contexte dans la requête pour biaiser la recherche vers ces domaines. Les fragments d'autres domaines restent accessibles.",
+      en: 'Semantic hint (not a strict filter) — injected as query context to bias the search toward these domains. Fragments from other domains remain accessible.',
     },
     filterLang: { fr: 'Langue', en: 'Language' },
     filterLangTooltip: {
-      fr: 'Code ISO de la langue (ex. fr, en). Laissez vide pour toutes les langues.',
-      en: 'ISO language code (e.g. fr, en). Leave empty for all languages.',
+      fr: "Filtre strict — seuls les fragments dans cette langue seront retournés. Laissez sur 'Any' pour inclure toutes les langues.",
+      en: "Strict filter — only fragments in this language will be returned. Leave on 'Any' to include all languages.",
     },
     filterType: { fr: 'Type', en: 'Type' },
     filterTypeTooltip: {
@@ -485,8 +509,8 @@ const translations = {
     },
     filterTags: { fr: 'Tags', en: 'Tags' },
     filterTagsTooltip: {
-      fr: 'Mots-clés libres pour affiner la recherche (ex. produit:Twake). Séparer par des virgules.',
-      en: 'Free-form keywords to narrow the search (e.g. produit:Twake). Separate with commas.',
+      fr: "Hint sémantique (pas un filtre strict) — injecté comme contexte dans la requête. N'exclut pas les fragments sans ces tags.",
+      en: 'Semantic hint (not a strict filter) — injected as query context. Does not exclude fragments that lack these tags.',
     },
     writerOverride: { fr: 'Instructions globales au rédacteur', en: 'Global writer instructions' },
     writerOverrideTooltip: {
