@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
+import { Copy, Check } from 'lucide-react';
 import { UploadStyleTemplateDialog } from './upload-style-template-dialog';
 import { toast } from 'sonner';
 
@@ -42,6 +43,14 @@ export function ExportStep({ plan }: { plan: Plan }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('docx');
   const [exporting, setExporting] = useState(false);
+  const [copiedDraft, setCopiedDraft] = useState(false);
+
+  function copyToClipboard(text: string, setCopied: (v: boolean) => void) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
   const styleId = plan.state.export_style_template_id ?? '';
   const defaultName = styleTemplates.data?.defaultName ?? null;
   const hasDraft = !!plan.state.draft_markdown?.trim();
@@ -204,12 +213,21 @@ export function ExportStep({ plan }: { plan: Plan }) {
           <CardTitle>Final markdown</CardTitle>
         </CardHeader>
         <CardContent>
-          <Textarea
-            rows={32}
-            className="font-mono text-sm"
-            value={draft}
-            onChange={(e) => onDraftChange(e.target.value)}
-          />
+          <div className="relative">
+            <button
+              onClick={() => copyToClipboard(draft, setCopiedDraft)}
+              className="absolute top-2 right-2 z-10 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Copier"
+            >
+              {copiedDraft ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+            <Textarea
+              rows={32}
+              className="font-mono text-sm pr-8"
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+            />
+          </div>
         </CardContent>
       </Card>
 

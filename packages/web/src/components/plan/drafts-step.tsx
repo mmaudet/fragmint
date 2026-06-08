@@ -7,13 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Loader2, Info } from 'lucide-react';
+import { Loader2, Info, Copy, Check } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: () => void }) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [progress, setProgress] = useState<{ i: number; total: number } | null>(null);
+  const [copiedSection, setCopiedSection] = useState(false);
+
+  function copyToClipboard(text: string, setCopied: (v: boolean) => void) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
   const update = useUpdatePlan(plan.id);
   const generate = useGenerateSection(plan.id);
   const assemble = useAssemble(plan.id);
@@ -202,12 +210,21 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     ? t('planGeneration', 'regenerate')
                     : t('planGeneration', 'generateSection')}
                 </Button>
-                <Textarea
-                  rows={18}
-                  className="font-mono text-sm"
-                  value={activeMarkdown}
-                  onChange={(e) => saveSectionMarkdown(active, e.target.value)}
-                />
+                <div className="relative">
+                  <button
+                    onClick={() => copyToClipboard(activeMarkdown, setCopiedSection)}
+                    className="absolute top-2 right-2 z-10 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Copier"
+                  >
+                    {copiedSection ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                  <Textarea
+                    rows={18}
+                    className="font-mono text-sm pr-8"
+                    value={activeMarkdown}
+                    onChange={(e) => saveSectionMarkdown(active, e.target.value)}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}
