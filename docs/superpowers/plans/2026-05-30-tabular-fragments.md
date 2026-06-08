@@ -2,9 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fragments can store typed structured data (payload), tables in uploaded documents are decomposed into atomic fragments at harvest time, and plan sections can render fragment data as native Word tables, PPTX tables, prose, or data-point injections.
+**Goal:** Fragments can store typed structured data (payload), tables in uploaded documents are decomposed into **one fragment per row** at harvest time, and plan sections can reconstruct tables on demand — choosing which columns to display, in which order.
 
-**Architecture:** A `payload` JSON field + `payload_schema` identifier are added to fragments and harvest candidates. A new `fragment_collections` table groups related fragments (e.g. rows from a harvested table). The plan assembler gains a `render_mode` concept per section (`prose | table | data_point | list`), dispatching to the right renderer: pandoc for prose, docx-templates FOR loop for docx tables, pptxgenjs for PPTX tables.
+**Architecture:**
+- Each table row becomes one fragment with `payload` (row data as JSON) + `payload_schema` (typed discriminant, e.g. `sla-row-v1`)
+- `fragment_collections` groups row-fragments from the same source table — the collection IS the canonical representation of the table
+- At plan assembly, a section with `render_mode: 'table'` calls `resolveTableRows()` to fetch row payloads, then `buildGfmTable(rows, columns)` to reconstruct the table
+- `section.columns` is the **adapt-on-demand** mechanism: pick any subset of columns in any order — different sections can render different views of the same collection
+- Export: docx via docx-templates FOR loop (`renderDocxWithTables`), PPTX via pptxgenjs (`renderPptxWithTables`), both dispatched from `plan-assembler.ts`
+- A fragment's `body` field always contains the prose representation of its row (auto-generated via `toBody()` in the schema registry) — the same fragment works in both `render_mode: 'table'` and `render_mode: 'prose'` sections
 
 **Tech Stack:** Drizzle ORM (SQLite), Zod schemas, Fastify 5 routes, pptxgenjs (new dep), docx-templates (existing), React 19 + shadcn/ui, MCP tool pattern (existing)
 
@@ -20,6 +26,8 @@
 | Collection < 3 lignes | Toujours créer une collection. Provenance > bruit. |
 | Ordre lignes `render_mode: table` | Ordre de la collection par défaut. Slot peut surcharger avec `order_by: {field, direction}`. |
 | Factorisation PayloadEditor | Composant unique `PayloadEditor` dans `packages/web/src/components/payload-editor.tsx`. Utilisé en harvest validation ET drawer fragment. |
+| Granularité fragment tabulaire | **Un fragment = une ligne de tableau.** La collection groupe les lignes. Le fragment a un `body` prose (auto-généré via `toBody()`) qui permet de le réutiliser hors-tableau. `render_mode: 'table'` reconstruit le tableau ; `render_mode: 'prose'` cite la ligne comme texte. |
+| "Adapter à la demande" | `section.columns` dans `PlanSectionSchema` (`schema/plan.ts:77`) contrôle quelles colonnes apparaissent et dans quel ordre. Deux sections peuvent pointer la même collection avec des colonnes différentes. |
 
 ---
 
@@ -48,6 +56,26 @@
 | T18 | E2E tests: pipeline complet | 4h |
 | T19 | OpenCode SKILL.md: workflow composition tabulaire | 2h |
 | **Total** | | **~66h ≈ 8-9 jours** |
+
+---
+
+## État d'implémentation (2026-06-05)
+
+| Tâche | Statut | Notes |
+|-------|--------|-------|
+| T1 — DB: payload + fragment_collections | ✅ Fait | `db/schema.ts:33-34` (payload, payload_schema) + `fragmentCollections` table |
+| T4 — Table detector | ✅ Fait | `services/table-detector.ts` (342 lignes) — pipe, grid, HTML, simple Pandoc |
+| T9 — Plan schema render_mode + columns | ✅ Fait | `schema/plan.ts:75-81` — render_mode, table_source, columns, data_field |
+| T10 — Plan assembler: table mode | ✅ Fait côté serveur | `plan-assembler.ts:196-256` — `resolveTableRows()` + `buildGfmTable()` |
+| T11 — Export docx hybrid | ✅ Fait | `plan-assembler.ts:305-333` — `renderDocxWithTables()` |
+| T12 — Export PPTX pptxgenjs | ✅ Fait | `plan-assembler.ts:351-376` — `renderPptxWithTables()` |
+| T5 — Inférence payload_schema | ✅ Fait (heuristique) | `services/payload-inference.ts` (37 lignes) — keyword matching, pas LLM |
+| T6 — Harvest: décomposition → N candidates | ⚠️ **Bug actuel** | `harvest-table-extractor.ts:flushTableCandidates` stocke UN fragment par tableau (payload = toutes les lignes). **Fix requis** : boucler sur `table.rows`, une insertion par ligne. |
+| T7 — CollectionService + auto-création | 🔄 Service existe | Création automatique à l'harvest non vérifiée |
+| T17 — Plan builder UI: render_mode + collection picker | ❌ À faire | C'est le gap principal : le serveur supporte les sections tableau, l'UI n'expose pas encore ce mode |
+| T3, T13, T14-T16, T18-T19 | ❌ À faire | Migration legacy, MCP, UI harvest/drawer/admin, E2E |
+
+**Priorité immédiate** : corriger T6 (`flushTableCandidates`) — sans ça, le harvest produit des fragments inutilisables pour `render_mode: 'table'`.
 
 ---
 
@@ -642,10 +670,12 @@ git commit -m "feat(llm): inferPayloadSchema prompt for table column classificat
 
 ## Task 6 — Harvest: décomposition tableau → N candidates
 
-**Files:**
-- Modify: `packages/server/src/services/harvester-pipeline.ts`
+> ⚠️ **Bug actuel** : `harvest-table-extractor.ts:flushTableCandidates` insère UN seul candidat par tableau avec `payload = JSON.stringify(table.rows)` (toutes les lignes en une fois). L'architecture cible exige UN candidat PAR LIGNE. Le fix est dans `flushTableCandidates` : boucler sur `table.rows` et insérer un candidat par itération avec `payload = JSON.stringify(row)`.
 
-Insérer **avant** l'appel à `semanticChunk` : appel à `detectTables(markdown)`. Pour chaque table détectée, inférer le schema via LLM, créer N `harvestCandidates` (un par ligne) avec `payload`, `payload_schema`, `body` auto-généré.
+**Files:**
+- Modify: `packages/server/src/services/harvest-table-extractor.ts` (file à modifier, pas harvester-pipeline.ts)
+
+Corriger `flushTableCandidates` pour insérer un candidate par ligne de tableau. Pour chaque ligne, inférer le schema, générer le `body` via `toBody()`, insérer avec `payload = JSON.stringify(row)`.
 
 **Important — type et payload_schema sont orthogonaux :** le LLM doit toujours classifier le `type` du fragment (ex: `commitment`, `pricing`, `reference`), indépendamment du `payload_schema`. Un fragment peut avoir `type='commitment'` ET `payload_schema='sla-row-v1'`. Ne pas utiliser `type: 'data'` — ce n'est pas un type valide. Ajouter `'data'` à `FRAGMENT_TYPES` **uniquement** si vraiment nécessaire pour des fragments sans sémantique métier claire.
 
