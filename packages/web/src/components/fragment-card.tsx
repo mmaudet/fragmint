@@ -6,6 +6,7 @@ import { QualityBadge } from './quality-badge';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Fragment } from '@/api/types';
+import { useSchemaLabel } from '@/components/payload-editor';
 
 function nearDupBadge(info: NonNullable<Fragment['harvest_near_dup']>) {
   const score = info.score ?? 0;
@@ -31,6 +32,7 @@ export function FragmentCard({
   checked,
   onCheckedChange,
 }: FragmentCardProps) {
+  const getSchemaLabel = useSchemaLabel();
   return (
     <Card
       className={cn(
@@ -93,7 +95,7 @@ export function FragmentCard({
         )}
         {/^\|.+\|/.test(fragment.body_excerpt?.split('\n')[0] ?? '') || fragment.payload_schema ? (
           <p className="text-xs text-muted-foreground italic mt-2">
-            📊 Tableau structuré ({fragment.payload_schema ?? 'données'})
+            📊 {getSchemaLabel(fragment.payload_schema)}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground mt-2 line-clamp-2">

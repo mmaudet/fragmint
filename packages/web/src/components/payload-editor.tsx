@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/lib/i18n';
 
 type FieldDef = { key: string; label: string; type: 'text' | 'number' };
 
@@ -7,6 +8,25 @@ type FieldDef = { key: string; label: string; type: 'text' | 'number' };
 // Generic/fallback schemas like generic-row-v1 are excluded — their data is already
 // visible as a rendered HTML table in the Corps field.
 export const STRUCTURED_SCHEMAS = new Set(['pricing-line-v1', 'sla-row-v1', 'reference-v1']);
+
+const SCHEMA_LABELS: Record<string, { fr: string; en: string }> = {
+  'pricing-line-v1': { fr: 'Ligne tarif / compétences', en: 'Pricing / skills row' },
+  'sla-row-v1': { fr: 'Ligne SLA / engagement', en: 'SLA / commitment row' },
+  'reference-v1': { fr: 'Référence technique', en: 'Technical reference' },
+  'generic-row-v1': { fr: 'Ligne de données', en: 'Data row' },
+};
+
+export function schemaLabel(schemaId: string | null | undefined, lang: string = 'fr'): string {
+  if (!schemaId) return lang === 'en' ? 'Tabular data' : 'Données tabulaires';
+  const entry = SCHEMA_LABELS[schemaId];
+  if (!entry) return schemaId;
+  return lang === 'en' ? entry.en : entry.fr;
+}
+
+export function useSchemaLabel() {
+  const { lang } = useI18n();
+  return (schemaId: string | null | undefined) => schemaLabel(schemaId, lang);
+}
 
 /** Returns true only if the payload has at least one non-empty value for a known schema field. */
 export function hasPayloadContent(schemaId: string, value: Record<string, unknown>): boolean {

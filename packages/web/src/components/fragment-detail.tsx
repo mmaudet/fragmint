@@ -28,7 +28,8 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { AlertTriangle, Save, Trash2 } from 'lucide-react';
-import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent } from '@/components/payload-editor';
+import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent, useSchemaLabel } from '@/components/payload-editor';
+import { useFragmentCollectionsByFragmentId } from '@/api/hooks/use-plans';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
@@ -50,9 +51,11 @@ function parseTags(raw: unknown): string[] {
 
 export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProps) {
   const { t } = useI18n();
+  const getSchemaLabel = useSchemaLabel();
   const { activeCollection } = useCollection();
   const { data: fragment, isLoading, isFetching } = useFragment(activeCollection, fragmentId);
   const { data: history } = useFragmentHistory(activeCollection, fragmentId);
+  const { data: parentCollections } = useFragmentCollectionsByFragmentId(fragmentId);
   const reviewMutation = useReviewFragment(activeCollection);
   const approveMutation = useApproveFragment(activeCollection);
   const updateMutation = useUpdateFragment(activeCollection);
@@ -247,7 +250,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                         variant="outline"
                         className="text-xs border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                       >
-                        📊 {fragment.payload_schema ?? 'tableau'}
+                        📊 {getSchemaLabel(fragment.payload_schema)}
                       </Badge>
                     )}
                   </div>
@@ -318,8 +321,7 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                     <Separator />
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-muted-foreground">
-                        Données structurées{' '}
-                        <span className="ml-2 bg-muted px-1.5 py-0.5 rounded text-xs">{fragment.payload_schema}</span>
+                        {getSchemaLabel(fragment.payload_schema)}
                       </p>
                       <PayloadEditor
                         schemaId={fragment.payload_schema}
@@ -372,6 +374,26 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   </tbody>
                 </table>
               </div>
+
+              {parentCollections && parentCollections.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-medium text-muted-foreground">Tableau d'origine</h4>
+                    {parentCollections.map((col) => (
+                      <div key={col.id} className="flex items-center gap-2 text-sm">
+                        <span className="text-base">📊</span>
+                        <span className="font-medium">{col.title}</span>
+                        {col.source_document && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            · {col.source_document}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {history && history.length > 0 && (
                 <>
