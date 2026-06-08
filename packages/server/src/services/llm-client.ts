@@ -50,36 +50,39 @@ export class LlmClient {
   }
 
   async chatMessages(messages: ChatMessage[], options?: { temperature?: number }): Promise<string> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.config.timeout);
-
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (this.config.apiKey) {
-        headers.Authorization = `Bearer ${this.config.apiKey}`;
+    const RETRYABLE = new Set([429, 503]);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.config.timeout);
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.config.apiKey) headers.Authorization = `Bearer ${this.config.apiKey}`;
+        const res = await fetch(`${this.config.endpoint}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: this.config.model,
+            temperature: options?.temperature ?? this.config.temperature,
+            messages,
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          if (RETRYABLE.has(res.status) && attempt < 3) {
+            const delay = 1000 * (2 ** (attempt - 1)); // 1s, 2s
+            console.warn(`[llm-client] ${res.status} attempt ${attempt}/3 — retry in ${delay}ms`);
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+          throw new Error(`LLM request failed: ${res.status} ${res.statusText}`);
+        }
+        const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+        return data.choices[0]?.message?.content ?? '';
+      } finally {
+        clearTimeout(timer);
       }
-      const res = await fetch(`${this.config.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: this.config.model,
-          temperature: options?.temperature ?? this.config.temperature,
-          messages,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        throw new Error(`LLM request failed: ${res.status} ${res.statusText}`);
-      }
-
-      const data = (await res.json()) as {
-        choices: Array<{ message: { content: string } }>;
-      };
-      return data.choices[0]?.message?.content ?? '';
-    } finally {
-      clearTimeout(timer);
     }
+    throw new Error('LLM request failed: exhausted retries');
   }
 
   private extractJson(text: string, expectArray: boolean): string | null {
