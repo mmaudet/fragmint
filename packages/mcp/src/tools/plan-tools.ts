@@ -126,10 +126,6 @@ export const planGenerateDefinition: ToolDefinition = {
     type: 'object',
     properties: {
       id: { type: 'string', description: 'Plan ID' },
-      extra_instructions: {
-        type: 'string',
-        description: 'Additional LLM instructions to guide outline generation (optional)',
-      },
     },
     required: ['id'],
   },
@@ -140,9 +136,7 @@ export function planGenerateHandler(client: FragmintApiClient): ToolHandler {
     const id = args.id as string | undefined;
     if (!id) return toolError('plan_generate: id is required');
     try {
-      const plan = await client.post<{ data: { state: { sections: Array<{ id: string; title: string; description: string }> } } }>(`/v1/plans/${id}/generate-plan`, {
-        extra_instructions: args.extra_instructions as string | undefined,
-      });
+      const plan = await client.post<{ data: { state: { sections: Array<{ id: string; title: string; description: string }> } } }>(`/v1/plans/${id}/generate-plan`, {});
       const sections = (plan as any)?.data?.state?.sections ?? [];
       const outline = sections.map((s: any, i: number) => `${i + 1}. **${s.title}** — ${s.description}`).join('\n');
       return {
