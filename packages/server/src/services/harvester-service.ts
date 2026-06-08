@@ -74,6 +74,7 @@ export interface ValidationInput {
   }>;
   merged: Array<{ candidate: string; into: string }>;
   rejected: string[];
+  row_selections?: Record<string, boolean[]>;
 }
 
 export class HarvesterService {
@@ -198,6 +199,8 @@ export class HarvesterService {
           ? (JSON.parse(c.quality_signals) as CoherenceFlag[])
           : [],
         judge_result: c.judge_result ? (JSON.parse(c.judge_result) as JudgeResult) : null,
+        payload: c.payload ?? null,
+        payload_schema: c.payload_schema ?? null,
       })),
     };
   }
@@ -207,7 +210,7 @@ export class HarvesterService {
     validation: ValidationInput,
     userId: string,
   ): Promise<{ committed: number; merged: number; rejected: number }> {
-    return validate(this.db, this.fragmentService, jobId, validation, userId);
+    return validate(this.db, this.fragmentService, jobId, validation, userId, this.collectionService);
   }
 
   async bulkAccept(

@@ -141,6 +141,7 @@ export function harvestRoutes(
         modified: body.modified ?? [],
         merged: body.merged ?? [],
         rejected: body.rejected ?? [],
+        row_selections: body.row_selections ?? {},
       };
 
       const result = await harvesterService.validate(jobId, validation, request.user.login);

@@ -28,6 +28,8 @@ import {
   ShieldCheck,
   X,
   Trash2,
+  TableProperties,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
@@ -117,22 +119,22 @@ export default function HarvestPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const urlJobId = searchParams.get('job');
+  const jobId = searchParams.get('job');
   const [files, setFiles] = useState<File[]>([]);
   const [uploadHints, setUploadHints] = useState<UploadHints>({});
   const [dragOver, setDragOver] = useState(false);
   const [decisions, _setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>(() => {
-    if (!urlJobId) return {};
+    if (!jobId) return {};
     try {
-      return JSON.parse(sessionStorage.getItem(`harvest-decisions-${urlJobId}`) ?? '{}');
+      return JSON.parse(sessionStorage.getItem(`harvest-decisions-${jobId}`) ?? '{}');
     } catch {
       return {};
     }
   });
   const [modifications, _setModifications] = useState<Record<string, CandidateEdits>>(() => {
-    if (!urlJobId) return {};
+    if (!jobId) return {};
     try {
-      return JSON.parse(sessionStorage.getItem(`harvest-mods-${urlJobId}`) ?? '{}');
+      return JSON.parse(sessionStorage.getItem(`harvest-mods-${jobId}`) ?? '{}');
     } catch {
       return {};
     }
@@ -155,9 +157,9 @@ export default function HarvestPage() {
     [setSearchParams],
   );
   const [candidatePageSize, setCandidatePageSize] = useState(24);
+  const [showTabularOnly, setShowTabularOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const jobId = urlJobId;
   const setJobId = (id: string | null) => {
     if (id) {
       setSearchParams((prev) => {
@@ -205,7 +207,7 @@ export default function HarvestPage() {
 
   const handleAbandon = () => {
     if (!jobId) return;
-    if (!window.confirm('Abandonner cette ingestion ? Le job et tous ses candidats seront supprimés.')) return;
+    if (!window.confirm(t('harvest', 'abandonJobConfirm'))) return;
     deleteJob.mutate(jobId, {
       onSuccess: () => {
         sessionStorage.removeItem(`harvest-decisions-${jobId}`);
@@ -226,14 +228,23 @@ export default function HarvestPage() {
   }
 
   const resolvedDecisions = useMemo<Record<string, 'accepted' | 'rejected'>>(() => {
-    if (Object.keys(decisions).length > 0) return decisions;
-    if (!job?.candidates) return decisions;
-    const fromDb: Record<string, 'accepted' | 'rejected'> = {};
-    for (const c of job.candidates) {
-      if (c.status === 'accepted' || c.status === 'rejected') fromDb[c.id] = c.status;
+    let base: Record<string, 'accepted' | 'rejected'> = decisions;
+    if (!Object.keys(decisions).length && job?.candidates) {
+      const fromDb: Record<string, 'accepted' | 'rejected'> = {};
+      for (const c of job.candidates) {
+        if (c.status === 'accepted' || c.status === 'rejected') fromDb[c.id] = c.status;
+      }
+      if (Object.keys(fromDb).length > 0) base = fromDb;
     }
-    return Object.keys(fromDb).length > 0 ? fromDb : decisions;
-  }, [decisions, job]);
+    // Tabular candidate with all rows unchecked → implicit rejection
+    const result = { ...base };
+    for (const [id, mods] of Object.entries(modifications)) {
+      if (mods.row_selection && mods.row_selection.length > 0 && mods.row_selection.every((v) => !v)) {
+        result[id] = 'rejected';
+      }
+    }
+    return result;
+  }, [decisions, job, modifications]);
 
   const { data: domainsData } = useDomains();
   const { data: typesData } = useTypes();
@@ -293,22 +304,24 @@ export default function HarvestPage() {
     if (!jobId) return;
     const accepted: string[] = [];
     const modified: Array<{ id: string } & CandidateEdits> = [];
+    const rowSelections: Record<string, boolean[]> = {};
     const rejected = Object.entries(resolvedDecisions)
       .filter(([, v]) => v === 'rejected')
       .map(([k]) => k);
 
     for (const [id, decision] of Object.entries(resolvedDecisions)) {
       if (decision !== 'accepted') continue;
-      const edits = modifications[id];
-      if (edits && Object.keys(edits).length > 0) {
-        modified.push({ id, ...edits });
+      const { row_selection, ...otherEdits } = modifications[id] ?? {};
+      if (row_selection) rowSelections[id] = row_selection;
+      if (Object.keys(otherEdits).length > 0) {
+        modified.push({ id, ...otherEdits });
       } else {
         accepted.push(id);
       }
     }
 
     validateMutation.mutate(
-      { jobId, accepted, rejected, modified, merged: [] },
+      { jobId, accepted, rejected, modified, merged: [], row_selections: rowSelections },
       {
         onSuccess: (data) => {
           sessionStorage.removeItem(`harvest-decisions-${jobId}`);
@@ -329,6 +342,16 @@ export default function HarvestPage() {
         <div className="flex items-center gap-6">
           <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
           <CollectionSelector />
+        </div>
+
+        <div className="rounded-md border border-muted bg-muted/30 px-4 py-3 space-y-1.5">
+          <p className="text-sm font-medium">Comment fonctionne l'ingestion ?</p>
+          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+            <li>Déposez un ou plusieurs fichiers <strong>.docx</strong> ci-dessous.</li>
+            <li>Fragmint convertit le document, segmente le texte et classe chaque fragment automatiquement.</li>
+            <li>Vous validez chaque candidat : <strong>Accepter</strong> l'enregistre dans la bibliothèque, <strong>Rejeter</strong> l'écarte.</li>
+            <li>Les tableaux détectés apparaissent avec un bandeau ambre — ouvrez-les pour choisir quelles lignes importer (chaque ligne = un fragment).</li>
+          </ol>
         </div>
 
         <div
@@ -438,7 +461,13 @@ export default function HarvestPage() {
     );
   }
 
-  const candidates = job?.candidates ?? [];
+  const isTabular = (c: HarvestCandidate) => {
+    if (!c.payload_schema || !c.payload) return false;
+    try { return Array.isArray(JSON.parse(c.payload)); } catch { return false; }
+  };
+  const allCandidates = job?.candidates ?? [];
+  const tabularCount = allCandidates.filter(isTabular).length;
+  const candidates = showTabularOnly ? allCandidates.filter(isTabular) : allCandidates;
   const stats = job?.stats;
   const acceptedCount = Object.values(resolvedDecisions).filter((v) => v === 'accepted').length;
 
@@ -460,7 +489,7 @@ export default function HarvestPage() {
             ) : (
               <Trash2 className="h-4 w-4 mr-2" />
             )}
-            Abandonner l'ingestion
+            {t('harvest', 'abandonJob')}
           </Button>
         </div>
         {job?.files && job.files.length > 0 && (
@@ -479,7 +508,7 @@ export default function HarvestPage() {
       </div>
 
       {stats && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[
             { label: t('harvest', 'total'), value: stats.total, color: '' },
             { label: t('harvest', 'duplicates'), value: stats.duplicates, color: 'text-amber-600' },
@@ -497,28 +526,59 @@ export default function HarvestPage() {
         </div>
       )}
 
-      {candidates.length > 0 && (
-        <div className="flex flex-wrap gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={acceptAll}>
-            <CheckCircle className="h-4 w-4 mr-1" />
-            {t('harvest', 'acceptAll')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={rejectAll}>
-            <XCircle className="h-4 w-4 mr-1" />
-            {t('harvest', 'rejectAll')}
-          </Button>
+      {allCandidates.length > 0 && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2.5 flex items-start gap-2 overflow-hidden">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800 dark:text-blue-200 min-w-0 leading-relaxed">
+            <strong>{t('harvest', 'howToValidate')} :</strong>{' '}
+            {t('harvest', 'howToValidateDesc')}{' '}
+            <span className="inline-flex items-center gap-1 font-medium">
+              <TableProperties className="h-3 w-3" /> {t('harvest', 'tabularBadge')}
+            </span>{' — '}
+            <strong>{t('harvest', 'howToValidateCommit')}</strong>{' '}
+            {t('harvest', 'howToValidateSuffix')}
+          </p>
+        </div>
+      )}
+
+      {allCandidates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
           <Button
+            variant={showTabularOnly ? 'default' : 'outline'}
             size="sm"
-            onClick={handleCommit}
-            disabled={acceptedCount === 0 || validateMutation.isPending}
+            onClick={() => setShowTabularOnly((v) => !v)}
+            disabled={tabularCount === 0}
           >
-            {validateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <CheckCircle className="h-4 w-4 mr-1" />
-            )}
-            {t('harvest', 'commit')} ({acceptedCount})
+            <TableProperties className="h-4 w-4 mr-1" />
+            {t('harvest', 'tabularFilter')}{tabularCount > 0 ? ` (${tabularCount})` : ''}
           </Button>
+          {showTabularOnly && (
+            <span className="text-xs text-muted-foreground">
+              — {candidates.length} {t('harvest', 'tabularFilter').toLowerCase()}{candidates.length > 1 ? '' : ''} {t('harvest', 'tabularShown')}{candidates.length > 1 ? 's' : ''}
+            </span>
+          )}
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" size="sm" onClick={acceptAll}>
+              <CheckCircle className="h-4 w-4 mr-1" />
+              {t('harvest', 'acceptAll')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={rejectAll}>
+              <XCircle className="h-4 w-4 mr-1" />
+              {t('harvest', 'rejectAll')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCommit}
+              disabled={acceptedCount === 0 || validateMutation.isPending}
+            >
+              {validateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-1" />
+              )}
+              {t('harvest', 'commit')} ({acceptedCount})
+            </Button>
+          </div>
         </div>
       )}
 
@@ -536,6 +596,7 @@ export default function HarvestPage() {
                   key={c.id}
                   candidate={c}
                   decision={resolvedDecisions[c.id]}
+                  rowSelection={modifications[c.id]?.row_selection}
                   onAccept={() => setDecision(c.id, 'accepted')}
                   onReject={() => setDecision(c.id, 'rejected')}
                   onClick={() => setSelectedCandidate(c)}

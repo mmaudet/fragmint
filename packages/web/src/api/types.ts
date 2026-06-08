@@ -221,8 +221,10 @@ export interface FragmentCandidate {
     llm_rank?: number;
     rrf_score?: number;
     rrf_k?: number;
+    final_score?: number;
   };
   justification?: string;
+  confidence_level?: 'high' | 'medium' | 'low' | 'unknown';
 }
 
 export interface SectionFragmentSelection {
@@ -241,6 +243,20 @@ export interface TableSource {
   order_by?: { field: string; direction: 'asc' | 'desc' };
 }
 
+export type SectionBlock =
+  | { type: 'prose'; generated_markdown?: string }
+  | { type: 'table'; collection_id: string; columns?: string[] };
+
+export interface FragmentCollection {
+  id: string;
+  title: string;
+  payload_schema: string | null;
+  member_ids: string[];
+  source_document: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PlanSection {
   id: string;
   title: string;
@@ -251,10 +267,12 @@ export interface PlanSection {
   filters_override?: PlanFilters;
   inferred_type?: string;
   writer_instructions?: string;
+  section_confidence?: 'good' | 'partial' | 'poor' | 'empty';
   render_mode?: 'prose' | 'table' | 'data_point' | 'list';
   table_source?: TableSource;
   columns?: string[];
   data_field?: string;
+  blocks?: SectionBlock[];
 }
 
 export interface PlanState {

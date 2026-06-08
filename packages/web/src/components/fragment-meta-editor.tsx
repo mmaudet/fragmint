@@ -71,9 +71,10 @@ interface Props {
   domains: string[];
   availableTags?: string[];
   onChange: (edits: MetaEdits) => void;
+  hideBody?: boolean;
 }
 
-export function FragmentMetaEditor({ edits, types, domains, availableTags, onChange }: Props) {
+export function FragmentMetaEditor({ edits, types, domains, availableTags, onChange, hideBody }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [pendingTag, setPendingTag] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState(false);
@@ -287,7 +288,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
       </div>
 
       {/* Body */}
-      <div className="space-y-1">
+      {!hideBody && <div className="space-y-1">
         <div className="flex items-center justify-between">
           <label className="text-xs text-muted-foreground">Corps</label>
           <button
@@ -327,7 +328,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
             >{edits.body}</ReactMarkdown>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

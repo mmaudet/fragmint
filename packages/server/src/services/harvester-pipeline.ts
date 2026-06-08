@@ -174,7 +174,7 @@ export async function runPipeline(
       // Parallel LLM calls — one segmentAndClassify per semantic chunk
       // Skip table-of-contents chunks (Word ToC → Pandoc heading with .Contents-Heading class)
       const semanticChunks = semanticChunk(markdown).filter(
-        (chunk) => !/(Contents-Heading|table.*mati.res)/i.test(chunk.sourceSection ?? ''),
+        (chunk) => !/(Contents-Heading|table.*(mati.res|chapitres)|sommaire)/i.test(chunk.sourceSection ?? ''),
       );
 
       // Assign doc_position to table specs.
@@ -227,7 +227,13 @@ export async function runPipeline(
       type TaggedBlock = CombinedBlock & { _sourceSection: string; _chunkIndex: number; _blockIndexInChunk: number };
       const allBlocks = chunkResults.flat() as TaggedBlock[];
       const dedupedTagged = deduplicateL1L2(allBlocks);
-      const l1l2Blocks: TaggedBlock[] = dedupedTagged.filter((b) => !isJunky(b.body ?? ''));
+      const l1l2Blocks: TaggedBlock[] = dedupedTagged.filter((b) => {
+        const body = (b.body ?? '').trim();
+        if (isJunky(body)) return false;
+        // Drop heading-only bodies (TDC entries that slipped through chunking)
+        if (/^#{1,6}\s+[^\n]+$/.test(body)) return false;
+        return true;
+      });
       console.log(`[harvest:${jobId}] ${l1l2Blocks.length} block(s) after dedup+separator-filter`);
 
       // L3: embedding cosine dedup (skipped when embedding service unavailable)
@@ -285,7 +291,9 @@ export async function runPipeline(
         for (const tag of knownTags) {
           const normalizedTag = tag.toLowerCase();
           const keyword = normalizedTag.includes(':') ? normalizedTag.split(':')[1] : normalizedTag;
-          if (keyword.length >= 3 && blockText.includes(keyword)) {
+          const escapedKw = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const wordBoundary = new RegExp(`(?<![\\p{L}\\p{N}])${escapedKw}(?![\\p{L}\\p{N}])`, 'iu');
+          if (keyword.length >= 3 && wordBoundary.test(blockText)) {
             if (!block.tags) block.tags = [];
             if (!block.tags.some((t) => t.toLowerCase() === normalizedTag)) {
               block.tags.push(normalizedTag);
@@ -355,7 +363,7 @@ export async function runPipeline(
             domain: block.domain,
             lang: block.lang || lang,
             tags: JSON.stringify(block.tags),
-            confidence: block.confidence,
+            confidence: block.confidence ?? 0.5,
             new_proposals: JSON.stringify(block.new_proposals ?? {}),
             metadata_status: getMetadataStatus(block),
             trust_sources_json: JSON.stringify(trustSourcesPerBlock[j]),

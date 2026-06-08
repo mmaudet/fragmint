@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
-import { Check, X, AlertTriangle, Info } from 'lucide-react';
+import { Check, X, AlertTriangle, Info, TableProperties } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
-import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent } from '@/components/payload-editor';
+import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent, useSchemaLabel } from '@/components/payload-editor';
 import { tagDisplayLabel } from '@/lib/tag-display';
 
 function getSimilarityLevel(
@@ -40,6 +40,7 @@ const SIMILARITY_BADGE: Record<
 interface CandidateCardProps {
   candidate: HarvestCandidate;
   decision?: 'accepted' | 'rejected';
+  rowSelection?: boolean[];
   onAccept: () => void;
   onReject: () => void;
   onClick?: () => void;
@@ -48,11 +49,13 @@ interface CandidateCardProps {
 export function CandidateCard({
   candidate,
   decision,
+  rowSelection,
   onAccept,
   onReject,
   onClick,
 }: CandidateCardProps) {
   const { t } = useI18n();
+  const getSchemaLabel = useSchemaLabel();
   const simLevel = getSimilarityLevel(candidate.duplicate_score);
   const pct =
     candidate.duplicate_score != null ? Math.round(candidate.duplicate_score * 100) : null;
@@ -147,11 +150,42 @@ export function CandidateCard({
             📄 {candidate.source_section}
           </span>
         )}
-        {(/^\|.+\|/.test(candidate.body?.split('\n')[0] ?? '') || /<table[\s>]/i.test(candidate.body ?? '')) ? (
-          <p className="text-xs text-muted-foreground italic">📊 Tableau structuré ({candidate.payload_schema ?? 'données'})</p>
-        ) : (
-          <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>
-        )}
+        {(() => {
+          let rowCount: number | null = null;
+          if (candidate.payload_schema && candidate.payload) {
+            try {
+              const p = JSON.parse(candidate.payload);
+              if (Array.isArray(p)) rowCount = p.length;
+            } catch { /* ignore */ }
+          }
+          if (rowCount !== null) {
+            const configured = rowSelection !== undefined;
+            const selectedCount = configured ? rowSelection.filter(Boolean).length : rowCount;
+            if (configured) {
+              return (
+                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-2.5 py-1.5">
+                  <TableProperties className="h-3.5 w-3.5 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="text-xs font-medium text-green-800 dark:text-green-300">
+                    Tableau — {selectedCount}/{rowCount} ligne{rowCount > 1 ? 's' : ''} sélectionnée{selectedCount > 1 ? 's' : ''}
+                  </span>
+                  <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400 ml-auto shrink-0" />
+                </div>
+              );
+            }
+            return (
+              <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-2.5 py-1.5">
+                <TableProperties className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                  Tableau — {rowCount} ligne{rowCount > 1 ? 's' : ''} à valider
+                </span>
+                <span className="text-xs text-amber-600 dark:text-amber-400 ml-auto">
+                  Ouvrir →
+                </span>
+              </div>
+            );
+          }
+          return <p className="text-xs text-muted-foreground line-clamp-3">{candidate.body}</p>;
+        })()}
 
         {candidate.payload_schema && candidate.payload && STRUCTURED_SCHEMAS.has(candidate.payload_schema) && (() => {
           let parsed: Record<string, unknown> = {};
@@ -160,8 +194,7 @@ export function CandidateCard({
           return (
             <div className="space-y-1 pt-1 border-t">
               <p className="text-xs text-muted-foreground font-medium">
-                Données structurées{' '}
-                <span className="bg-muted px-1.5 py-0.5 rounded text-xs">{candidate.payload_schema}</span>
+                {getSchemaLabel(candidate.payload_schema)}
               </p>
               <PayloadEditor
                 schemaId={candidate.payload_schema}

@@ -11,6 +11,7 @@ export const FRAGMENT_TYPES = [
   'conclusion',
   'bio',
   'testimonial',
+  'reference',
   'methodology',
   'engagement',
   'use-case',

@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom';
 import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-editor';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Check,
   X,
@@ -26,6 +26,7 @@ export interface CandidateEdits {
   lang?: string;
   tags?: string[];
   body?: string;
+  row_selection?: boolean[];
 }
 
 
@@ -57,20 +58,23 @@ export function CandidateDetailSheet({
 }: Props) {
   const { t } = useI18n();
   const appliedSuggestionsRef = useRef<SuggestedMetadata | null>(null);
+  const editsRef = useRef(edits);
+  useEffect(() => { editsRef.current = edits; });
 
   // Auto-apply LLM suggestions when a new candidate opens
   useEffect(() => {
     if (!candidate?.judge_result?.suggested_metadata) return;
     const s = candidate.judge_result.suggested_metadata;
+    const current = editsRef.current;
     appliedSuggestionsRef.current = s;
     onEditsChange({
-      ...edits,
+      ...current,
       ...(s.type && { type: s.type }),
       ...(s.domain && { domain: s.domain }),
       ...(s.tags && {
         // Merge: judge suggestions + any prefixed tags from body-scan/hints
         // Fall back to candidate.tags when no user edits exist yet
-        tags: [...new Set([...s.tags, ...(edits.tags ?? candidate?.tags ?? []).filter((t) => t.includes(':'))])],
+        tags: [...new Set([...s.tags, ...(current.tags ?? candidate?.tags ?? []).filter((t) => t.includes(':'))])],
       }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,6 +82,23 @@ export function CandidateDetailSheet({
 
   if (!candidate) return null;
 
+  // Detect tabular candidate: payload is an array of row objects
+  let tabularRows: Record<string, string>[] | null = null;
+  let tabularHeaders: string[] = [];
+  if (candidate.payload_schema && candidate.payload) {
+    try {
+      const parsed = JSON.parse(candidate.payload);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        tabularRows = parsed;
+        tabularHeaders = Object.keys(parsed[0]);
+      }
+    } catch { /* not tabular */ }
+  }
+  const rowSelection = edits.row_selection ?? tabularRows?.map(() => true);
+  const selectedRowCount = rowSelection ? rowSelection.filter(Boolean).length : null;
+  const allRowsUnchecked = tabularRows !== null && selectedRowCount === 0;
+
+  const visibleSignals = (candidate.quality_signals ?? []).filter((s) => s.type !== 'duplicate_check');
   const current = { ...candidate, ...edits };
   const appliedSuggestions = appliedSuggestionsRef.current;
 
@@ -159,6 +180,90 @@ export function CandidateDetailSheet({
           );
         })()}
 
+        {tabularRows && rowSelection && (
+          <div className="space-y-3">
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2.5 space-y-1">
+              <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">
+                {t('harvest', 'tabularDetected')}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                {t('harvest', 'tabularDetectedDesc')}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">
+                  {selectedRowCount} / {tabularRows.length} {t('harvest', 'tabularRowsSuffix')}
+                  {' '}
+                  <span className="text-muted-foreground font-normal">
+                    → {selectedRowCount} fragment{(selectedRowCount ?? 0) > 1 ? 's' : ''} {t('harvest', 'tabularFragmentsSuffix')}
+                  </span>
+                </span>
+                <div className="flex gap-2 text-xs">
+                  <button
+                    className="text-primary hover:underline"
+                    onClick={() => onEditsChange({ ...edits, row_selection: tabularRows!.map(() => true) })}
+                  >
+                    {t('harvest', 'tabularCheckAll')}
+                  </button>
+                  <button
+                    className="text-muted-foreground hover:underline"
+                    onClick={() => onEditsChange({ ...edits, row_selection: tabularRows!.map(() => false) })}
+                  >
+                    {t('harvest', 'tabularUncheckAll')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      <th className="w-8 px-2 py-1.5" />
+                      {tabularHeaders.map((h) => (
+                        <th key={h} className="px-2 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tabularRows.map((row, i) => (
+                      <tr
+                        key={i}
+                        className={cn(
+                          'border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-opacity',
+                          !rowSelection[i] && 'opacity-35',
+                        )}
+                        onClick={() => {
+                          const next = [...rowSelection];
+                          next[i] = !next[i];
+                          onEditsChange({ ...edits, row_selection: next });
+                        }}
+                      >
+                        <td className="px-2 py-1.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={rowSelection[i] ?? true}
+                            onChange={() => {}}
+                            className="h-3.5 w-3.5 cursor-pointer"
+                          />
+                        </td>
+                        {tabularHeaders.map((h) => (
+                          <td key={h} className="px-2 py-1.5 max-w-[180px] truncate">
+                            {row[h] ?? ''}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         <FragmentMetaEditor
           edits={{
             type: current.type,
@@ -170,6 +275,7 @@ export function CandidateDetailSheet({
           types={types}
           domains={domains}
           availableTags={availableTags}
+          hideBody={!!tabularRows}
           onChange={(m: MetaEdits) =>
             onEditsChange({
               ...edits,
@@ -182,12 +288,12 @@ export function CandidateDetailSheet({
           }
         />
 
-        {candidate.quality_signals && candidate.quality_signals.filter((s) => s.type !== 'duplicate_check').length > 0 && (
+        {visibleSignals.length > 0 && (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t('harvest', 'qualitySignals')}
             </p>
-            {candidate.quality_signals.filter((s) => s.type !== 'duplicate_check').map((s) => (
+            {visibleSignals.map((s) => (
               <div
                 key={s.type}
                 className={cn(
@@ -314,16 +420,31 @@ export function CandidateDetailSheet({
           </div>
         )}
 
-        <Button variant="outline" size="sm" className="w-full" onClick={onClose}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            toast.info(t('harvest', 'editsSaved'));
+            onClose();
+          }}
+        >
           <Save className="h-3.5 w-3.5 mr-1" />
           {t('harvest', 'saveEdits')}
         </Button>
+        {allRowsUnchecked && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-1.5 text-center">
+            {t('harvest', 'tabularNoRows')}
+          </p>
+        )}
         <div className="flex gap-2">
           <Button
             className="flex-1"
             variant={decision === 'accepted' ? 'default' : 'outline'}
+            disabled={allRowsUnchecked}
             onClick={() => {
               onAccept();
+              toast.success(t('harvest', 'candidateAccepted'));
               onClose();
             }}
           >
@@ -335,6 +456,7 @@ export function CandidateDetailSheet({
             variant={decision === 'rejected' ? 'destructive' : 'outline'}
             onClick={() => {
               onReject();
+              toast.info(t('harvest', 'candidateRejected'));
               onClose();
             }}
           >

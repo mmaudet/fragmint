@@ -63,7 +63,7 @@ export async function flushTableCandidates(
   lang: string,
   uploadHints: UploadHints,
   existingDomains: string[],
-  collectionService?: FragmentCollectionService,
+  _collectionService?: FragmentCollectionService,
 ): Promise<number> {
   if (specs.length === 0) return 0;
 
@@ -71,44 +71,40 @@ export async function flushTableCandidates(
   let count = 0;
 
   for (const spec of specs) {
-    const { table, schemaId, body } = spec;
+    const { table, schemaId } = spec;
+    const type = SCHEMA_TYPE_MAP[schemaId] ?? 'pricing';
+    const tableTitle = table.precedingHeading ?? `Tableau (${schemaId})`;
+    const validRows = table.rows.filter((row) => Object.values(row).some((v) => v?.trim()));
+    if (validRows.length === 0) continue;
+
     const id = `hcn-${randomUUID()}`;
-    const title = table.precedingHeading ?? `Tableau (${schemaId})`;
+    const body = buildGfmTable({ ...table, rows: validRows });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(harvestCandidates).values([{
       id,
       job_id: jobId,
-      title,
+      title: tableTitle,
       body,
-      type: SCHEMA_TYPE_MAP[schemaId] ?? 'pricing',
+      type,
       domain,
       lang,
-      tags: JSON.stringify([]),
-      confidence: 0.80,
+      tags: JSON.stringify(['source:tableau']),
+      confidence: 0.85,
       origin_source: filename,
       origin_page: null,
       source_section: table.precedingHeading ?? null,
       doc_position: spec.docPosition ?? 999999,
       status: 'pending',
-      payload: JSON.stringify(table.rows),
+      payload: JSON.stringify(validRows),
       payload_schema: schemaId,
     }] as any);
-    count += 1;
 
-    if (collectionService) {
-      await collectionService.create({
-        title,
-        payloadSchema: schemaId,
-        memberIds: [id],
-        sourceDocument: filename,
-        createdBy: 'harvest-pipeline',
-      });
-    }
+    count += 1;
   }
 
   if (count > 0) {
-    console.log(`[harvest:${jobId}] ${filename}: ${specs.length} table(s) → ${count} structured candidate(s)`);
+    console.log(`[harvest:${jobId}] ${filename}: ${count} table candidate(s) inserted`);
   }
 
   return count;

@@ -2,8 +2,8 @@
 // Semantic chunker: splits markdown by H1–H3 headers, merges small sections,
 // falls back to paragraph splitting for oversized sections.
 
-export const SECTION_MAX_CHARS = 12000; // ~3000 tokens
-const MIN_MERGE_CHARS = 200; // sections smaller than this are merged with the next
+export const SECTION_MAX_CHARS = 2000; // ~640 tokens — keeps fragments within embedding window
+const MIN_MERGE_CHARS = 500; // sections smaller than this are merged — avoids title-only fragments
 
 export interface SemanticChunk {
   text: string;
@@ -82,7 +82,17 @@ export function semanticChunk(markdown: string): SemanticChunk[] {
   }
   if (pending) chunks.push(...splitLargeChunk(pending));
 
-  return chunks.length > 0 ? chunks : [{ text: markdown.trim(), sourceSection: '' }];
+  // Drop chunks whose content is mostly headers with no substantive paragraph text
+  const substantive = chunks.filter((c) => {
+    const paragraphContent = c.text
+      .split('\n')
+      .filter((l) => l.trim() && !l.trim().startsWith('#'))
+      .join(' ')
+      .trim();
+    return paragraphContent.length > 0;
+  });
+
+  return substantive.length > 0 ? substantive : [{ text: markdown.trim(), sourceSection: '' }];
 }
 
 // ── Internals ─────────────────────────────────────────────────────────────────

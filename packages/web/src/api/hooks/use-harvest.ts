@@ -60,6 +60,7 @@ export function useValidateCandidates(collectionSlug: string) {
       rejected: string[];
       modified?: any[];
       merged?: any[];
+      row_selections?: Record<string, boolean[]>;
     }) =>
       apiRequest<ValidateResult>(
         'POST',

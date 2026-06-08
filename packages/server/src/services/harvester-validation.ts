@@ -11,6 +11,7 @@ import {
 import type { FragmentService } from './fragment-service.js';
 import type { FragmentBulkService } from './fragment-bulk-service.js';
 import type { ValidationInput } from './harvester-service.js';
+import type { FragmentCollectionService } from './fragment-collection-service.js';
 
 export async function validate(
   db: FragmintDb,
@@ -18,6 +19,7 @@ export async function validate(
   jobId: string,
   validation: ValidationInput,
   userId: string,
+  collectionService?: FragmentCollectionService,
 ): Promise<{ committed: number; merged: number; rejected: number }> {
   let committed = 0;
   let merged = 0;
@@ -40,45 +42,15 @@ export async function validate(
 
     if (rows.length === 0) continue;
     const candidate = rows[0];
-
     const tags = tagsFromCandidate(candidate);
 
-    const result = await fragmentService.create(
-      {
-        type: candidate.type as any,
-        domain: candidate.domain,
-        tags,
-        lang: candidate.lang,
-        body: candidate.body,
-        translation_of: null,
-        parent_id: null,
-        generation: 0,
-        origin: 'harvested',
-        origin_source: candidate.origin_source,
-        origin_page: candidate.origin_page ?? null,
-        valid_from: null,
-        valid_until: null,
-        access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        harvest_confidence: candidate.confidence,
-        payload: candidate.payload ?? null,
-        payload_schema: candidate.payload_schema ?? null,
-      } as any,
-      userId,
-      'expert',
-      undefined,
-      undefined,
-      collectionSlug,
+    const n = await commitCandidate(
+      db, fragmentService, collectionService,
+      candidate, { type: candidate.type, domain: candidate.domain, lang: candidate.lang, tags, body: candidate.body },
+      validation.row_selections?.[candidateId],
+      userId, collectionSlug,
     );
-
-    await Promise.all([
-      db
-        .update(harvestCandidates)
-        .set({ status: 'accepted', fragment_id: result.id })
-        .where(eq(harvestCandidates.id, candidateId)),
-      upsertTags(db, tags),
-    ]);
-
-    committed++;
+    committed += n;
   }
 
   // Modified candidates — create fragments with modifications
@@ -91,45 +63,22 @@ export async function validate(
 
     if (rows.length === 0) continue;
     const candidate = rows[0];
-
     const tags = tagsFromCandidate(candidate, mod.tags);
 
-    const result = await fragmentService.create(
+    const n = await commitCandidate(
+      db, fragmentService, collectionService,
+      candidate,
       {
-        type: (mod.type ?? candidate.type) as any,
+        type: mod.type ?? candidate.type,
         domain: mod.domain ?? candidate.domain,
-        tags,
         lang: mod.lang ?? candidate.lang,
+        tags,
         body: mod.body ?? candidate.body,
-        translation_of: null,
-        parent_id: null,
-        generation: 0,
-        origin: 'harvested',
-        origin_source: candidate.origin_source,
-        origin_page: candidate.origin_page ?? null,
-        valid_from: null,
-        valid_until: null,
-        access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-        harvest_confidence: candidate.confidence,
-        payload: candidate.payload ?? null,
-        payload_schema: candidate.payload_schema ?? null,
-      } as any,
-      userId,
-      'expert',
-      undefined,
-      undefined,
-      collectionSlug,
+      },
+      validation.row_selections?.[mod.id],
+      userId, collectionSlug,
     );
-
-    await Promise.all([
-      db
-        .update(harvestCandidates)
-        .set({ status: 'accepted', fragment_id: result.id })
-        .where(eq(harvestCandidates.id, mod.id)),
-      upsertTags(db, tags),
-    ]);
-
-    committed++;
+    committed += n;
   }
 
   // Merged candidates
@@ -166,6 +115,140 @@ export async function validate(
   }
 
   return { committed, merged, rejected };
+}
+
+async function commitCandidate(
+  db: FragmintDb,
+  fragmentService: FragmentService,
+  collectionService: FragmentCollectionService | undefined,
+  candidate: typeof harvestCandidates.$inferSelect,
+  overrides: { type: string; domain: string; lang: string; tags: string[]; body: string },
+  rowSelection: boolean[] | undefined,
+  userId: string,
+  collectionSlug: string | undefined,
+): Promise<number> {
+  const { type, domain, lang, tags, body } = overrides;
+
+  // Detect tabular payload (payload is an array of row objects)
+  let tabularRows: Record<string, string>[] | null = null;
+  if (candidate.payload_schema && candidate.payload) {
+    try {
+      const parsed = JSON.parse(candidate.payload);
+      if (Array.isArray(parsed)) tabularRows = parsed;
+    } catch { /* not array payload */ }
+  }
+
+  if (tabularRows) {
+    // Tabular candidate: expand to one fragment per selected row
+    const rowFragmentIds: string[] = [];
+
+    for (let i = 0; i < tabularRows.length; i++) {
+      const include = rowSelection ? (rowSelection[i] ?? true) : true;
+      if (!include) continue;
+
+      const row = tabularRows[i]!;
+      const keyValueLine = Object.entries(row)
+        .filter(([, v]) => v?.trim())
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' | ');
+
+      // Derive a short title from the first substantial column value
+      let rowTitleVal = '';
+      for (const v of Object.values(row)) {
+        const s = (v ?? '').replace(/\n/g, ' ').trim();
+        if (s.length > 5 && !/^\d+$/.test(s)) { rowTitleVal = s.slice(0, 100); break; }
+      }
+      const rowTitle = rowTitleVal || candidate.title;
+      const rowBody = `# ${rowTitle}\n\n${keyValueLine}`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await fragmentService.create(
+        {
+          type: type as any,
+          domain,
+          tags,
+          lang,
+          body: rowBody,
+          translation_of: null,
+          parent_id: null,
+          generation: 0,
+          origin: 'harvested',
+          origin_source: candidate.origin_source,
+          origin_page: candidate.origin_page ?? null,
+          valid_from: null,
+          valid_until: null,
+          access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
+          harvest_confidence: candidate.confidence,
+          payload: JSON.stringify(row),
+          payload_schema: candidate.payload_schema ?? null,
+        } as any,
+        userId,
+        'expert',
+        undefined,
+        undefined,
+        collectionSlug,
+      );
+      rowFragmentIds.push(result.id);
+    }
+
+    if (collectionService && rowFragmentIds.length > 0) {
+      await collectionService.create({
+        title: candidate.title,
+        payloadSchema: candidate.payload_schema ?? undefined,
+        memberIds: rowFragmentIds,
+        sourceDocument: candidate.origin_source,
+        createdBy: userId,
+      });
+    }
+
+    await Promise.all([
+      db
+        .update(harvestCandidates)
+        .set({ status: 'accepted', fragment_id: rowFragmentIds[0] ?? null })
+        .where(eq(harvestCandidates.id, candidate.id)),
+      upsertTags(db, tags),
+    ]);
+
+    return rowFragmentIds.length;
+  }
+
+  // Normal candidate: single fragment
+  const result = await fragmentService.create(
+    {
+      type: type as any,
+      domain,
+      tags,
+      lang,
+      body,
+      translation_of: null,
+      parent_id: null,
+      generation: 0,
+      origin: 'harvested',
+      origin_source: candidate.origin_source,
+      origin_page: candidate.origin_page ?? null,
+      valid_from: null,
+      valid_until: null,
+      access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
+      harvest_confidence: candidate.confidence,
+      payload: candidate.payload ?? null,
+      payload_schema: candidate.payload_schema ?? null,
+    } as any,
+    userId,
+    'expert',
+    undefined,
+    undefined,
+    collectionSlug,
+  );
+
+  await Promise.all([
+    db
+      .update(harvestCandidates)
+      .set({ status: 'accepted', fragment_id: result.id })
+      .where(eq(harvestCandidates.id, candidate.id)),
+    upsertTags(db, tags),
+  ]);
+
+  return 1;
 }
 
 export async function bulkAccept(
