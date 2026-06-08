@@ -25,6 +25,7 @@ import AdminUsersPage from '@/pages/admin/users';
 import { AdminPlaceholderPage } from '@/pages/admin/placeholder';
 import { AdminHomePage } from '@/pages/admin/home';
 import AdminRetrievalPage from '@/pages/admin/retrieval';
+import AdminFragmentCollectionsPage from '@/pages/admin/fragment-collections';
 import { ReferentialItemDetailPage } from '@/pages/admin/referential-item-detail';
 import { ActiveJobsProvider } from '@/contexts/active-jobs-context';
 
@@ -122,6 +123,7 @@ export default function App() {
                         <Route path="users" element={<AdminUsersPage />} />
                         <Route path="collections" element={<AdminCollectionsPage />} />
                         <Route path="retrieval" element={<AdminRetrievalPage />} />
+                        <Route path="tableaux" element={<AdminFragmentCollectionsPage />} />
                         <Route
                           path="referential/:type/:id"
                           element={<ReferentialItemDetailPage />}

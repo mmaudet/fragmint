@@ -14,6 +14,7 @@ const CreateFragmentCollectionSchema = z.object({
 
 const ListFragmentCollectionsSchema = z.object({
   collection_slug: z.string().optional(),
+  fragment_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
@@ -34,8 +35,10 @@ export function fragmentCollectionRoutes(
     if (!parsed.success) {
       return { data: null, meta: null, error: parsed.error.message };
     }
-    const { collection_slug, limit } = parsed.data;
-    const items = await service.list({ collectionSlug: collection_slug, limit });
+    const { collection_slug, fragment_id, limit } = parsed.data;
+    const items = fragment_id
+      ? await service.getByFragmentId(fragment_id)
+      : await service.list({ collectionSlug: collection_slug, limit });
     return { data: items, meta: { count: items.length }, error: null };
   });
 

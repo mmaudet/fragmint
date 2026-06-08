@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, PenLine, CheckCircle, Archive, LayoutGrid } from 'lucide-react';
+import { Clock, PenLine, CheckCircle, Archive, LayoutGrid, Table2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   FragmentsToolbar,
@@ -11,7 +11,9 @@ import {
 import { AdminFragmentCard, type AdminFragment } from '@/components/admin/fragment-card';
 import { FragmentsBulkActions } from '@/components/admin/fragments-bulk-actions';
 import { FragmentDetailDrawer } from '@/components/admin/fragment-detail-drawer';
+import { CollectionsView } from '@/components/admin/collections-view';
 import { apiRequest } from '@/api/client';
+import { cn } from '@/lib/utils';
 
 const LIMIT = 50;
 
@@ -19,7 +21,6 @@ const LIMIT = 50;
 const QUALITY_CARDS = [
   {
     value: 'reviewed',
-    label: 'Reviewed',
     sublabel: 'à valider',
     icon: Clock,
     iconColor: 'text-blue-500',
@@ -28,7 +29,6 @@ const QUALITY_CARDS = [
   },
   {
     value: 'draft',
-    label: 'Draft',
     sublabel: 'en cours',
     icon: PenLine,
     iconColor: 'text-muted-foreground',
@@ -37,7 +37,6 @@ const QUALITY_CARDS = [
   },
   {
     value: 'approved',
-    label: 'Approved',
     sublabel: 'validés',
     icon: CheckCircle,
     iconColor: 'text-green-600',
@@ -46,7 +45,6 @@ const QUALITY_CARDS = [
   },
   {
     value: 'deprecated',
-    label: 'Archivé',
     sublabel: 'retirés',
     icon: Archive,
     iconColor: 'text-amber-500',
@@ -55,7 +53,6 @@ const QUALITY_CARDS = [
   },
   {
     value: 'all',
-    label: 'Tous',
     sublabel: 'au total',
     icon: LayoutGrid,
     iconColor: 'text-primary',
@@ -196,12 +193,28 @@ export default function AdminFragmentsPage() {
     queryClient.invalidateQueries({ queryKey: ['admin-fragments'] });
   };
 
+  const view = searchParams.get('view') ?? 'fragments';
+  const setView = useCallback(
+    (v: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (v === 'fragments') next.delete('view');
+          else next.set('view', v);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   return (
     <div className="min-h-full bg-muted/20">
       {/* Header */}
-      <div className="bg-background border-b px-8 py-8">
+      <div className="bg-background border-b px-8 pt-8 pb-0">
         <h1 className="text-2xl font-bold mb-2">Fragments</h1>
-        <div className="text-sm text-muted-foreground leading-relaxed space-y-1">
+        <div className="text-sm text-muted-foreground leading-relaxed space-y-1 mb-5">
           <p>
             Bibliothèque complète de tous les fragments du vault, toutes collections confondues. Le
             cycle de vie d'un fragment est :{' '}
@@ -216,26 +229,14 @@ export default function AdminFragmentsPage() {
               Approved
             </span>{' '}
             (utilisable dans les plans).
-          </p>
-          <p>
-            <span className="font-medium text-foreground/80">Votre rôle :</span> approuver les
-            fragments{' '}
-            <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-              Reviewed
-            </span>
-            , archiver les obsolètes, ou supprimer les erreurs. Les{' '}
-            <span className="font-medium text-foreground/80">Drafts</span> sont visibles pour
-            supervision mais seuls les contributeurs peuvent les soumettre en review.
+            {' '}Les lignes de tableaux détectés à l'ingestion sont aussi des fragments — visibles ici et regroupés par tableau dans l'onglet <span className="font-medium text-foreground/80">Tableaux structurés</span>.
           </p>
         </div>
-      </div>
 
-      <div className="px-8 py-6 space-y-6">
-        {/* Stat cards — clicking filters the list */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {/* Stat cards — above both tabs, includes tabular fragments */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 py-5">
           {QUALITY_CARDS.map(
-            ({ value, label, sublabel, icon: Icon, iconColor, activeClass, countColor }) => {
-              // 'all' sums by_status (always global) — stats.total is filtered by current query.
+            ({ value, sublabel, icon: Icon, iconColor, activeClass, countColor }) => {
               const count =
                 value === 'all'
                   ? Object.values(stats?.by_status ?? {}).reduce(
@@ -243,11 +244,14 @@ export default function AdminFragmentsPage() {
                       0,
                     )
                   : (stats?.by_status[value] ?? 0);
-              const isActive = filters.quality === value;
+              const isActive = view === 'fragments' && filters.quality === value;
               return (
                 <button
                   key={value}
-                  onClick={() => updateFilters({ quality: value })}
+                  onClick={() => {
+                    if (view !== 'fragments') setView('fragments');
+                    updateFilters({ quality: value });
+                  }}
                   className="text-left"
                 >
                   <Card
@@ -271,6 +275,42 @@ export default function AdminFragmentsPage() {
           )}
         </div>
 
+        {/* View switcher tabs */}
+        <div className="flex gap-0 border-b -mb-px">
+          <button
+            onClick={() => setView('fragments')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+              view === 'fragments'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/50',
+            )}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Fragments
+          </button>
+          <button
+            onClick={() => setView('tableaux')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+              view === 'tableaux'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/50',
+            )}
+          >
+            <Table2 className="h-3.5 w-3.5" />
+            Tableaux structurés
+          </button>
+        </div>
+      </div>
+
+      {view === 'tableaux' ? (
+        <div className="px-8 py-6">
+          <CollectionsView />
+        </div>
+      ) : (
+      <>
+      <div className="px-8 py-6 space-y-6">
         {/* Toolbar: search + domain + type + origin + lang + sort */}
         <FragmentsToolbar filters={filters} onFiltersChange={updateFilters} />
 
@@ -360,6 +400,8 @@ export default function AdminFragmentsPage() {
           onClose={closeFragmentDrawer}
           onUpdate={onBulkComplete}
         />
+      )}
+      </>
       )}
     </div>
   );

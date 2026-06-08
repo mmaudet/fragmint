@@ -1,4 +1,4 @@
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, like } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { FragmintDb } from '../db/connection.js';
 import { fragmentCollections } from '../db/schema.js';
@@ -93,6 +93,16 @@ export class FragmentCollectionService {
 
     if (rows.length === 0) return null;
     return rowToCollection(rows[0]);
+  }
+
+  async getByFragmentId(fragmentId: string): Promise<FragmentCollection[]> {
+    const rows = await this.db
+      .select()
+      .from(fragmentCollections)
+      .where(like(fragmentCollections.member_ids, `%"${fragmentId}"%`))
+      .orderBy(desc(fragmentCollections.created_at))
+      .limit(10);
+    return rows.map(rowToCollection);
   }
 
   async delete(id: string): Promise<void> {
