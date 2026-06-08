@@ -252,7 +252,21 @@ export function adminMetadataRoutes(
       const { kind, target_id } = parsed.data;
       let affectedFragments = 0;
 
-      if (kind === 'tag') {
+      if (kind === 'domain') {
+        const fragmentsUsing = await db
+          .select()
+          .from(fragments)
+          .where(eq(fragments.domain, id));
+
+        db.transaction((tx) => {
+          for (const f of fragmentsUsing) {
+            tx.update(fragments).set({ domain: target_id }).where(eq(fragments.id, f.id)).run();
+          }
+          tx.delete(fragmentDomains).where(eq(fragmentDomains.slug, id)).run();
+        });
+
+        affectedFragments = fragmentsUsing.length;
+      } else if (kind === 'tag') {
         // Read first (outside transaction — reads don't need atomicity)
         const fragmentsUsing = await db
           .select()

@@ -58,6 +58,29 @@ export async function computeFlagsForTag(
   return flags;
 }
 
+export async function computeFlagsForDomain(
+  db: FragmintDb,
+  domain: { slug: string; usageCount: number; label: string },
+  cachedValidatedDomains?: Array<{ slug: string; label: string }>,
+): Promise<any[]> {
+  const flags = [];
+  if ((domain.usageCount ?? 0) < 3) flags.push({ type: 'info', label: 'Low usage' });
+  const validatedDomains =
+    cachedValidatedDomains ??
+    (await db
+      .select({ slug: fragmentDomains.slug, label: fragmentDomains.label })
+      .from(fragmentDomains)
+      .where(eq(fragmentDomains.status, 'active')));
+  for (const vd of validatedDomains) {
+    if (vd.slug === domain.slug) continue;
+    if (similarityRatio(domain.slug, vd.slug) > 0.7) {
+      flags.push({ type: 'info', label: `Similar to ${vd.slug}`, merge_target: vd.slug });
+      break;
+    }
+  }
+  return flags;
+}
+
 export async function computeCounts(db: FragmintDb) {
   const [tagCount, domainCount] = await Promise.all([
     db.select({ value: count() }).from(fragmentTags).where(ne(fragmentTags.status, 'active')),

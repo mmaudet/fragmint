@@ -334,6 +334,10 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
               <Edit className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'rename')}
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
+              <Combine className="h-3.5 w-3.5 mr-1.5" />
+              {t('admin', 'merge')}
+            </Button>
             <Button
               size="sm"
               variant="outline"

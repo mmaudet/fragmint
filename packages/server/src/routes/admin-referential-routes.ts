@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { and, eq, like, desc, asc, sql } from 'drizzle-orm';
+import { and, eq, like, desc, asc, sql, inArray } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import {
   fragmentDomains,
@@ -15,7 +15,7 @@ import {
 import { requireRole } from '../auth/middleware.js';
 import type { JobService } from '../services/job-service.js';
 import { runRecalculationJob } from '../services/signal-recalc-service.js';
-import { computeFlagsForTag, getPreviewForTag } from './admin-metadata-helpers.js';
+import { computeFlagsForTag, computeFlagsForDomain, getPreviewForTag } from './admin-metadata-helpers.js';
 import {
   type ReferentialType,
   TABLE_MAP,
@@ -150,6 +150,7 @@ export function adminReferentialRoutes(
 
     // Load caches for flag computation — needed for both pending and active items.
     let cachedValidatedTags: Array<{ slug: string; label: string }> | undefined;
+    let cachedValidatedDomains: Array<{ slug: string; label: string }> | undefined;
     const needsFlags = formattedWithUsers.some(
       (i) => i.status === 'pending' || i.status === 'active',
     );
@@ -159,7 +160,24 @@ export function adminReferentialRoutes(
           .select({ slug: fragmentTags.slug, label: fragmentTags.label })
           .from(fragmentTags)
           .where(eq(fragmentTags.status, 'active'));
+      } else if (refType === 'domain') {
+        cachedValidatedDomains = await db
+          .select({ slug: fragmentDomains.slug, label: fragmentDomains.label })
+          .from(fragmentDomains)
+          .where(eq(fragmentDomains.status, 'active'));
       }
+    }
+
+    // Compute dynamic usageCount for domains (fragments.domain column, not the stale stored value).
+    let domainUsageCounts: Map<string, number> | undefined;
+    if (refType === 'domain' && formattedWithUsers.length > 0) {
+      const slugs = formattedWithUsers.map((i) => String(i.id));
+      const rows = await db
+        .select({ domain: fragments.domain, count: sql<number>`count(*)` })
+        .from(fragments)
+        .where(inArray(fragments.domain, slugs))
+        .groupBy(fragments.domain);
+      domainUsageCounts = new Map(rows.map((r) => [r.domain ?? '', r.count]));
     }
 
     const itemsWithMeta = await Promise.all(
@@ -176,6 +194,15 @@ export function adminReferentialRoutes(
           const preview =
             item.status === 'pending' ? await getPreviewForTag(db, String(item.id)) : '';
           return { ...item, flags, preview };
+        }
+        if (refType === 'domain') {
+          const usageCount = domainUsageCounts?.get(String(item.id)) ?? 0;
+          const flags = await computeFlagsForDomain(
+            db,
+            { slug: String(item.id), usageCount, label: item.label },
+            cachedValidatedDomains,
+          );
+          return { ...item, usageCount, flags, preview: '' };
         }
         return { ...item, flags: [], preview: '' };
       }),
