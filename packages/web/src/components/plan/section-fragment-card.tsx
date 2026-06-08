@@ -57,11 +57,12 @@ export function SectionFragmentCard({
     const firstNewline = raw.indexOf('\n');
     const firstLine = firstNewline >= 0 ? raw.slice(0, firstNewline) : raw;
     const firstLinePlain = firstLine.replace(/^#+\s*/, '').trim();
-    const deduped = !isTableBody && firstLinePlain === cleanTitle && cleanTitle.length > 0
+    // Only strip when the first line is a markdown heading matching the title (e.g. "## Titre\n\nbody").
+    // Do NOT strip when the body simply starts with the same text as the title — CardTitle is no
+    // longer displayed, so stripping would silently eat the first sentence of the fragment.
+    const deduped = !isTableBody && firstNewline >= 0 && firstLinePlain === cleanTitle && cleanTitle.length > 0
       ? raw.slice(firstNewline + 1).replace(/^\n+/, '')
-      : !isTableBody && raw.startsWith(cleanTitle) && cleanTitle.length > 0
-        ? raw.slice(cleanTitle.length).replace(/^\n+/, '')
-        : raw;
+      : raw;
     if (fullSrc) return deduped;
     const trimmed = deduped.trimEnd();
     if (!trimmed) return '';
