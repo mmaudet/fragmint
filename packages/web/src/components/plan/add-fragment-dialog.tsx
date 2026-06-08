@@ -1,26 +1,31 @@
 import { useState } from 'react';
-import { useAddFragmentToSection } from '@/api/hooks/use-plans';
+import { useAddFragmentToSection, useFragmentCollections } from '@/api/hooks/use-plans';
 import { useSearchFragments } from '@/api/hooks/use-fragments';
 import { useCollection } from '@/lib/collection-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n';
 import { toast } from 'sonner';
+import { Table2, FileText } from 'lucide-react';
+import { useSchemaLabel } from '@/components/payload-editor';
 
-type Mode = 'library' | 'manual';
+type Mode = 'library' | 'manual' | 'collection';
 
 export function AddFragmentDialog({
   open,
   onOpenChange,
   planId,
   sectionId,
+  onAttachCollection,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   planId: string;
   sectionId: string;
+  onAttachCollection?: (collectionId: string) => void;
 }) {
   const { t } = useI18n();
   const { activeCollection } = useCollection();
@@ -29,6 +34,8 @@ export function AddFragmentDialog({
   const [body, setBody] = useState('');
   const add = useAddFragmentToSection(planId);
   const search = useSearchFragments(activeCollection, query);
+  const { data: collections = [] } = useFragmentCollections();
+  const getSchemaLabel = useSchemaLabel();
 
   function close() {
     onOpenChange(false);
@@ -60,6 +67,12 @@ export function AddFragmentDialog({
     }
   }
 
+  function attachCollection(collectionId: string) {
+    onAttachCollection?.(collectionId);
+    toast.success(t('planGeneration', 'collectionAttached'));
+    close();
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -82,6 +95,16 @@ export function AddFragmentDialog({
           >
             {t('planGeneration', 'addManually')}
           </Button>
+          {onAttachCollection && (
+            <Button
+              size="sm"
+              variant={mode === 'collection' ? 'default' : 'ghost'}
+              onClick={() => setMode('collection')}
+            >
+              <Table2 className="h-3.5 w-3.5 mr-1.5" />
+              {t('planGeneration', 'addFromCollection')}
+            </Button>
+          )}
         </div>
 
         {mode === 'library' ? (
@@ -129,7 +152,7 @@ export function AddFragmentDialog({
               )}
             </div>
           </div>
-        ) : (
+        ) : mode === 'manual' ? (
           <div className="space-y-3">
             <Textarea
               rows={10}
@@ -142,6 +165,48 @@ export function AddFragmentDialog({
               <Button onClick={submitManual} disabled={add.isPending}>
                 {t('planGeneration', 'addAndSelect')}
               </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 min-w-0">
+            <p className="text-sm text-muted-foreground">
+              {t('planGeneration', 'collectionPickerHint')}
+            </p>
+            <div className="max-h-80 overflow-y-auto overflow-x-hidden space-y-1.5 min-w-0">
+              {collections.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('planGeneration', 'collectionPickerEmpty')}
+                </p>
+              ) : (
+                collections.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => attachCollection(c.id)}
+                    className="block w-full min-w-0 text-left p-3 border rounded hover:bg-muted transition-colors overflow-hidden"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Table2 className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium text-sm truncate flex-1 min-w-0">
+                        {c.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {c.member_ids.length} lignes
+                      </span>
+                      {c.payload_schema && (
+                        <Badge variant="outline" className="text-xs shrink-0 border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          {getSchemaLabel(c.payload_schema)}
+                        </Badge>
+                      )}
+                      {c.source_document && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 max-w-[140px] truncate">
+                          <FileText className="h-3 w-3 shrink-0" />
+                          {c.source_document}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         )}

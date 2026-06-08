@@ -7,10 +7,50 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
 import { AddFragmentDialog } from './add-fragment-dialog';
-import { SectionBlocksEditor } from './section-blocks-editor';
-import type { SectionBlock } from '@/api/types';
-import { Plus, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { useFragmentCollections } from '@/api/hooks/use-plans';
+import { Plus, Loader2, AlertTriangle, Info, Table2, Trash2, ExternalLink } from 'lucide-react';
+import type { FragmentCollection } from '@/api/types';
 import { toast } from 'sonner';
+
+function CollectionCard({ collection, onDetach }: { collection: FragmentCollection; onDetach: () => void }) {
+  return (
+    <Card className="border-teal-500/50 bg-teal-500/10 flex flex-col h-full">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1 flex items-center gap-2">
+            <Table2 className="h-4 w-4 text-teal-600 dark:text-teal-400 shrink-0" />
+            <CardTitle className="text-sm leading-snug">{collection.title}</CardTitle>
+          </div>
+          <span className="text-xs px-2 py-0.5 rounded bg-teal-500/15 text-teal-700 dark:text-teal-300 shrink-0">
+            📊 Tableau
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col flex-1 gap-2">
+        <p className="text-xs text-muted-foreground">
+          {collection.member_ids.length} ligne{collection.member_ids.length > 1 ? 's' : ''} de tableau
+          {collection.source_document && ` · ${collection.source_document}`}
+        </p>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="ghost" onClick={onDetach} className="text-destructive hover:text-destructive">
+            <Trash2 className="h-4 w-4 mr-1" />
+            Détacher
+          </Button>
+          <a
+            href="/ui/admin/fragments?view=tableaux"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto text-xs text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Voir le tableau
+          </a>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?: () => void }) {
   const { t, lang } = useI18n();
@@ -19,6 +59,8 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
   const update = useUpdatePlan(plan.id);
   const search = useSectionSearch(plan.id);
   const validate = useValidateFragments(plan.id);
+  const { data: collections = [] } = useFragmentCollections();
+  const collectionsById = Object.fromEntries(collections.map((c) => [c.id, c]));
 
   const sections = plan.state.sections;
   const active = sections[activeIdx];
@@ -97,15 +139,6 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                     {active.description}
                   </p>
 
-                  <div className="pt-2 border-t">
-                    <SectionBlocksEditor
-                      blocks={active.blocks ?? []}
-                      onChange={(blocks: SectionBlock[]) =>
-                        updateSection(active.id, (s) => ({ ...s, blocks }))
-                      }
-                    />
-                  </div>
-
                   <div className="flex gap-2 flex-wrap pt-1 border-t">
                     <Button
                       size="sm"
@@ -142,22 +175,29 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                   <span>{t('planGeneration', 'sectionConfidencePartial')}</span>
                 </div>
               )}
-              {active.candidates.length > 0 && active.candidates.length < 5 && (
+              {active.candidates.length > 0 && active.section_confidence === 'partial' && (
                 <div className="mt-3 flex items-start gap-2 rounded-md bg-muted/60 border border-border px-3 py-2 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                   <span>
                     {lang === 'fr'
-                      ? `${active.candidates.length} fragment${active.candidates.length > 1 ? 's' : ''} pertinent${active.candidates.length > 1 ? 's' : ''} trouvé${active.candidates.length > 1 ? 's' : ''} (sur 5 demandés). Le système n'a pas trouvé d'autres fragments suffisamment pertinents pour cette section.`
-                      : `${active.candidates.length} relevant fragment${active.candidates.length > 1 ? 's' : ''} found (out of 5 requested). The system did not find enough relevant fragments for this section.`}
+                      ? `${active.candidates.length} fragment${active.candidates.length > 1 ? 's' : ''} pertinent${active.candidates.length > 1 ? 's' : ''} trouvé${active.candidates.length > 1 ? 's' : ''}. Le système n'a pas trouvé d'autres fragments suffisamment pertinents pour cette section.`
+                      : `${active.candidates.length} relevant fragment${active.candidates.length > 1 ? 's' : ''} found. The system did not find enough relevant fragments for this section.`}
                   </span>
                 </div>
               )}
-              {active.candidates.length === 0 ? (
+              {active.candidates.length === 0 && !active.table_source?.collection_id && (
                 <p className="mt-4 text-sm text-muted-foreground">
                   {t('planGeneration', 'noCandidates')}
                 </p>
-              ) : (
+              )}
+              {(active.candidates.length > 0 || active.table_source?.collection_id) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
+                  {active.table_source?.collection_id && collectionsById[active.table_source.collection_id] && (
+                    <CollectionCard
+                      collection={collectionsById[active.table_source.collection_id]}
+                      onDetach={() => updateSection(active.id, (s) => ({ ...s, table_source: undefined }))}
+                    />
+                  )}
                   {active.candidates.map((c) => (
                     <SectionFragmentCard
                       key={`${active.id}-${c.fragment_id}`}
@@ -197,6 +237,9 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
           onOpenChange={setAddOpen}
           planId={plan.id}
           sectionId={active.id}
+          onAttachCollection={(collectionId) =>
+            updateSection(active.id, (s) => ({ ...s, table_source: { collection_id: collectionId } }))
+          }
         />
       )}
     </div>

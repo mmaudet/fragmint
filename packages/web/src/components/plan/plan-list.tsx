@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { usePlans, useDeletePlan } from '@/api/hooks/use-plans';
+import { usePlans, useDeletePlan, useDeletePlans } from '@/api/hooks/use-plans';
 import { useUsers } from '@/api/hooks/use-users';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
@@ -33,9 +33,12 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
   const displayName = (login: string) =>
     users.find((u) => u.login === login)?.display_name ?? login;
   const remove = useDeletePlan();
+  const bulkRemove = useDeletePlans();
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   const search = searchParams.get('q') ?? '';
   const statusFilter = searchParams.get('status') ?? 'all';
@@ -77,6 +80,31 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
       return sortDir === 'desc' ? -cmp : cmp;
     });
   }, [plans, search, statusFilter, sortKey, sortDir]);
+
+  const allFilteredIds = filtered.map((p) => p.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
+  const someSelected = allFilteredIds.some((id) => selectedIds.has(id));
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        allFilteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set([...prev, ...allFilteredIds]));
+    }
+  }
 
   function SortTh({ col, label }: { col: SortKey; label: string }) {
     const active = sortKey === col;
@@ -124,6 +152,59 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
         </span>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-md border bg-muted/40 text-sm">
+          <span className="text-muted-foreground">
+            {selectedIds.size} plan{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {confirmBulk ? (
+              <>
+                <span className="text-xs text-destructive font-medium">Supprimer {selectedIds.size} plan{selectedIds.size > 1 ? 's' : ''} ?</span>
+                <button
+                  onClick={() => {
+                    const ids = [...selectedIds];
+                    setConfirmBulk(false);
+                    setSelectedIds(new Set());
+                    bulkRemove.mutate(ids, {
+                      onSuccess: () => toast.success(`${ids.length} plan${ids.length > 1 ? 's' : ''} supprimé${ids.length > 1 ? 's' : ''}.`),
+                      onError: (err: any) => toast.error(`Erreur: ${err.message ?? err}`),
+                    });
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-destructive text-white hover:bg-destructive/90 transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Confirmer
+                </button>
+                <button
+                  onClick={() => setConfirmBulk(false)}
+                  className="px-2 py-1 text-xs rounded border hover:bg-muted transition-colors"
+                >
+                  Annuler
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-2 py-1 text-xs rounded border hover:bg-muted transition-colors"
+                >
+                  Désélectionner
+                </button>
+                <button
+                  onClick={() => setConfirmBulk(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Supprimer
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Chargement…</p>
       ) : filtered.length === 0 ? (
@@ -135,6 +216,15 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
           <table className="w-full text-sm">
             <thead className="bg-muted/40 border-b">
               <tr>
+                <th className="px-4 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                    onChange={toggleSelectAll}
+                    className="cursor-pointer"
+                  />
+                </th>
                 <SortTh col="title" label="Nom" />
                 <SortTh col="status" label="Statut" />
                 <SortTh col="owner" label="Créé par" />
@@ -150,8 +240,17 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                 return (
                   <tr
                     key={p.id}
-                    className={`hover:bg-muted/20 transition-colors group ${isConfirming ? 'bg-destructive/5' : ''}`}
+                    className={`hover:bg-muted/20 transition-colors group ${isConfirming ? 'bg-destructive/5' : ''} ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}
                   >
+                    <td className="px-4 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(p.id)}
+                        onChange={() => toggleSelect(p.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="cursor-pointer"
+                      />
+                    </td>
                     {/* Name — real <Link> so browser shows URL + ctrl+click works */}
                     <td className="px-4 py-3 font-medium max-w-0 w-full">
                       <Link
@@ -181,6 +280,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                             onClick={() => {
                               setConfirmingId(null);
                               remove.mutate(p.id, {
+                                onSuccess: () => toast.success('Plan supprimé.'),
                                 onError: (err: any) => toast.error(`Erreur: ${err.message ?? err}`),
                               });
                             }}

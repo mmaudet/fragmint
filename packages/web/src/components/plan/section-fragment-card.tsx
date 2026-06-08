@@ -48,15 +48,25 @@ export function SectionFragmentCard({
     : rawBody;
   // Edit textarea uses stripped body.
   const displayBody = strippedBody;
-  // Card display: same source hierarchy as before, but fix mid-word truncation on excerpts.
+  // Card display: strip leading title heading to avoid repeating it below CardHeader.
+  // Exception: table fragments (body starts with |) keep their header row intact so GFM renders correctly.
   const cardBody = (() => {
     const fullSrc = (selection?.edited ? selection.body : null) ?? fullFragment?.body ?? selection?.body;
-    if (fullSrc) return fullSrc;
-    const excerpt = candidate.body_excerpt ?? '';
-    const trimmed = excerpt.trimEnd();
+    const raw = fullSrc ?? candidate.body_excerpt ?? '';
+    const isTableBody = raw.trimStart().startsWith('|');
+    const firstNewline = raw.indexOf('\n');
+    const firstLine = firstNewline >= 0 ? raw.slice(0, firstNewline) : raw;
+    const firstLinePlain = firstLine.replace(/^#+\s*/, '').trim();
+    const deduped = !isTableBody && firstLinePlain === cleanTitle && cleanTitle.length > 0
+      ? raw.slice(firstNewline + 1).replace(/^\n+/, '')
+      : !isTableBody && raw.startsWith(cleanTitle) && cleanTitle.length > 0
+        ? raw.slice(cleanTitle.length).replace(/^\n+/, '')
+        : raw;
+    if (fullSrc) return deduped;
+    const trimmed = deduped.trimEnd();
     if (!trimmed) return '';
     const last = trimmed.slice(-1);
-    if ('.!?,;:)»"\']'.includes(last)) return excerpt;
+    if ('.!?,;:)»"\']'.includes(last)) return deduped;
     const lastSpace = trimmed.lastIndexOf(' ');
     return (lastSpace > 10 ? trimmed.slice(0, lastSpace) : trimmed) + '…';
   })();
@@ -134,15 +144,12 @@ export function SectionFragmentCard({
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-sm leading-snug">
-              {(candidate.title ?? candidate.fragment_id).replace(/^[-–]\s+/, '')}
-            </CardTitle>
             {candidate.type && (
               <span className="text-[11px] text-muted-foreground/70 font-normal">{candidate.type}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {(/^\|.+\|/m.test(candidate.body_excerpt ?? '') || /<table[\s>]/i.test(candidate.body_excerpt ?? '')) && (
+            {(candidate.payload_schema != null || /^\|.+\|/m.test(candidate.body_excerpt ?? '') || /<table[\s>]/i.test(candidate.body_excerpt ?? '') || (candidate.body_excerpt?.match(/\|/g)?.length ?? 0) >= 3) && (
               <span className="text-xs px-2 py-0.5 rounded bg-teal-500/15 text-teal-700 dark:text-teal-300">
                 📊 Tableau
               </span>
@@ -214,7 +221,7 @@ export function SectionFragmentCard({
                 Chargement…
               </div>
             ) : (
-              <div ref={contentRef} className={`text-sm prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1 ${expanded ? '' : 'line-clamp-3'}`}>
+              <div ref={contentRef} className={`text-sm prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1 ${expanded ? '' : 'line-clamp-6'}`}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
