@@ -172,6 +172,17 @@ export function CandidateCard({
                 </div>
               );
             }
+            if (decision === 'accepted') {
+              return (
+                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40 px-2.5 py-1.5">
+                  <TableProperties className="h-3.5 w-3.5 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="text-xs font-medium text-green-800 dark:text-green-300">
+                    Tableau — {rowCount} ligne{rowCount > 1 ? 's' : ''} validée{rowCount > 1 ? 's' : ''}
+                  </span>
+                  <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400 ml-auto shrink-0" />
+                </div>
+              );
+            }
             return (
               <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-2.5 py-1.5">
                 <TableProperties className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
