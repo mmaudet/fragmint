@@ -69,11 +69,31 @@ export function useDeletePlan() {
   });
 }
 
+export function useDeletePlans() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => apiRequest<void>('DELETE', `/v1/plans/${id}`)));
+    },
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: ['plans'] });
+      const previous = qc.getQueryData<Plan[]>(['plans']);
+      const idSet = new Set(ids);
+      qc.setQueryData<Plan[]>(['plans'], (old) => (old ?? []).filter((p) => !idSet.has(p.id)));
+      return { previous };
+    },
+    onError: (_err, _ids, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['plans'], ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['plans'] }),
+  });
+}
+
 export function useGeneratePlan(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { extra_instructions?: string }) =>
-      apiRequest<Plan>('POST', `/v1/plans/${id}/generate-plan`, input),
+    mutationFn: () =>
+      apiRequest<Plan>('POST', `/v1/plans/${id}/generate-plan`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
