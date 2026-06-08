@@ -4,6 +4,7 @@ import { buildReadableIdMap, renderMarkdown, renderToc } from '../services/index
 import type { FragmentService } from '../services/fragment-service.js';
 import type { PlanFilters } from '../schema/plan.js';
 import type { FragmentRetriever, RetrievedFragment, SectionQuery } from './fragment-retriever.js';
+import { TYPE_BOOST } from './fragment-retriever.js';
 
 const PHASE2_SCORE_MIN = 0.3;
 const BATCH_JUDGE_SIZE = 25; // max candidates per LLM call — above this, Phase 2 batches sequentially
@@ -41,9 +42,17 @@ export class AgenticRetriever implements FragmentRetriever {
           Object.keys(subj.types).map((type) => `${domain}:${type}`),
         ),
       );
-      const selected = await this.selectDomainTypes(query, toc, combinations);
+      // Pré-filtre souple — si inferred_type connu, restreindre le set aux domain:inferred_type.
+      // Fallback sur le set complet si aucun fragment de ce type n'existe dans le corpus.
+      const typeFiltered = query.inferred_type
+        ? new Set([...combinations].filter((c) => c.endsWith(`:${query.inferred_type}`)))
+        : combinations;
+      const effectiveCombinations = typeFiltered.size > 0 ? typeFiltered : combinations;
+      const selected = await this.selectDomainTypes(query, toc, effectiveCombinations);
       const sectionLabel = query.text.replace(/\s+/g, ' ').slice(0, 60);
-      const typeHint = query.inferred_type ? ` [inferred_type=${query.inferred_type}]` : ' [inferred_type=none]';
+      const typeHint = query.inferred_type
+        ? ` [inferred_type=${query.inferred_type}, phase0_set=${effectiveCombinations.size}/${combinations.size}]`
+        : ' [inferred_type=none]';
       if (selected) {
         console.info(
           `[retrieval][agentic-only][phase0] "${sectionLabel}"${typeHint} → ${selected.length} combinations: ${selected.join(', ')}`,
@@ -85,13 +94,18 @@ export class AgenticRetriever implements FragmentRetriever {
     const scored = await this.batchScore(query, allCandidateIds);
     const kept = scored
       .filter((r) => r.score !== null && r.score >= this.minScore)
-      .map((r) => ({
-        ...r,
-        retrieval_source: (
-          phase1Set.has(r.fragment_id) && forcedSet.has(r.fragment_id) ? 'both' :
-          forcedSet.has(r.fragment_id) ? 'tag' : 'vector'
-        ) as 'vector' | 'tag' | 'both',
-      }));
+      .map((r) => {
+        const typeMatch = !!query.inferred_type && r.type === query.inferred_type;
+        const score = typeMatch && r.score != null ? r.score * TYPE_BOOST : r.score;
+        return {
+          ...r,
+          score,
+          retrieval_source: (
+            phase1Set.has(r.fragment_id) && forcedSet.has(r.fragment_id) ? 'both' :
+            forcedSet.has(r.fragment_id) ? 'tag' : 'vector'
+          ) as 'vector' | 'tag' | 'both',
+        };
+      });
 
     console.info(
       `[retrieval][agentic-only][phase2] section "${query.text.slice(0, 50)}" ` +
@@ -219,15 +233,14 @@ export class AgenticRetriever implements FragmentRetriever {
     }>,
     temperature?: number,
   ): Promise<Map<string, { score: number; reason?: string }> | null> {
-    // If too many candidates, split into sequential chunks and merge scores.
-    // This prevents LLM JSON malformation that occurs with very large response arrays.
+    // If too many candidates, split into sequential chunks to avoid LLM JSON malformation.
+    // Sequential keeps us within the section-level semaphore budget — parallel chunks would
+    // multiply concurrent calls beyond FRAGMINT_LLM_CONCURRENCY.
     if (candidates.length > BATCH_JUDGE_SIZE) {
       const merged = new Map<string, { score: number; reason?: string }>();
       for (let i = 0; i < candidates.length; i += BATCH_JUDGE_SIZE) {
         const chunkResult = await this.callBatchJudge(query, candidates.slice(i, i + BATCH_JUDGE_SIZE), temperature);
-        if (chunkResult) {
-          for (const [id, v] of chunkResult) merged.set(id, v);
-        }
+        if (chunkResult) for (const [id, v] of chunkResult) merged.set(id, v);
       }
       return merged.size > 0 ? merged : null;
     }
@@ -408,6 +421,7 @@ function buildResult(
     body_excerpt?: string | null;
     quality: string;
     type?: string;
+    payload_schema?: string | null;
   },
   rawScore: number,
   reason?: string,
@@ -420,6 +434,7 @@ function buildResult(
     body_excerpt: ((frag.body ?? frag.body_excerpt) ?? '').slice(0, 200),
     quality: frag.quality,
     type: frag.type,
+    payload_schema: frag.payload_schema ?? null,
     justification: reason,
     score_breakdown: {
       method: 'agentic' as const,

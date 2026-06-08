@@ -24,14 +24,29 @@ let _mode: RetrievalMode = 'vector-only';
 let _deps: RetrieverDeps | null = null;
 let _retriever: FragmentRetriever | null = null;
 let _weightsPreset: string = 'literature';
+let _sectionTopK: number = 5;
 
-export function createRetriever(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
+export function createRetriever(
+  mode: RetrievalMode,
+  deps: RetrieverDeps,
+  initialTopK?: number,
+): FragmentRetriever {
   _mode = mode;
   _deps = deps;
   _weightsPreset = deps.rrfWeightsPreset ?? 'literature';
+  if (initialTopK !== undefined) _sectionTopK = initialTopK;
   _retriever = build(mode, deps);
-  console.log(`[retrieval] mode=${mode}`);
+  console.log(`[retrieval] mode=${mode} top_k=${_sectionTopK}`);
   return _retriever;
+}
+
+export function getSectionTopK(): number {
+  return _sectionTopK;
+}
+
+export function setSectionTopK(n: number): void {
+  _sectionTopK = Math.max(1, Math.min(20, n));
+  console.log(`[retrieval] section_top_k set to ${_sectionTopK}`);
 }
 
 export function setRetrievalMode(mode: RetrievalMode, weightsPreset?: string): FragmentRetriever {

@@ -7,7 +7,7 @@ import type {
   ScoreBreakdown,
   SectionQuery,
 } from './fragment-retriever.js';
-import { enrichQueryWithFilters } from './fragment-retriever.js';
+import { enrichQueryWithFilters, TYPE_BOOST } from './fragment-retriever.js';
 
 const PHASE1_MULTIPLIER = 4; // phase1 candidates = limit × PHASE1_MULTIPLIER
 
@@ -141,7 +141,9 @@ export class HybridRetriever implements FragmentRetriever {
       const normalizedScore = normalizeRrfScore(rrf_score, this.weights, this.rrfK);
       // Weight normalized RRF by LLM quality: prevents high RRF rank from masking low relevance.
       // Falls back to raw normalizedScore when LLM judge failed (llmScore undefined).
-      const finalScore = llmScore !== undefined ? normalizedScore * (llmScore / 10) : normalizedScore;
+      const preBoostScore = llmScore !== undefined ? normalizedScore * (llmScore / 10) : normalizedScore;
+      const typeMatch = !!query.inferred_type && c.type === query.inferred_type;
+      const finalScore = typeMatch ? preBoostScore * TYPE_BOOST : preBoostScore;
       const inVector = vectorIds.has(c.id);
       const inForced = forcedIds.has(c.id);
 
@@ -163,6 +165,7 @@ export class HybridRetriever implements FragmentRetriever {
         body_excerpt: c.body_excerpt,
         quality: c.quality,
         type: c.type,
+        payload_schema: c.payload_schema ?? null,
         score_breakdown: breakdown,
         retrieval_source: (inVector && inForced ? 'both' : inForced ? 'tag' : 'vector') as 'vector' | 'tag' | 'both',
       } satisfies RetrievedFragment;

@@ -660,7 +660,7 @@ describe('HybridRetriever (RRF)', () => {
   it('score_breakdown.llm_score is the raw 0-10 value', async () => {
     const candidates: SearchResult[] = [{ ...SAMPLE_RESULT, id: 'f1', score: 0.8 }];
     const svc = fakeSearchService(candidates);
-    const llm = fakeLlmClient([JSON.stringify([{ id: 'f1', score: 7 }])]);
+    const llm = fakeLlmClient([JSON.stringify({ f1: 7 })]);
     const retriever = new HybridRetriever(svc, llm);
     const results = await retriever.searchForSection(
       { text: 'x', filters: {}, collectionSlug: null },

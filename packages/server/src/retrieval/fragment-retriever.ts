@@ -68,6 +68,7 @@ export interface RetrievedFragment {
   body_excerpt: string | null;
   quality: string;
   type?: string;
+  payload_schema?: string | null;
   justification?: string;
   score_breakdown?: ScoreBreakdown;
   /** Indicates whether this fragment came from the tag pool (A), vector pool (B), or both. */
@@ -77,3 +78,6 @@ export interface RetrievedFragment {
 export interface FragmentRetriever {
   searchForSection(query: SectionQuery, limit?: number): Promise<RetrievedFragment[]>;
 }
+
+/** Multiplicative boost applied when a fragment's editorial type matches the section's inferred_type. */
+export const TYPE_BOOST = 1.1;
