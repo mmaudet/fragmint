@@ -7,6 +7,7 @@ import {
   useSetRetrievalMode,
   type RetrievalMode,
 } from '@/api/hooks/use-retrieval-mode';
+import { useSectionTopK, useSetSectionTopK } from '@/api/hooks/use-section-top-k';
 import { useIndexStatus, useTriggerReindex } from '@/api/hooks/use-index';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -163,13 +164,19 @@ export default function AdminRetrievalPage() {
   const reindex = useTriggerReindex();
 
   const [pending, setPending] = useState<RetrievalMode | null>(null);
+  const { data: topKData } = useSectionTopK();
+  const setTopK = useSetSectionTopK();
+  const [pendingTopK, setPendingTopK] = useState<number | null>(null);
+  const currentTopK = topKData?.top_k ?? 5;
 
   // Initialise pending to current once loaded
   useEffect(() => {
-    if (current && pending === null) {
-      setPending(current);
-    }
+    if (current && pending === null) setPending(current);
   }, [current, pending]);
+
+  useEffect(() => {
+    if (topKData && pendingTopK === null) setPendingTopK(topKData.top_k);
+  }, [topKData, pendingTopK]);
 
   const selected = pending;
   const isDirty = selected !== null && selected !== current;
@@ -395,6 +402,89 @@ export default function AdminRetrievalPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* Section top-k */}
+      <div className="rounded-lg border px-4 py-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-medium mb-1">
+              {lang === 'fr' ? 'Fragments par section (top_k)' : 'Fragments per section (top_k)'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {lang === 'fr'
+                ? 'Nombre de fragments candidats retenus en sortie pour chaque section du plan. Le retriever explore un pool plus large en interne, puis n\'en conserve que top_k.'
+                : 'Number of candidate fragments returned per plan section. The retriever explores a larger pool internally, then keeps only top_k.'}
+            </p>
+
+            {/* Per-mode phase explanation */}
+            <div className="mt-3 space-y-2">
+              {[
+                {
+                  mode: 'hybrid' as const,
+                  label: lang === 'fr' ? 'Hybride' : 'Hybrid',
+                  phases: lang === 'fr'
+                    ? [`Phase 1 — Vecteur : top_k × 4 candidats par similarité cosine`, `Phase 2 — Juge LLM : score 0-10 sur tous les candidats`, `Fusion RRF → top_k résultats finaux`]
+                    : [`Phase 1 — Vector: top_k × 4 candidates by cosine similarity`, `Phase 2 — LLM judge: 0-10 score on all candidates`, `RRF fusion → top_k final results`],
+                },
+                {
+                  mode: 'vector-only' as const,
+                  label: lang === 'fr' ? 'Vectoriel' : 'Vector-only',
+                  phases: lang === 'fr'
+                    ? [`Recherche Milvus directe → top_k résultats (pas de juge LLM)`]
+                    : [`Direct Milvus search → top_k results (no LLM judge)`],
+                },
+                {
+                  mode: 'agentic-only' as const,
+                  label: lang === 'fr' ? 'Vectorless RAG' : 'Vectorless RAG',
+                  phases: lang === 'fr'
+                    ? [`Phase 0 — TOC : filtrage domaine/type si corpus > 200 fragments`, `Phase 1 — LLM : sélection de top_k × 4 candidats dans l'index`, `Phase 2 — LLM : scoring par auto-consistance → top_k résultats`]
+                    : [`Phase 0 — TOC: domain/type filtering if corpus > 200 fragments`, `Phase 1 — LLM: selects top_k × 4 candidates from index`, `Phase 2 — LLM: self-consistency scoring → top_k results`],
+                },
+              ].map(({ mode, label, phases }) => (
+                <div key={mode} className={`rounded px-3 py-2 text-xs ${current === mode ? 'bg-primary/8 border border-primary/20' : 'bg-muted/40'}`}>
+                  <span className={`font-medium ${current === mode ? 'text-primary' : 'text-foreground/70'}`}>
+                    {label}{current === mode && (lang === 'fr' ? ' — actif' : ' — active')}
+                  </span>
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                    {phases.map((p) => <li key={p} className="before:content-['→_'] before:opacity-40">{p}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Integer input */}
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={pendingTopK ?? currentTopK}
+              onChange={(e) => {
+                const v = Math.max(1, Math.min(20, parseInt(e.target.value) || 1));
+                setPendingTopK(v);
+              }}
+              className="w-16 text-center text-2xl font-bold font-mono border rounded-md py-1 bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <span className="text-xs text-muted-foreground">1 – 20</span>
+          </div>
+        </div>
+
+        {pendingTopK !== null && pendingTopK !== currentTopK && (
+          <div className="flex gap-2 justify-end pt-1 border-t">
+            <Button variant="ghost" size="sm" onClick={() => setPendingTopK(currentTopK)}>
+              {lang === 'fr' ? 'Annuler' : 'Cancel'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setTopK.mutate(pendingTopK, { onSuccess: () => toast.success(`top_k = ${pendingTopK}`) })}
+              disabled={setTopK.isPending}
+            >
+              {setTopK.isPending ? (lang === 'fr' ? 'Enregistrement…' : 'Saving…') : (lang === 'fr' ? 'Appliquer' : 'Apply')}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Save banner when dirty */}

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, PenLine, CheckCircle, Archive, LayoutGrid, Table2 } from 'lucide-react';
+import { Clock, PenLine, CheckCircle, Archive, LayoutGrid, Table2, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   FragmentsToolbar,
@@ -19,6 +19,14 @@ const LIMIT = 50;
 
 // Quality stat cards — ordered by admin workflow priority
 const QUALITY_CARDS = [
+  {
+    value: 'all',
+    sublabel: 'au total',
+    icon: LayoutGrid,
+    iconColor: 'text-primary',
+    activeClass: 'border-primary/60',
+    countColor: 'text-foreground',
+  },
   {
     value: 'reviewed',
     sublabel: 'à valider',
@@ -50,14 +58,6 @@ const QUALITY_CARDS = [
     iconColor: 'text-amber-500',
     activeClass: 'border-amber-400 dark:border-amber-600',
     countColor: 'text-amber-700 dark:text-amber-300',
-  },
-  {
-    value: 'all',
-    sublabel: 'au total',
-    icon: LayoutGrid,
-    iconColor: 'text-primary',
-    activeClass: 'border-primary/60',
-    countColor: 'text-foreground',
   },
 ] as const;
 
@@ -191,7 +191,62 @@ export default function AdminFragmentsPage() {
     setSelectedIds(new Set());
     refetch();
     queryClient.invalidateQueries({ queryKey: ['admin-fragments'] });
+    queryClient.invalidateQueries({ queryKey: ['admin', 'fragments', 'pending-count'] });
   };
+
+  const [approveAllLoading, setApproveAllLoading] = useState(false);
+  const [selectAllLoading, setSelectAllLoading] = useState(false);
+
+  const handleSelectAllPages = useCallback(async () => {
+    setSelectAllLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '5000', offset: '0' });
+      if (apiQuality) params.set('quality', apiQuality);
+      if (filters.domain) params.set('domain', filters.domain);
+      if (filters.type) params.set('type', filters.type);
+      if (filters.lang) params.set('lang', filters.lang);
+      if (filters.origin) params.set('origin', filters.origin);
+      if (filters.search) params.set('search', filters.search);
+      const result = await apiRequest<{ items: { id: string }[] }>(
+        'GET',
+        `/v1/admin/fragments?${params}`,
+      );
+      setSelectedIds(new Set(result.items.map((f) => f.id)));
+    } catch (e: any) {
+      alert(`Erreur : ${e.message}`);
+    } finally {
+      setSelectAllLoading(false);
+    }
+  }, [apiQuality, filters]);
+
+  const handleApproveAll = useCallback(async () => {
+    setApproveAllLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.domain) params.set('domain', filters.domain);
+      if (filters.type) params.set('type', filters.type);
+      if (filters.lang) params.set('lang', filters.lang);
+      if (filters.origin) params.set('origin', filters.origin);
+      const qs = params.toString() ? `?${params}` : '';
+      const result = await apiRequest<{ job_id: string | null; count: number }>(
+        'POST',
+        `/v1/admin/fragments/bulk-approve-all${qs}`,
+      );
+      if (result?.job_id) {
+        // Poll until done
+        for (let i = 0; i < 300; i++) {
+          await new Promise((r) => setTimeout(r, 800));
+          const job = await apiRequest<{ status: string }>('GET', `/v1/jobs/${result.job_id}`);
+          if (job.status === 'done' || job.status === 'error') break;
+        }
+      }
+      onBulkComplete();
+    } catch (e: any) {
+      alert(`Erreur : ${e.message}`);
+    } finally {
+      setApproveAllLoading(false);
+    }
+  }, [filters, onBulkComplete]);
 
   const view = searchParams.get('view') ?? 'fragments';
   const setView = useCallback(
@@ -320,6 +375,7 @@ export default function AdminFragmentsPage() {
             selectedIds={Array.from(selectedIds)}
             onComplete={onBulkComplete}
             onCancel={() => setSelectedIds(new Set())}
+            showApprove={filters.quality === 'reviewed'}
           />
         )}
 
@@ -336,22 +392,24 @@ export default function AdminFragmentsPage() {
             <div className="flex items-center gap-2 px-1 py-1 text-xs text-muted-foreground">
               <input
                 type="checkbox"
-                checked={allSelected}
+                checked={someSelected}
                 ref={(el) => {
-                  if (el) el.indeterminate = someSelected && !allSelected;
+                  if (el) el.indeterminate = selectAllLoading;
                 }}
-                onChange={() =>
-                  allSelected
-                    ? setSelectedIds(new Set())
-                    : setSelectedIds(new Set(items.map((f) => f.id)))
-                }
+                onChange={() => {
+                  if (someSelected) {
+                    setSelectedIds(new Set());
+                  } else {
+                    handleSelectAllPages();
+                  }
+                }}
                 aria-label="Tout sélectionner"
               />
               <span>
-                {allSelected
-                  ? `Tous les ${items.length} sélectionnés`
-                  : someSelected
-                    ? `${selectedIds.size} / ${items.length} sélectionnés`
+                {selectAllLoading
+                  ? 'Sélection en cours…'
+                  : selectedIds.size > 0
+                    ? `${selectedIds.size} sélectionné${selectedIds.size > 1 ? 's' : ''}`
                     : `${pagination?.total ?? items.length} fragments`}
               </span>
             </div>
