@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useSchemaLabel } from '@/components/payload-editor';
 import { useI18n } from '@/lib/i18n';
-import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, FileText } from 'lucide-react';
 
 function useAllFragmentCollections() {
   return useQuery<FragmentCollection[]>({
@@ -111,12 +111,55 @@ function CollectionRow({ col }: { col: FragmentCollection }) {
   );
 }
 
+type SortCol = 'title' | 'rows' | 'date' | 'schema' | 'source';
+type SortDir = 'asc' | 'desc';
+const DEFAULT_DIR: Record<SortCol, SortDir> = { title: 'asc', rows: 'desc', date: 'desc', schema: 'asc', source: 'asc' };
+
+function SortHeader({
+  label,
+  col,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string;
+  col: SortCol;
+  sort: string;
+  onSort: (col: SortCol, dir: SortDir) => void;
+  className?: string;
+}) {
+  const isAsc = sort === `${col}_asc`;
+  const isDesc = sort === `${col}_desc`;
+  const active = isAsc || isDesc;
+  const toggle = () => {
+    if (!active) onSort(col, DEFAULT_DIR[col]);
+    else onSort(col, isAsc ? 'desc' : 'asc');
+  };
+  return (
+    <button
+      onClick={toggle}
+      className={`flex items-center gap-1 select-none uppercase tracking-wide ${className ?? ''}`}
+    >
+      <span>{label}</span>
+      {isAsc ? (
+        <ChevronUp className="h-3 w-3" />
+      ) : isDesc ? (
+        <ChevronDown className="h-3 w-3" />
+      ) : (
+        <ChevronDown className="h-3 w-3 opacity-30" />
+      )}
+    </button>
+  );
+}
+
 export function CollectionsView() {
   const { data: collections, isLoading } = useAllFragmentCollections();
   const [schemaFilter, setSchemaFilter] = useState('');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('date_desc');
   const { t } = useI18n();
+
+  const handleSort = (col: SortCol, dir: SortDir) => setSort(`${col}_${dir}`);
 
   const SCHEMA_FILTERS = [
     { value: '', label: t('admin', 'tablesFilterAll') },
@@ -137,6 +180,12 @@ export function CollectionsView() {
       if (sort === 'date_asc') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       if (sort === 'title_asc') return a.title.localeCompare(b.title);
       if (sort === 'title_desc') return b.title.localeCompare(a.title);
+      if (sort === 'rows_asc') return a.member_ids.length - b.member_ids.length;
+      if (sort === 'rows_desc') return b.member_ids.length - a.member_ids.length;
+      if (sort === 'schema_asc') return (a.payload_schema ?? '').localeCompare(b.payload_schema ?? '');
+      if (sort === 'schema_desc') return (b.payload_schema ?? '').localeCompare(a.payload_schema ?? '');
+      if (sort === 'source_asc') return (a.source_document ?? '').localeCompare(b.source_document ?? '');
+      if (sort === 'source_desc') return (b.source_document ?? '').localeCompare(a.source_document ?? '');
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
@@ -156,16 +205,6 @@ export function CollectionsView() {
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-1.5 border rounded-md text-sm flex-1 min-w-[180px] bg-background"
           />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="px-2 py-1.5 border rounded-md text-sm bg-background"
-          >
-            <option value="date_desc">{t('admin', 'tablesSortNewest')}</option>
-            <option value="date_asc">{t('admin', 'tablesSortOldest')}</option>
-            <option value="title_asc">{t('admin', 'tablesSortTitleAsc')}</option>
-            <option value="title_desc">{t('admin', 'tablesSortTitleDesc')}</option>
-          </select>
           <select
             value={schemaFilter}
             onChange={(e) => setSchemaFilter(e.target.value)}
@@ -193,11 +232,21 @@ export function CollectionsView() {
             <thead>
               <tr className="border-b bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
                 <th className="w-8 px-3 py-2" />
-                <th className="px-3 py-2 text-left">{t('admin', 'tablesColTitle')}</th>
-                <th className="px-3 py-2 text-left">{t('admin', 'tablesColRowType')}</th>
-                <th className="px-3 py-2 text-center w-20">{t('admin', 'tablesColRows')}</th>
-                <th className="px-3 py-2 text-left">{t('admin', 'tablesColSource')}</th>
-                <th className="px-3 py-2 text-left w-24">{t('admin', 'tablesColDate')}</th>
+                <th className="px-3 py-2 text-left">
+                  <SortHeader label={t('admin', 'tablesColTitle')} col="title" sort={sort} onSort={handleSort} />
+                </th>
+                <th className="px-3 py-2 text-left">
+                  <SortHeader label={t('admin', 'tablesColRowType')} col="schema" sort={sort} onSort={handleSort} />
+                </th>
+                <th className="px-3 py-2 text-center w-20">
+                  <SortHeader label={t('admin', 'tablesColRows')} col="rows" sort={sort} onSort={handleSort} className="justify-center w-full" />
+                </th>
+                <th className="px-3 py-2 text-left">
+                  <SortHeader label={t('admin', 'tablesColSource')} col="source" sort={sort} onSort={handleSort} />
+                </th>
+                <th className="px-3 py-2 text-left w-24">
+                  <SortHeader label={t('admin', 'tablesColDate')} col="date" sort={sort} onSort={handleSort} />
+                </th>
               </tr>
             </thead>
             <tbody>

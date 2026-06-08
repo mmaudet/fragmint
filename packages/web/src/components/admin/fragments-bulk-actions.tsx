@@ -8,6 +8,7 @@ interface Props {
   selectedIds: string[];
   onComplete: () => void;
   onCancel: () => void;
+  showApprove?: boolean;
 }
 
 type BulkAction = 'approve' | 'archive' | 'delete';
@@ -30,7 +31,7 @@ async function pollJob(jobId: string, maxAttempts = 120): Promise<void> {
   // Timed out — still call onComplete so the list refreshes
 }
 
-export function FragmentsBulkActions({ selectedIds, onComplete, onCancel }: Props) {
+export function FragmentsBulkActions({ selectedIds, onComplete, onCancel, showApprove = false }: Props) {
   const [pendingAction, setPendingAction] = useState<BulkAction | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -65,13 +66,15 @@ export function FragmentsBulkActions({ selectedIds, onComplete, onCancel }: Prop
       </span>
 
       <div className="flex gap-2">
-        <button
-          onClick={() => setPendingAction('approve')}
-          disabled={loading}
-          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-        >
-          Approuver
-        </button>
+        {showApprove && (
+          <button
+            onClick={() => setPendingAction('approve')}
+            disabled={loading}
+            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            Approuver
+          </button>
+        )}
         <button
           onClick={() => setPendingAction('archive')}
           disabled={loading}
@@ -95,10 +98,10 @@ export function FragmentsBulkActions({ selectedIds, onComplete, onCancel }: Prop
         </button>
       </div>
 
-      {pendingAction === 'approve' && (
+      {pendingAction === 'approve' && showApprove && (
         <ConfirmModal
           title="Approuver les fragments ?"
-          message={`${n} fragment${n > 1 ? 's' : ''} seront approuvés. Les fragments non "reviewed" seront ignorés par le serveur.`}
+          message={`${n} fragment${n > 1 ? 's' : ''} seront approuvés.`}
           confirmLabel={`Approuver ${n}`}
           onConfirm={() => executeAction('approve')}
           onClose={() => setPendingAction(null)}

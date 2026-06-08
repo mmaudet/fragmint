@@ -14,7 +14,7 @@ export interface FragmentsFilters {
 }
 
 export const DEFAULT_FILTERS: FragmentsFilters = {
-  quality: 'reviewed', // default: what needs admin attention
+  quality: 'all',
   domain: '',
   type: '',
   lang: '',
