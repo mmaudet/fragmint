@@ -5,14 +5,40 @@ export interface BuildPlanArgs {
   spec_prompt: string;
   filters: PlanFilters;
   current_plan?: string;
-  extra_instructions?: string;
   reference_docs?: Array<{ name: string; content: string }>;
+  corpus_summary?: string;
 }
 
 const PLAN_SYSTEM = `You produce structured document plans in Markdown. Output ONLY the plan.
-Format: one H2 (## ) per section. Under each H2, a single short paragraph
-(1–3 sentences) describing what the section covers. No body content.
-No introduction, no conclusion outside the plan, no commentary.`;
+
+Format for each section:
+## Section title
+**Type:** <slug>
+Short description (1–3 sentences) describing what the section covers.
+
+The <slug> MUST be one of:
+- introduction   : opening context, problem statement, or executive summary
+- argument       : key point, benefit, or rationale for a claim
+- use-case       : concrete scenario, customer story, or application example
+- methodology    : process, approach, technical specification, or how-it-works
+- engagement     : call to action, next steps, contact, or offer
+- reference      : legal reference, standard, norm, or external citation
+- testimonial    : customer quote, review, or success story
+- pricing        : pricing table, licensing model, or cost breakdown
+- faq            : frequently asked questions or objection handling
+- conclusion     : summary, recap, or closing remarks
+- bio            : author, speaker, or team member profile
+- clause         : contractual clause, term, or condition
+
+No body content. No commentary outside section descriptions.
+
+When a corpus context is provided:
+- Prefer types listed under "Types" — those have matching fragments in the library.
+- You may use other valid types (faq, bio, clause, conclusion) if editorially appropriate, but note in the description that no library content exists for that section.
+- Table titles in the corpus (e.g. "Choix du modèle de langage", "New additional features", "Proposition financière") are internal data labels from source documents. They MUST NOT appear as section names in your plan.
+  Use them only inside section descriptions, with a phrasing like "may include data from the table titled '...'".
+  Correct:   section name "Tarification annuelle des prestations", description "...may include data from the table titled 'New additional features'..."
+  Incorrect: section name "New additional features" ← do not do this`;
 
 export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
   const lang = args.filters.lang ?? 'fr';
@@ -21,6 +47,12 @@ export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
     args.filters.tags && args.filters.tags.length > 0 ? args.filters.tags.join(', ') : 'none';
 
   const parts: string[] = [];
+
+  if (args.corpus_summary) {
+    parts.push(`Corpus context (shape sections to match available content):\n${args.corpus_summary}`);
+    parts.push('');
+  }
+
   parts.push(`Context / specification:\n${args.spec_prompt}`);
   parts.push('');
   parts.push('Constraints:');
@@ -40,17 +72,10 @@ export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
     }
   }
 
-  if (args.extra_instructions && !args.current_plan) {
-    parts.push('');
-    parts.push(`Additional instructions: ${args.extra_instructions}`);
-  }
-
   if (args.current_plan && args.current_plan.trim() !== '') {
     parts.push('');
-    parts.push('Current plan to revise:');
+    parts.push('Current plan to revise (update it according to the specification above):');
     parts.push(args.current_plan);
-    parts.push('');
-    parts.push(`Revision instructions: ${args.extra_instructions ?? ''}`.trim());
   }
 
   return [

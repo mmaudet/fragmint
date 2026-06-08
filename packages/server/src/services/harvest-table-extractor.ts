@@ -13,6 +13,34 @@ const SCHEMA_TYPE_MAP: Record<string, string> = {
   'generic-row-v1': 'pricing',
 };
 
+const SCHEMA_BASE_TAGS: Record<string, string[]> = {
+  'pricing-line-v1': ['source:tableau', 'pricing', 'tarification'],
+  'sla-row-v1':      ['source:tableau', 'sla', 'engagement', 'disponibilité'],
+  'reference-v1':    ['source:tableau', 'reference'],
+  'generic-row-v1':  ['source:tableau'],
+};
+
+// (pattern, tags) — tested against "tableTitle + headers" concatenated
+const TITLE_TAG_SIGNALS: Array<[RegExp, string[]]> = [
+  [/rgesn/i,                          ['rgesn']],
+  [/migration/i,                      ['migration']],
+  [/audit/i,                          ['audit', 'securite']],
+  [/gti|gtr|criticité/i,              ['incidents', 'sla', 'gti', 'gtr']],
+  [/incident/i,                       ['incidents', 'gestion-incidents']],
+  [/tarif|prix|financ/i,              ['tarification', 'pricing']],
+  [/certif/i,                         ['certifications']],
+  [/sla|disponibil/i,                 ['sla', 'disponibilité']],
+];
+
+function deriveRowTags(schemaId: string, tableTitle: string, headers: string[]): string[] {
+  const base = SCHEMA_BASE_TAGS[schemaId] ?? ['source:tableau'];
+  const searchText = `${tableTitle} ${headers.join(' ')}`;
+  const extra = TITLE_TAG_SIGNALS.flatMap(([pattern, tags]) =>
+    pattern.test(searchText) ? tags : [],
+  );
+  return [...new Set([...base, ...extra])];
+}
+
 function buildGfmTable(table: DetectedTable): string {
   const header = '| ' + table.headers.join(' | ') + ' |';
   const sep = '| ' + table.headers.map(() => '---').join(' | ') + ' |';
@@ -89,7 +117,7 @@ export async function flushTableCandidates(
       type,
       domain,
       lang,
-      tags: JSON.stringify(['source:tableau']),
+      tags: JSON.stringify(deriveRowTags(schemaId, tableTitle, table.headers)),
       confidence: 0.85,
       origin_source: filename,
       origin_page: null,

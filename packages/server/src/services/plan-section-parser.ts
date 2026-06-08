@@ -4,6 +4,7 @@ export interface ParsedSection {
   id: string;
   title: string;
   description: string;
+  inferred_type?: string;
 }
 
 export function sectionStableId(title: string, index: number): string {
@@ -13,6 +14,17 @@ export function sectionStableId(title: string, index: number): string {
 }
 
 const H2_RE = /^##\s+(.+?)\s*$/;
+const TYPE_RE = /^\*\*Type:\*\*\s+([a-z-]+)\s*$/i;
+
+function extractType(lines: string[]): { filtered: string[]; inferred_type: string | undefined } {
+  let inferred_type: string | undefined;
+  const filtered = lines.filter((l) => {
+    const m = l.match(TYPE_RE);
+    if (m) { inferred_type = m[1].toLowerCase(); return false; }
+    return true;
+  });
+  return { filtered, inferred_type };
+}
 
 export function parsePlanSections(markdown: string): ParsedSection[] {
   const trimmed = markdown.trim();
@@ -28,11 +40,13 @@ export function parsePlanSections(markdown: string): ParsedSection[] {
 
   if (headingIndices.length === 0) {
     const [firstLine, ...rest] = trimmed.split('\n');
+    const { filtered, inferred_type } = extractType(rest);
     return [
       {
         id: sectionStableId(firstLine.trim(), 0),
         title: firstLine.trim(),
-        description: rest.join('\n').trim(),
+        description: filtered.join('\n').trim(),
+        inferred_type,
       },
     ];
   }
@@ -41,9 +55,10 @@ export function parsePlanSections(markdown: string): ParsedSection[] {
   for (let i = 0; i < headingIndices.length; i++) {
     const start = headingIndices[i].line + 1;
     const end = i + 1 < headingIndices.length ? headingIndices[i + 1].line : lines.length;
-    const description = lines.slice(start, end).join('\n').trim();
+    const { filtered, inferred_type } = extractType(lines.slice(start, end));
+    const description = filtered.join('\n').trim();
     const title = headingIndices[i].title;
-    sections.push({ id: sectionStableId(title, i), title, description });
+    sections.push({ id: sectionStableId(title, i), title, description, inferred_type });
   }
   return sections;
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { eq, and, desc, inArray, ne } from 'drizzle-orm';
+import { eq, and, desc, inArray, ne, isNotNull, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
-import { plans, fragmentTypes, fragmentDomains, fragments } from '../db/schema.js';
+import { plans, fragmentTypes, fragmentDomains, fragments, fragmentCollections } from '../db/schema.js';
 import {
   PlanStateSchema,
   type PlanState,
@@ -22,10 +22,21 @@ import type {
   SectionQuery,
 } from '../retrieval/fragment-retriever.js';
 import { VectorRetriever } from '../retrieval/vector-retriever.js';
-import { getCurrentRetriever, getCurrentMode } from '../retrieval/factory.js';
+import { getCurrentRetriever, getCurrentMode, getSectionTopK } from '../retrieval/factory.js';
 import type { FragmentCollectionService } from './fragment-collection-service.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
+
+function makeSemaphore(limit: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  return async function<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= limit) await new Promise<void>((r) => queue.push(r));
+    active++;
+    try { return await fn(); }
+    finally { active--; queue.shift()?.(); }
+  };
+}
 
 // When two sections compete for the same fragment and their score gap is below this
 // threshold, type affinity breaks the tie instead of raw score.
@@ -158,6 +169,7 @@ export interface PlanServiceConfig {
   fragments?: FragmentService;
   collectionService?: FragmentCollectionService;
   sectionTopK?: number;
+  llmConcurrency?: number;
 }
 
 export interface PlanRecord {
@@ -329,7 +341,7 @@ export class PlanService {
       .slice(0, 2000);
     console.debug(`[plan-service] query "${section.title.slice(0, 40)}" enriched=${enrichedText.slice(0, 200).replace(/\n/g, ' ')}`);
 
-    const limit = topK ?? this.config.sectionTopK ?? 5;
+    const limit = topK ?? getSectionTopK();
 
     // Pool A — detect referential tags + domains in section text, fetch forced candidates
     const sectionText = `${section.title} ${section.description}`.toLowerCase();
@@ -401,6 +413,7 @@ export class PlanService {
         body_excerpt: r.body_excerpt,
         quality: r.quality,
         type: r.type,
+        payload_schema: r.payload_schema ?? null,
         score_breakdown: r.score_breakdown,
         justification: r.justification,
         retrieval_source: r.retrieval_source,
@@ -446,21 +459,82 @@ export class PlanService {
     return new Map(entries);
   }
 
-  async generatePlan(
-    id: string,
-    args: { extra_instructions?: string },
-  ): Promise<PlanRecord | null> {
+  async generatePlan(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
+    const corpusSummary = await this.buildCorpusSummary();
     const messages = buildPlanMessages({
       spec_prompt: p.state.spec_prompt,
       filters: p.state.filters,
       current_plan: p.state.plan_markdown,
-      extra_instructions: args.extra_instructions,
       reference_docs: p.state.reference_docs,
+      corpus_summary: corpusSummary,
     });
     const out = await this.requireLlm().chatMessages(messages);
     return this.update(id, { plan_markdown: out.trim(), status: 'plan_generated' });
+  }
+
+  private async buildCorpusSummary(): Promise<string | undefined> {
+    const domainRows = await this.db
+      .select({ domain: fragments.domain, n: sql<number>`count(*)` })
+      .from(fragments)
+      .where(eq(fragments.quality, 'approved'))
+      .groupBy(fragments.domain)
+      .orderBy(desc(sql`count(*)`))
+      .limit(12);
+
+    const total = domainRows.reduce((s, r) => s + r.n, 0);
+    if (total < 20) return undefined;
+
+    const typeRows = await this.db
+      .select({ type: fragments.type, n: sql<number>`count(*)` })
+      .from(fragments)
+      .where(eq(fragments.quality, 'approved'))
+      .groupBy(fragments.type)
+      .orderBy(desc(sql`count(*)`));
+
+    const collRows = await this.db
+      .select({
+        title: fragmentCollections.title,
+        schema: fragmentCollections.payload_schema,
+        source: fragmentCollections.source_document,
+        member_ids: fragmentCollections.member_ids,
+      })
+      .from(fragmentCollections)
+      .where(isNotNull(fragmentCollections.payload_schema));
+
+    const domainStr = domainRows.map((r) => `${r.domain} (${r.n})`).join(', ');
+    const typeStr = typeRows.map((r) => `${r.type} (${r.n})`).join(', ');
+
+    const structuredColls = collRows
+      .map((r) => {
+        try {
+          const count = (JSON.parse(r.member_ids ?? '[]') as unknown[]).length;
+          return count > 0 ? { title: r.title, schema: r.schema ?? '', source: r.source ?? '', count } : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter((r): r is { title: string; schema: string; source: string; count: number } => r !== null)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    const lines: string[] = [
+      `Available corpus (${total} approved fragments):`,
+      `Domains: ${domainStr}`,
+      `Types: ${typeStr}`,
+    ];
+
+    if (structuredColls.length > 0) {
+      lines.push('Structured data sources (internal labels, NOT section names):');
+      for (const c of structuredColls) {
+        const tableId = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+        const src = c.source.replace(/\.docx?$/i, '').slice(0, 55);
+        lines.push(`- table_id="${tableId}" (${c.count} rows, schema=${c.schema}, source=${src})`);
+      }
+    }
+
+    return lines.join('\n');
   }
 
   async addReferenceDoc(
@@ -495,15 +569,21 @@ export class PlanService {
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
     const retrieverSnapshot = this.requireRetriever();
-    console.log(`[plan-service] validatePlan starting (mode=${getCurrentMode()}, sections=${parsed.length})`);
+    const concurrency = this.config.llmConcurrency ?? 3;
+    const throttle = makeSemaphore(concurrency);
+    console.log(`[plan-service] validatePlan starting (mode=${getCurrentMode()}, sections=${parsed.length}, concurrency=${concurrency})`);
 
-    const inferredById = await this.inferSectionTypes(parsed);
+    const sectionsNeedingInference = parsed.filter((ps) => !ps.inferred_type);
+    const inferredById = sectionsNeedingInference.length > 0
+      ? await this.inferSectionTypes(sectionsNeedingInference)
+      : new Map<string, string | undefined>();
+    console.log(`[plan-service] type inference: ${parsed.length - sectionsNeedingInference.length} from prompt, ${sectionsNeedingInference.length} via LLM classify`);
 
     const newSections = await Promise.all(
-      parsed.map(async (ps) => {
+      parsed.map((ps) => throttle(async () => {
         const previous = oldById.get(ps.id);
         const filters = previous?.filters_override ?? p.state.filters;
-        const inferred_type = inferredById.get(ps.id) ?? previous?.inferred_type;
+        const inferred_type = ps.inferred_type ?? inferredById.get(ps.id) ?? previous?.inferred_type;
         let candidates: FragmentCandidate[] = [];
         try {
           candidates = await this.runSectionSearch(
@@ -538,7 +618,7 @@ export class PlanService {
           inferred_type,
           section_confidence,
         };
-      }),
+      })),
     );
 
     const dedupedSections = dedupCandidatesAcrossSections(newSections).map((s) => ({
@@ -604,9 +684,11 @@ export class PlanService {
     const inferredById = toInfer.length > 0 ? await this.inferSectionTypes(toInfer) : new Map<string, string | undefined>();
 
     const retrieverSnapshot = this.requireRetriever();
-    console.log(`[plan-service] searchAllSections starting (mode=${getCurrentMode()}, sections=${sections.length})`);
+    const concurrency = this.config.llmConcurrency ?? 3;
+    const throttle = makeSemaphore(concurrency);
+    console.log(`[plan-service] searchAllSections starting (mode=${getCurrentMode()}, sections=${sections.length}, concurrency=${concurrency})`);
 
-    const rawSections = await Promise.all(sections.map(async (s) => {
+    const rawSections = await Promise.all(sections.map((s) => throttle(async () => {
       const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
       const filters = s.filters_override ?? p.state.filters;
       let candidates: FragmentCandidate[] = s.candidates ?? [];
@@ -632,7 +714,7 @@ export class PlanService {
         `[plan] section "${s.title.slice(0, 40)}": top_llm=${topLlm === -Infinity ? 'none' : topLlm} → ${section_confidence}`,
       );
       return { ...s, candidates, inferred_type, section_confidence };
-    }));
+    })));
     const updatedSections = dedupCandidatesAcrossSections(rawSections).map((s) => ({
       ...s,
       section_confidence: computeSectionConfidence(s.candidates ?? []),

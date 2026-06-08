@@ -123,7 +123,7 @@ describe('PlanService.generatePlan', () => {
     const llm = fakeLlm(['## Intro\n\nWelcomes.\n\n## Pricing\n\nCosts.']);
     const svc = makeServiceFull({ llm });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: 'cloud doc' });
-    const out = await svc.generatePlan(p.id, {});
+    const out = await svc.generatePlan(p.id);
     expect(out!.state.plan_markdown).toContain('## Intro');
     expect(llm.chatMessages).toHaveBeenCalledTimes(1);
   });

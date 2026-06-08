@@ -257,7 +257,7 @@ export function planRoutes(
         return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
       }
       if (!(await requireOwnership(request, reply, id))) return;
-      const out = await planService.generatePlan(id, parsed.data);
+      const out = await planService.generatePlan(id);
       if (!out) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
       return { data: out, meta: null, error: null };
     },

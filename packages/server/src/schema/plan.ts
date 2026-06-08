@@ -35,6 +35,7 @@ export const FragmentCandidateSchema = z.object({
   body_full: z.string().nullable().optional(),
   quality: z.string(),
   type: z.string().optional(),
+  payload_schema: z.string().nullable().optional(),
   score_breakdown: ScoreBreakdownSchema.optional(),
   justification: z.string().optional(),
   retrieval_source: z.enum(['vector', 'tag', 'both']).optional(),
@@ -132,9 +133,7 @@ export const UpdatePlanSchema = z.object({
   reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).optional(),
 });
 
-export const GeneratePlanSchema = z.object({
-  extra_instructions: z.string().optional(),
-});
+export const GeneratePlanSchema = z.object({});
 
 export const SectionSearchSchema = z.object({
   filters_override: PlanFiltersSchema.optional(),
