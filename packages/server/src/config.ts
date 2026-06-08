@@ -53,6 +53,7 @@ export interface FragmintConfig {
 
   // Retrieval
   retrieval_mode: 'vector-only' | 'agentic-only' | 'hybrid';
+  llm_concurrency: number;
 
   // Retrieval scoring
   rrf_k: number;
@@ -161,6 +162,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     rrf_weights: toRrfWeights(process.env.FRAGMINT_RRF_WEIGHTS) ?? fileConfig.rrf_weights ?? 'literature',
     hybrid_llm_floor: toFloat(process.env.FRAGMINT_HYBRID_LLM_FLOOR) ?? fileConfig.hybrid_llm_floor ?? 3,
     dupe_shingles_threshold: toFloat(process.env.FRAGMINT_DUPE_SHINGLES_THRESHOLD) ?? fileConfig.dupe_shingles_threshold ?? 0.70,
+    llm_concurrency: toNumber(process.env.FRAGMINT_LLM_CONCURRENCY) ?? fileConfig.llm_concurrency ?? 3,
   };
 }
 

@@ -308,7 +308,7 @@ export async function createServer(options?: {
     rrfK: config.rrf_k,
     rrfWeightsPreset: config.rrf_weights,
     hybridLlmFloor: config.hybrid_llm_floor,
-  });
+  }, config.section_top_k);
 
   const planService = new PlanAssembler(db, {
     fragmentMaxChars: config.plan_fragment_max_chars,
@@ -318,6 +318,7 @@ export async function createServer(options?: {
     retriever,
     fragments: fragmentService,
     sectionTopK: config.section_top_k,
+    llmConcurrency: config.llm_concurrency,
   });
 
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
