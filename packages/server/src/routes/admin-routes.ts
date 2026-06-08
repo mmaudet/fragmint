@@ -9,7 +9,7 @@ import { SearchService } from '../search/search-service.js';
 import { TemplateService } from '../services/template-service.js';
 import { z } from 'zod';
 import { createUserSchema, createTokenSchema } from '../schema/api.js';
-import { setRetrievalMode, getCurrentMode, getCurrentWeightsPreset, type RetrievalMode } from '../retrieval/factory.js';
+import { setRetrievalMode, getCurrentMode, getCurrentWeightsPreset, getSectionTopK, setSectionTopK, type RetrievalMode } from '../retrieval/factory.js';
 
 const patchUserSchema = z.object({
   role: z.enum(['reader', 'contributor', 'expert', 'admin']).optional(),
@@ -182,6 +182,26 @@ export function adminRoutes(
         meta: null,
         error: null,
       });
+    },
+  );
+
+  app.get(
+    '/v1/admin/retrieval/top-k',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (_req, reply) => {
+      return reply.send({ data: { top_k: getSectionTopK() }, meta: null, error: null });
+    },
+  );
+
+  app.post(
+    '/v1/admin/retrieval/top-k',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const parsed = z.object({ top_k: z.number().int().min(1).max(20) }).safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      setSectionTopK(parsed.data.top_k);
+      return reply.send({ data: { top_k: getSectionTopK() }, meta: null, error: null });
     },
   );
 

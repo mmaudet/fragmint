@@ -42,7 +42,7 @@ export function adminFragmentRoutes(
     if (q.origin) conditions.push(eq(fragments.origin, q.origin));
     if (q.search) {
       const pattern = `%${q.search}%`;
-      conditions.push(or(like(fragments.title, pattern), like(fragments.body_excerpt, pattern)));
+      conditions.push(or(like(fragments.title, pattern), like(fragments.body_excerpt, pattern), like(fragments.id, pattern)));
     }
 
     const where = conditions.length ? and(...conditions) : undefined;
@@ -138,6 +138,46 @@ export function adminFragmentRoutes(
       reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
       fragmentService
         .bulkDeprecate(ids, userLogin, request.ip, (done) => jobService.progress(job.id, done))
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
+
+  // ── POST /v1/admin/fragments/bulk-approve-all ────────────────────────
+  // Approves ALL fragments with quality='reviewed' matching the given filters.
+  // No IDs needed — the server resolves the full set server-side.
+  app.post(
+    '/v1/admin/fragments/bulk-approve-all',
+    { preHandler: adminHandlers },
+    async (request, reply) => {
+      const q = request.query as {
+        domain?: string;
+        type?: string;
+        lang?: string;
+        origin?: string;
+      };
+      const userLogin = (request.user as { login: string }).login;
+
+      const conditions: ReturnType<typeof eq>[] = [eq(fragments.quality, 'reviewed')];
+      if (q.domain) conditions.push(eq(fragments.domain, q.domain));
+      if (q.type) conditions.push(eq(fragments.type, q.type));
+      if (q.lang) conditions.push(eq(fragments.lang, q.lang));
+      if (q.origin) conditions.push(eq(fragments.origin, q.origin));
+
+      const rows = await db
+        .select({ id: fragments.id })
+        .from(fragments)
+        .where(and(...conditions));
+
+      const ids = rows.map((r) => r.id);
+      if (ids.length === 0) {
+        return reply.send({ data: { job_id: null, count: 0 }, meta: null, error: null });
+      }
+
+      const job = await jobService.create('bulk_approve', ids.length, userLogin);
+      reply.code(202).send({ data: { job_id: job.id, count: ids.length }, meta: null, error: null });
+      fragmentService
+        .bulkApprove(ids, userLogin, request.ip, (done) => jobService.progress(job.id, done))
         .then(({ done, errors }) => jobService.complete(job.id, done, errors))
         .catch(() => jobService.fail(job.id));
     },
