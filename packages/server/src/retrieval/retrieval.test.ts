@@ -64,10 +64,9 @@ describe('FragmentRetriever interface', () => {
   });
 });
 
-function fakeSearchService(results: SearchResult[] = [], keywordResults: SearchResult[] = []): SearchService {
+function fakeSearchService(results: SearchResult[] = []): SearchService {
   return {
     search: vi.fn(async () => results),
-    keywordSearch: vi.fn(async () => keywordResults),
   } as unknown as SearchService;
 }
 
@@ -196,49 +195,6 @@ describe('VectorRetriever', () => {
     expect(results[0].score_breakdown?.method).toBe('sqlite_like');
   });
 
-  it('includes keyword-only fragments from keywordSearch when vector misses them', async () => {
-    const vectorResult: SearchResult = { ...SAMPLE_RESULT, id: 'vec-1', score: 0.8 };
-    const kwResult: SearchResult = { ...SAMPLE_RESULT, id: 'kw-1', score: null as unknown as number, domain: 'mirai' };
-    const svc = fakeSearchService([vectorResult], [kwResult]);
-    const retriever = new VectorRetriever(svc);
-    const results = await retriever.searchForSection(
-      { text: 'présentation MIRAI', filters: {}, collectionSlug: null },
-    );
-    const ids = results.map((r) => r.fragment_id);
-    expect(ids).toContain('vec-1');
-    expect(ids).toContain('kw-1');
-    expect(results.find((r) => r.fragment_id === 'kw-1')?.score_breakdown?.method).toBe('sqlite_like');
-  });
-
-  it('deduplicates fragments present in both vector and keyword results (VectorRetriever)', async () => {
-    const shared: SearchResult = { ...SAMPLE_RESULT, id: 'shared-1', score: 0.8 };
-    const svc = fakeSearchService([shared], [shared]);
-    const retriever = new VectorRetriever(svc);
-    const results = await retriever.searchForSection(
-      { text: 'x', filters: {}, collectionSlug: null },
-    );
-    expect(results.filter((r) => r.fragment_id === 'shared-1')).toHaveLength(1);
-  });
-
-  it('calls keywordSearch with the same filters as search', async () => {
-    const svc = fakeSearchService([], []);
-    const retriever = new VectorRetriever(svc);
-    await retriever.searchForSection(
-      {
-        text: 'security',
-        filters: { lang: 'fr', domain: ['cloud'], type: 'argument' },
-        collectionSlug: 'my-col',
-      },
-      3,
-    );
-    expect(vi.mocked(svc.keywordSearch).mock.calls[0]![1]).toMatchObject({
-      lang: 'fr',
-      type: ['argument'],
-      collectionSlug: 'my-col',
-      quality_min: 'approved',
-    });
-    expect(vi.mocked(svc.keywordSearch).mock.calls[0]![2]).toBe(3);
-  });
 });
 
 function makeIndexData(overrides: Partial<IndexData> = {}): IndexData {
@@ -612,22 +568,86 @@ describe('HybridRetriever (RRF)', () => {
     expect(ids).toContain('f2'); // f1 dropped by floor, f2 fills top 2
   });
 
-  it('falls back to neutral LLM score when LLM returns unparseable response', async () => {
+  it('falls back to vector-only order when LLM returns unparseable response', async () => {
     const candidates: SearchResult[] = [
       { ...SAMPLE_RESULT, id: 'fa', score: 0.9 },
       { ...SAMPLE_RESULT, id: 'fb', score: 0.8 },
     ];
     const svc = fakeSearchService(candidates);
     const llm = fakeLlmClient(['This is not JSON at all, sorry.']);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const retriever = new HybridRetriever(svc, llm);
     const results = await retriever.searchForSection(
       { text: 'x', filters: {}, collectionSlug: null },
       2,
     );
-    // Fallback: neutral LLM score 5 for all → both lists rank in same order
-    // → RRF preserves vector order
+    // No LLM list → RRF uses vector list only → vector order preserved
     expect(results[0].fragment_id).toBe('fa');
     expect(results).toHaveLength(2);
+    // No fake neutral score in breakdown — judge failed, field is absent
+    expect(results[0].score_breakdown?.llm_score).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[hybrid][judge]'));
+    warnSpy.mockRestore();
+  });
+
+  it('logs differentiated warning on LLM API failure and excludes all fragments from LLM ranking', async () => {
+    const candidates: SearchResult[] = [
+      { ...SAMPLE_RESULT, id: 'f1', score: 0.9 },
+      { ...SAMPLE_RESULT, id: 'f2', score: 0.8 },
+      { ...SAMPLE_RESULT, id: 'f3', score: 0.6 },
+    ];
+    const svc = fakeSearchService(candidates);
+    const llm = {
+      chatMessages: vi.fn(async () => { throw new Error('HTTP 429 Too Many Requests'); }),
+    } as unknown as LlmClient;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      3,
+    );
+    // Warning must name the cause
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('rate-limited (429)'));
+    // All fragments still returned (vector-only fallback)
+    expect(results).toHaveLength(3);
+    // Vector order preserved, no llm_score anywhere
+    expect(results[0].fragment_id).toBe('f1');
+    expect(results.every(r => r.score_breakdown?.llm_score === undefined)).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('excludes only missing fragments from LLM ranking when LLM response is partial', async () => {
+    const candidates: SearchResult[] = [
+      { ...SAMPLE_RESULT, id: 'f1', score: 0.9 }, // vector rank 1
+      { ...SAMPLE_RESULT, id: 'f2', score: 0.8 }, // vector rank 2 — absent from LLM response
+      { ...SAMPLE_RESULT, id: 'f3', score: 0.7 }, // vector rank 3 — absent from LLM response
+      { ...SAMPLE_RESULT, id: 'f4', score: 0.6 }, // vector rank 4
+      { ...SAMPLE_RESULT, id: 'f5', score: 0.5 }, // vector rank 5
+    ];
+    const svc = fakeSearchService(candidates);
+    // LLM only scores f1, f4, f5 — f2 and f3 are absent
+    const llm = fakeLlmClient([
+      JSON.stringify([
+        { id: 'f1', score: 4 },
+        { id: 'f4', score: 9 },
+        { id: 'f5', score: 8 },
+      ]),
+    ]);
+    const retriever = new HybridRetriever(svc, llm);
+    const results = await retriever.searchForSection(
+      { text: 'x', filters: {}, collectionSlug: null },
+      5,
+    );
+    // f4 (llm=9) should rank highest
+    expect(results[0].fragment_id).toBe('f4');
+    // f2, f3 (absent from LLM response) have no llm_score — not penalised
+    const f2 = results.find(r => r.fragment_id === 'f2');
+    const f3 = results.find(r => r.fragment_id === 'f3');
+    expect(f2?.score_breakdown?.llm_score).toBeUndefined();
+    expect(f3?.score_breakdown?.llm_score).toBeUndefined();
+    // f1 (llm=4) has its real score — not replaced by neutral 5
+    const f1 = results.find(r => r.fragment_id === 'f1');
+    expect(f1?.score_breakdown?.llm_score).toBe(4);
   });
 
   it('returns empty when SearchService returns no results', async () => {
@@ -652,50 +672,6 @@ describe('HybridRetriever (RRF)', () => {
     expect(results[0].score_breakdown?.llm_rank).toBe(1);
   });
 
-  it('includes SQLite-only fragments from keywordSearch when LLM scores them high', async () => {
-    const vectorResult: SearchResult = { ...SAMPLE_RESULT, id: 'fragmint-1', score: 0.8 };
-    const miraiResult: SearchResult = { ...SAMPLE_RESULT, id: 'mirai-1', score: null as unknown as number, domain: 'mirai' };
-    const svc = fakeSearchService([vectorResult], [miraiResult]);
-    const llmResp = JSON.stringify([
-      { id: 'fragmint-1', score: 2 }, // low — dropped by floor
-      { id: 'mirai-1', score: 9 },    // high — should surface
-    ]);
-    const llm = fakeLlmClient([llmResp]);
-    const retriever = new HybridRetriever(svc, llm);
-    const results = await retriever.searchForSection(
-      { text: 'présentation MIRAI', filters: {}, collectionSlug: null },
-      2,
-    );
-    const ids = results.map((r) => r.fragment_id);
-    expect(ids).toContain('mirai-1');
-  });
-
-  it('deduplicates fragments present in both vector and keyword results (HybridRetriever)', async () => {
-    const shared: SearchResult = { ...SAMPLE_RESULT, id: 'shared-1', score: 0.8 };
-    const svc = fakeSearchService([shared], [shared]);
-    const llm = fakeLlmClient([JSON.stringify([{ id: 'shared-1', score: 7 }])]);
-    const retriever = new HybridRetriever(svc, llm);
-    const results = await retriever.searchForSection(
-      { text: 'x', filters: {}, collectionSlug: null },
-      1,
-    );
-    expect(results.filter((r) => r.fragment_id === 'shared-1')).toHaveLength(1);
-  });
-
-  it('SQLite-only fragment has vector_score:0 and vector_rank:0 in score_breakdown', async () => {
-    const kwOnly: SearchResult = { ...SAMPLE_RESULT, id: 'kw-only', score: null as unknown as number };
-    const svc = fakeSearchService([], [kwOnly]);
-    const llm = fakeLlmClient([JSON.stringify([{ id: 'kw-only', score: 8 }])]);
-    const retriever = new HybridRetriever(svc, llm, 60, 'balanced', 0); // floor=0 to not drop it
-    const results = await retriever.searchForSection(
-      { text: 'x', filters: {}, collectionSlug: null },
-      1,
-    );
-    expect(results).toHaveLength(1);
-    expect(results[0].score_breakdown?.vector_score).toBe(0);
-    expect(results[0].score_breakdown?.vector_rank).toBe(0);
-    expect(results[0].score_breakdown?.llm_score).toBe(8);
-  });
 });
 
 describe('AgenticRetriever — self-consistency (Phase 2)', () => {

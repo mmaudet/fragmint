@@ -78,7 +78,50 @@ When `FRAGMINT_RETRIEVAL_MODE=vector-only` (default), `VectorRetriever` calls `S
 
 ---
 
-## 3. Duplicate Detection Cascade
+## 3. Agentic Retrieval — Multi-Phase LLM Pipeline
+
+When `mode=agentic-only`, `AgenticRetriever` runs three sequential phases entirely on the fragment index (no cosine):
+
+### Phase 0 — TOC domain:type filtering
+**Condition:** only when `index.total > 200` AND no domain filter on the query.
+LLM reads a compact table-of-contents of all `domain:type` combinations and selects the ones relevant for the section. The full index is then filtered to only those combinations before Phase 1.
+
+**Why:** reduces Phase 1 context from ~233 fragments to a focused subset, saves LLM tokens and improves precision.
+
+### Phase 1 — LLM candidate selection from index
+LLM reads the full filtered index (markdown with one fragment per line: title, excerpt, type, domain, tags) and returns a ranked JSON array of fragment IDs. Cap: `limit × 4` IDs (default: 20 for limit=5).
+
+Readable IDs (like `TM-arg-001`) are used in the prompt and mapped back to UUIDs internally via `buildReadableIdMap()`.
+
+**Pool A merging:** Phase 1 candidates are merged with domain/tag-forced candidates from plan-service (`forced_candidates`). Phase 2 judges both together.
+
+### Phase 2 — Self-consistency batch scoring
+**Factory behavior:** `factory.ts` always instantiates `AgenticRetriever` with `selfConsistency: true` (even though the class default is `false`). This means Phase 2 makes **two parallel LLM calls** per section:
+
+| Agent | Temperature | Purpose |
+|-------|-------------|---------|
+| Agent 1 | 0.2 (low — near-deterministic) | Main judgment |
+| Agent 2 | 0.4 (slightly higher) | Diverse judgment |
+
+Final score = `min(agent1_score, agent2_score)` — conservative consensus.
+
+If `|agent1_score - agent2_score| > 0.3`, a `STRONG_DISAGREEMENT` warning is logged.
+
+**Threshold:** fragments with normalized score < `PHASE2_SCORE_MIN = 0.3` are dropped.
+
+**score_breakdown** for agentic:
+```typescript
+{ method: 'agentic', llm_score: rawScore }  // rawScore: 0-10 integer
+```
+No `vector_score` — agentic is index-based, not cosine-based.
+
+**Neutral fallback:** if Phase 2 LLM fails to mention a fragment, it receives `llm_score = 5` (neutral, not rejection). Unlike hybrid, agentic does not implicitly reject unlisted fragments — it keeps them with `score = 0.5`. This is intentional: conservative pessimism (min score) already penalizes uncertain fragments.
+
+**Cost:** agentic-only makes `N_sections × (1 + 1 + 2) = 4 LLM calls` per section for typical corpora > 200 fragments. For 8 sections: ~32 calls. Expect 5-10 minutes on rate-limited free-tier LLMs.
+
+---
+
+## 4. Duplicate Detection Cascade
 
 Three levels, run in order. First match wins.
 

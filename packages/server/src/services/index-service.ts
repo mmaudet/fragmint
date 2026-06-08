@@ -187,23 +187,36 @@ export function buildReadableIdMap(data: IndexData): Map<string, string> {
   return map;
 }
 
+const TOC_MAX_TITLES = 3;
+const TOC_TITLE_MAX_LEN = 80;
+
+function truncateTitle(title: string): string {
+  if (title.length <= TOC_TITLE_MAX_LEN) return title;
+  return title.slice(0, TOC_TITLE_MAX_LEN - 1) + '…';
+}
+
 export function renderToc(data: IndexData): string {
-  const typeKeys = Object.keys(TYPE_SHORT);
-  const header = `| Domaine | ${typeKeys.join(' | ')} | Total |`;
-  const sep = `|---------|${typeKeys.map(() => '---').join('|')}|-------|`;
-  const rows = Object.entries(data.subjects)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([domain, subj]) => {
-      const counts = typeKeys.map((t) => subj.types[t]?.length ?? 0);
-      return `| ${subj.label} (${domain}) | ${counts.join(' | ')} | ${subj.count} |`;
-    });
-  return [
+  const lines: string[] = [
     `# Fragmint — Table des matières (${data.total} fragments approuvés)`,
     '',
-    header,
-    sep,
-    ...rows,
-  ].join('\n');
+  ];
+
+  for (const [domain, subj] of Object.entries(data.subjects).sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
+    lines.push(`## ${subj.label} (${domain}) — ${subj.count} fragments`);
+    for (const [type, frags] of Object.entries(subj.types).sort(([a], [b]) => a.localeCompare(b))) {
+      const sample = frags
+        .slice(0, TOC_MAX_TITLES)
+        .map((f) => `"${truncateTitle(f.title)}"`)
+        .join(' | ');
+      const more = frags.length > TOC_MAX_TITLES ? ' | …' : '';
+      lines.push(`- ${type} (${frags.length}): ${sample}${more}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 export function renderMarkdown(data: IndexData): string {

@@ -17,17 +17,18 @@ export interface RetrieverDeps {
   rrfK?: number;
   rrfWeightsPreset?: string;
   hybridLlmFloor?: number;
+  agenticMinScore?: number;
 }
 
 let _mode: RetrievalMode = 'vector-only';
 let _deps: RetrieverDeps | null = null;
 let _retriever: FragmentRetriever | null = null;
-let _weightsPreset: string = 'balanced';
+let _weightsPreset: string = 'literature';
 
 export function createRetriever(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
   _mode = mode;
   _deps = deps;
-  _weightsPreset = deps.rrfWeightsPreset ?? 'balanced';
+  _weightsPreset = deps.rrfWeightsPreset ?? 'literature';
   _retriever = build(mode, deps);
   console.log(`[retrieval] mode=${mode}`);
   return _retriever;
@@ -63,14 +64,15 @@ function build(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
       // defines the mode's conservative precision strategy. Not env-configurable by design.
       return new AgenticRetriever(deps.indexService, deps.llm, deps.fragmentService, {
         selfConsistency: true,
+        minScore: deps.agenticMinScore ?? 0.5,
       });
     case 'hybrid':
       return new HybridRetriever(
         deps.searchService,
         deps.llm,
         deps.rrfK ?? 60,
-        deps.rrfWeightsPreset ?? 'balanced',
-        deps.hybridLlmFloor ?? 3,
+        deps.rrfWeightsPreset ?? 'literature',
+        deps.hybridLlmFloor ?? 4,
       );
   }
 }

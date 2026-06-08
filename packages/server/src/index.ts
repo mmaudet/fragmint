@@ -141,16 +141,13 @@ export async function createServer(options?: {
   await ensureCollections(db, config);
   await migrateFragmentCollectionSlug(db);
 
-  // Seed fragment_types and fragment_domains if empty
+  // Seed fragment_types — idempotent, runs every startup to pick up new types
   const now = new Date().toISOString();
-  const typeCount = await db.select({ c: count() }).from(fragmentTypes);
-  if (typeCount[0].c === 0) {
-    for (const slug of FRAGMENT_TYPES) {
-      await db
-        .insert(fragmentTypes)
-        .values({ slug, label: slug, created_at: now })
-        .onConflictDoNothing();
-    }
+  for (const slug of FRAGMENT_TYPES) {
+    await db
+      .insert(fragmentTypes)
+      .values({ slug, label: slug, created_at: now })
+      .onConflictDoNothing();
   }
   const domainCount = await db.select({ c: count() }).from(fragmentDomains);
   if (domainCount[0].c === 0) {
@@ -317,6 +314,7 @@ export async function createServer(options?: {
     fragmentMaxChars: config.plan_fragment_max_chars,
     docxReferencePath: config.plan_docx_reference_path,
     llm: llmClient,
+    search: searchService,
     retriever,
     fragments: fragmentService,
     sectionTopK: config.section_top_k,

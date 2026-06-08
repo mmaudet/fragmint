@@ -278,6 +278,7 @@ export class SearchService {
           domain: filters?.domain,
           lang: filters?.lang,
           quality_min: filters?.quality_min,
+          tags: filters?.tags,
         };
         const milvusResults = await this.milvusClient.search(
           vector,
@@ -374,8 +375,70 @@ export class SearchService {
     };
   }
 
-  async keywordSearch(query: string, filters?: SearchFilters, limit = 20): Promise<SearchResult[]> {
-    return this.sqliteSearch(query, filters, limit);
+  async searchByDomain(
+    domain: string,
+    filters?: Pick<SearchFilters, 'quality_min' | 'collectionSlug' | 'lang'>,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    const conditions = [
+      eq(fragments.domain, domain),
+      ne(fragments.quality, 'deprecated'),
+    ];
+    if (filters?.quality_min) {
+      const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
+      if (minIdx >= 0) conditions.push(inArray(fragments.quality, QUALITY_ORDER.slice(minIdx)));
+    }
+    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
+    if (filters?.collectionSlug) {
+      conditions.push(
+        filters.collectionSlug === 'common'
+          ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!
+          : eq(fragments.collection_slug, filters.collectionSlug),
+      );
+    }
+    const rows = await this.db
+      .select()
+      .from(fragments)
+      .where(and(...conditions))
+      .orderBy(desc(fragments.uses))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
+      type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,
+      author: row.author, uses: row.uses, updated_at: row.updated_at,
+      payload: row.payload ?? null, payload_schema: row.payload_schema ?? null,
+    }));
+  }
+
+  async searchByTags(
+    tags: string[],
+    filters?: Pick<SearchFilters, 'quality_min' | 'collectionSlug' | 'lang'>,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    if (tags.length === 0) return [];
+    const conditions = [
+      or(...tags.map((t) => like(fragments.tags, `%${t}%`)))!,
+      ne(fragments.quality, 'deprecated'),
+    ];
+    if (filters?.quality_min) {
+      const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
+      if (minIdx >= 0) conditions.push(inArray(fragments.quality, QUALITY_ORDER.slice(minIdx)));
+    }
+    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
+    if (filters?.collectionSlug) {
+      conditions.push(
+        filters.collectionSlug === 'common'
+          ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!
+          : eq(fragments.collection_slug, filters.collectionSlug),
+      );
+    }
+    const rows = await this.db.select().from(fragments).where(and(...conditions)).limit(limit);
+    return rows.map((row) => ({
+      id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
+      type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,
+      author: row.author, uses: row.uses, updated_at: row.updated_at,
+      payload: row.payload ?? null, payload_schema: row.payload_schema ?? null,
+    }));
   }
 
   private async sqliteSearch(

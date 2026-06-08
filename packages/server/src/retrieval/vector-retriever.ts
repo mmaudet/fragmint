@@ -14,31 +14,27 @@ export class VectorRetriever implements FragmentRetriever {
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
     const { filters, collectionSlug } = query;
-    // Domain and tags are soft hints — injected into query text, not hard filters.
+    // forced_candidates intentionally ignored — vector-only is a pure semantic baseline.
+    // Tag-first only applies to modes with a LLM judge (hybrid, agentic).
     const enrichedText = enrichQueryWithFilters(query.text, filters);
-    const searchFilters = {
-      type: filters.type ? [filters.type] : undefined,
-      lang: filters.lang,
-      collectionSlug: collectionSlug ?? undefined,
-      quality_min: 'approved' as const,
-    };
-
-    const vectorResults = await this.searchService.search(enrichedText, searchFilters, limit);
-    const keywordResults = await this.searchService.keywordSearch(enrichedText, searchFilters, limit);
-
-    const seen = new Set(vectorResults.map((r) => r.id));
-    const results = [...vectorResults, ...keywordResults.filter((r) => !seen.has(r.id))];
+    const results = await this.searchService.search(
+      enrichedText,
+      {
+        type: filters.type ? [filters.type] : undefined,
+        lang: filters.lang,
+        collectionSlug: collectionSlug ?? undefined,
+        quality_min: 'approved',
+      },
+      limit,
+    );
 
     const filtered = results
-      // null score = SQLite LIKE result → always pass through (no threshold)
-      // non-null score = Milvus cosine → apply threshold
       .filter((r) => r.score == null || r.score >= SCORE_THRESHOLD)
-      .map((r) => {
+      .map((r): RetrievedFragment => {
         const cappedScore = r.score != null ? Math.min(1.0, r.score) : null;
-        const breakdown: ScoreBreakdown = r.score != null
-          ? { method: 'vector', vector_score: cappedScore! }
+        const breakdown: ScoreBreakdown = cappedScore != null
+          ? { method: 'vector', vector_score: cappedScore }
           : { method: 'sqlite_like' };
-
         return {
           fragment_id: r.id,
           score: cappedScore,
@@ -47,7 +43,8 @@ export class VectorRetriever implements FragmentRetriever {
           quality: r.quality,
           type: r.type,
           score_breakdown: breakdown,
-        } satisfies RetrievedFragment;
+          retrieval_source: 'vector',
+        };
       });
 
     console.debug(

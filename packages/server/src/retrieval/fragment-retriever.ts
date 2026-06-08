@@ -1,4 +1,5 @@
 import type { PlanFilters } from '../schema/plan.js';
+import type { SearchResult } from '../search/search-service.js';
 
 /**
  * Enrich a section query text with domain/tag context as soft hints.
@@ -26,6 +27,12 @@ export interface SectionQuery {
    * Propagated from plan-service via p.state.spec_prompt.slice(0, 300).
    */
   spec_context?: string;
+  /**
+   * Pool A — tag-matched candidates injected by plan-service before retrieval.
+   * Retrievers must include these in the candidate pool so the LLM judge sees them.
+   * Forced candidates bypass the score threshold but not the LLM judge floor.
+   */
+  forced_candidates?: SearchResult[];
 }
 
 /**
@@ -34,7 +41,7 @@ export interface SectionQuery {
  */
 export interface ScoreBreakdown {
   /** Which retrieval path produced this result. */
-  method: 'vector' | 'agentic' | 'hybrid_rrf' | 'sqlite_like';
+  method: 'vector' | 'agentic' | 'hybrid_rrf' | 'sqlite_like' | 'tag_match';
   /** Raw cosine similarity from Milvus (0-1, capped at 1.0). */
   vector_score?: number;
   /** Rank of this fragment in the vector list (1-based). */
@@ -47,11 +54,15 @@ export interface ScoreBreakdown {
   rrf_score?: number;
   /** k parameter used in RRF computation. */
   rrf_k?: number;
+  /** Absolute disagreement between self-consistency agents (agentic mode only, normalized 0-1). */
+  consistency_delta?: number;
+  /** Final score after LLM-weighting: rrf_normalized × (llm_score / 10). Absent when LLM judge failed. */
+  final_score?: number;
 }
 
 export interface RetrievedFragment {
   fragment_id: string;
-  /** null when source is SQLite LIKE fallback (no real ranking). */
+  /** null when source is SQLite LIKE fallback or tag-match (no real ranking). */
   score: number | null;
   title: string | null;
   body_excerpt: string | null;
@@ -59,6 +70,8 @@ export interface RetrievedFragment {
   type?: string;
   justification?: string;
   score_breakdown?: ScoreBreakdown;
+  /** Indicates whether this fragment came from the tag pool (A), vector pool (B), or both. */
+  retrieval_source?: 'vector' | 'tag' | 'both';
 }
 
 export interface FragmentRetriever {
