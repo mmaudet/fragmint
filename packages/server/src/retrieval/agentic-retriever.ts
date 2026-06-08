@@ -42,16 +42,13 @@ export class AgenticRetriever implements FragmentRetriever {
           Object.keys(subj.types).map((type) => `${domain}:${type}`),
         ),
       );
-      // Pré-filtre souple — si inferred_type connu, restreindre le set aux domain:inferred_type.
-      // Fallback sur le set complet si aucun fragment de ce type n'existe dans le corpus.
-      const typeFiltered = query.inferred_type
-        ? new Set([...combinations].filter((c) => c.endsWith(`:${query.inferred_type}`)))
-        : combinations;
-      const effectiveCombinations = typeFiltered.size > 0 ? typeFiltered : combinations;
-      const selected = await this.selectDomainTypes(query, toc, effectiveCombinations);
+      // inferred_type is used only as a Phase 2 score boost (×TYPE_BOOST), NOT as a hard
+      // pre-filter here. Restricting combinations to domain:inferred_type would cut cross-type
+      // relevant fragments (e.g. pricing/engagement fragments for a methodology section).
+      const selected = await this.selectDomainTypes(query, toc, combinations);
       const sectionLabel = query.text.replace(/\s+/g, ' ').slice(0, 60);
       const typeHint = query.inferred_type
-        ? ` [inferred_type=${query.inferred_type}, phase0_set=${effectiveCombinations.size}/${combinations.size}]`
+        ? ` [inferred_type=${query.inferred_type}]`
         : ' [inferred_type=none]';
       if (selected) {
         console.info(
