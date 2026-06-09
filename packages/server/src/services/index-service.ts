@@ -4,30 +4,52 @@ import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 
 const SUBJECT_PREFIX: Record<string, string> = {
+  // Twake product family
+  twake: 'TWA',
+  'twake-workplace': 'TWA',
   'twake-mail': 'TM',
   'twake-drive': 'TD',
   'twake-chat': 'TC',
   'twake-calendar': 'TCAL',
+  'twake-visio': 'TV',
+  // LINAGORA family (share LIN prefix — IDs are globally sequential)
+  linagora: 'LIN',
+  'linagora-corp': 'LIN',
+  'linagora-general': 'LIN',
+  'linagora-ia': 'LIN',
+  // Other products
   linshare: 'LS',
   lincloud: 'LC',
   linto: 'LT',
   openrag: 'OR',
   'apache-james': 'AJ',
-  'linagora-corp': 'LIN',
+  MIRAI: 'MIR',
+  james: 'JAM',
   other: 'OTH',
 };
 
 const SUBJECT_LABEL: Record<string, string> = {
+  // Twake product family
+  twake: 'Twake',
+  'twake-workplace': 'Twake Workplace',
   'twake-mail': 'Twake Mail',
   'twake-drive': 'Twake Drive',
   'twake-chat': 'Twake Chat',
   'twake-calendar': 'Twake Calendar',
+  'twake-visio': 'Twake Visio',
+  // LINAGORA family
+  linagora: 'LINAGORA',
+  'linagora-corp': 'LINAGORA Corp',
+  'linagora-general': 'LINAGORA Général',
+  'linagora-ia': 'LINAGORA IA',
+  // Other products
   linshare: 'LinShare',
   lincloud: 'LinCloud',
   linto: 'LinTO',
   openrag: 'OpenRAG',
   'apache-james': 'Apache James',
-  'linagora-corp': 'Linagora Corp',
+  MIRAI: 'MIRAI',
+  james: 'James (email)',
   other: 'Autres',
 };
 

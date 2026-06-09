@@ -118,12 +118,25 @@ export class AgenticRetriever implements FragmentRetriever {
         `(threshold=${PHASE2_SCORE_MIN}, self-consistency=${this.selfConsistency})`,
     );
 
+    // Type-boosted ranking before top-K slice: mirrors hybrid-retriever RANKING_TYPE_BOOST.
+    // Without this, forced-only type-match fragments (lower base score) are squeezed out
+    // by higher-scored cross-type candidates even after TYPE_BOOST is applied to their score.
+    const RANKING_TYPE_BOOST = 2.5;
     const qualityRank = (q: string | undefined) => q === 'approved' ? 2 : q === 'reviewed' ? 1 : 0;
-    return kept.sort((a, b) => {
-      const diff = (b.score ?? 0) - (a.score ?? 0);
-      if (diff !== 0) return diff;
-      return qualityRank(b.quality ?? undefined) - qualityRank(a.quality ?? undefined);
-    }).slice(0, limit);
+    const ranked = query.inferred_type
+      ? [...kept].sort((a, b) => {
+          const aBoost = a.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
+          const bBoost = b.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
+          const scoreDiff = (b.score ?? 0) * bBoost - (a.score ?? 0) * aBoost;
+          if (scoreDiff !== 0) return scoreDiff;
+          return qualityRank(b.quality ?? undefined) - qualityRank(a.quality ?? undefined);
+        })
+      : kept.sort((a, b) => {
+          const diff = (b.score ?? 0) - (a.score ?? 0);
+          if (diff !== 0) return diff;
+          return qualityRank(b.quality ?? undefined) - qualityRank(a.quality ?? undefined);
+        });
+    return ranked.slice(0, limit);
   }
 
   // ── Phase 2 batch ────────────────────────────────────────────────────────────
@@ -337,10 +350,13 @@ Include ALL ${candidates.length} fragments. Return ONLY the JSON array.`;
     toc: string,
     availableCombinations: Set<string>,
   ): Promise<string[] | null> {
+    const typeHint = query.inferred_type
+      ? `\nSection type hint (non-binding): "${query.inferred_type}" — include at least one combination of this type if available, but do not exclude other relevant types.`
+      : '';
     const prompt = `You are a document composition assistant.
 
 Section to populate: "${query.text}"
-${query.filters.lang ? `Language: ${query.filters.lang}` : ''}
+${query.filters.lang ? `Language: ${query.filters.lang}` : ''}${typeHint}
 
 Fragment library table of contents:
 ${toc}

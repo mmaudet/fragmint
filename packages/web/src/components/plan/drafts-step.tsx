@@ -168,17 +168,18 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
             {t('planGeneration', 'assemble')}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium">
-            {t('planGeneration', allGenerated ? 'regenerateAllSections' : 'generateAllSections')}
-          </span>
-          {' — '}
-          {t('planGeneration', 'generateAllSectionsHint')}
-          {' · '}
-          <span className="font-medium">{t('planGeneration', 'assemble')}</span>
-          {' — '}
-          {t('planGeneration', 'assembleHint')}
-        </p>
+        <div className="text-xs text-muted-foreground space-y-0.5">
+          <p>
+            <span className="font-medium">{t('planGeneration', allGenerated ? 'regenerateAllSections' : 'generateAllSections')}</span>
+            {' — '}
+            {t('planGeneration', 'generateAllSectionsHint')}
+          </p>
+          <p>
+            <span className="font-medium">{t('planGeneration', 'assemble')}</span>
+            {' — '}
+            {t('planGeneration', 'assembleHint')}
+          </p>
+        </div>
       </div>
 
       {!helpDismissed && (
@@ -303,6 +304,7 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     ? t('planGeneration', 'regenerate')
                     : t('planGeneration', 'generateSection')}
                 </Button>
+                <GroundednessPanel flags={active.groundedness_flags} />
                 <div className="relative">
                   <button
                     onClick={() => copyToClipboard(activeMarkdown, setCopiedSection)}
@@ -318,7 +320,6 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     onChange={(e) => saveSectionMarkdown(active, e.target.value)}
                   />
                 </div>
-                <GroundednessPanel flags={active.groundedness_flags} />
               </CardContent>
             </Card>
           )}

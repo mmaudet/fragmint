@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ShieldAlert } from 'lucide-react';
 import { UploadStyleTemplateDialog } from './upload-style-template-dialog';
 import { toast } from 'sonner';
 
@@ -108,6 +108,10 @@ export function ExportStep({ plan }: { plan: Plan }) {
     }, 500);
   }
 
+  const hasHighFlags = plan.state.sections.some(
+    (s) => s.groundedness_flags?.some((f) => f.risk === 'high'),
+  );
+
   const hasStyleTemplate = exportFormat === 'docx' || exportFormat === 'pptx';
   const isDocxFormat = exportFormat === 'docx';
 
@@ -125,6 +129,14 @@ export function ExportStep({ plan }: { plan: Plan }) {
 
   return (
     <div className="p-6 space-y-4">
+      {hasHighFlags && (
+        <div className="flex items-start gap-2 rounded border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+          <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            Certaines sections contiennent des informations potentiellement inventées (risque élevé). Vérifiez les drafts avant d'exporter.
+          </span>
+        </div>
+      )}
       <div className="space-y-3">
         <div>
           <Button variant="outline" onClick={handleReassemble} disabled={assemble.isPending}>

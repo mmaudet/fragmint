@@ -18,12 +18,16 @@ export function SectionFragmentCard({
   selection,
   onChange,
   onReject,
+  onPromoteInline,
+  onDemoteFromLibrary,
 }: {
   candidate: FragmentCandidate;
   collectionSlug: string;
   selection: SectionFragmentSelection | undefined;
   onChange: (sel: SectionFragmentSelection | null) => void;
   onReject: () => void;
+  onPromoteInline?: (body: string) => void;
+  onDemoteFromLibrary?: (fragmentId: string, body: string) => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -118,6 +122,18 @@ export function SectionFragmentCard({
   }
 
   function commitEdit() {
+    if (isInline && propose && onPromoteInline) {
+      onPromoteInline(displayBody);
+      setEditing(false);
+      setEditedBody(null);
+      return;
+    }
+    if (!isInline && !propose && selection?.propose_to_library === true && onDemoteFromLibrary) {
+      onDemoteFromLibrary(effectiveFragmentId, displayBody);
+      setEditing(false);
+      setEditedBody(null);
+      return;
+    }
     onChange({
       fragment_id: candidate.fragment_id,
       body: displayBody,

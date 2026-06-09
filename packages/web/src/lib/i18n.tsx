@@ -342,12 +342,12 @@ const translations = {
     regenerateAllSections: { fr: 'Régénérer tous les drafts', en: 'Regenerate all section drafts' },
     assemble: { fr: 'Assembler le document', en: 'Assemble document' },
     generateAllSectionsHint: {
-      fr: 'Écrit le brouillon de chaque section à partir des fragments sélectionnés.',
-      en: "Writes each section's draft from the selected fragments.",
+      fr: "Écrit le brouillon de chaque section à partir des fragments sélectionnés. Un ● rouge sur une section signale des informations potentiellement inventées par le LLM — à vérifier avant d'exporter.",
+      en: "Writes each section's draft from the selected fragments. A red ● on a section flags potentially hallucinated content — review before exporting.",
     },
     assembleHint: {
-      fr: 'Concatène tous les drafts en un document Markdown final, prêt à exporter.',
-      en: 'Concatenates all drafts into a final Markdown document, ready to export.',
+      fr: 'Concatène tous les drafts en un document Markdown final, prêt à exporter. Vérifiez les sections marquées ● avant de télécharger.',
+      en: 'Concatenates all drafts into a final Markdown document, ready to export. Review ● sections before downloading.',
     },
     assembleSuccess: {
       fr: "Document assemblé — passez à l'étape Assemblage pour exporter.",

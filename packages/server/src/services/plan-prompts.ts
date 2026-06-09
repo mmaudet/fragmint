@@ -100,10 +100,6 @@ export interface BuildSectionArgs {
   plan_title?: string;
   spec_prompt?: string;
   reference_docs?: Array<{ name: string; content: string }>;
-  /** When true, a structured table will be inserted in the section alongside this prose. */
-  has_table_block?: boolean;
-  /** Role of this prose block relative to surrounding table blocks. */
-  prose_block_role?: 'intro' | 'conclusion' | 'standalone';
 }
 
 const WRITER_SYSTEM_BASE = `You are an expert technical writer producing one section of a larger
@@ -122,7 +118,12 @@ Instead, rewrite and weave the fragment content into a single coherent
 section that reads as original prose. You may rephrase freely, reorder
 ideas, and drop fragment content that does not fit the section's scope.
 Stay faithful to the facts in the fragments — do not invent additional
-facts.
+facts. NEVER invent: phone numbers, email addresses, URLs, postal
+addresses, monetary amounts, discount percentages, promotional offers
+with specific dates or conditions, or named individuals not present in
+the source fragments. If a section expects such content (e.g. contact
+details, pricing) but no fragment provides it, write in general terms
+without fabricating specific values.
 
 Output ONLY the section body in Markdown. Do not repeat the section
 title as a heading. No introduction, no closing remark.`;
@@ -137,14 +138,6 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
   if (args.writer_prompt_override && args.writer_prompt_override.trim() !== '') {
     system += `\n\nAdditional guidance: ${args.writer_prompt_override.trim()}`;
   }
-  if (args.has_table_block) {
-    if (args.prose_block_role === 'intro') {
-      system += '\n\nNote: a structured data table will be inserted after this paragraph. Write only a brief introductory sentence or two — do not describe or repeat the tabular data.';
-    } else if (args.prose_block_role === 'conclusion') {
-      system += '\n\nNote: this paragraph follows a structured data table in the section. Write a brief conclusion that may reference the table above without repeating its data.';
-    }
-  }
-
   const lines: string[] = [];
   if (args.plan_title) lines.push(`Document title: ${args.plan_title}`);
   if (args.spec_prompt) {

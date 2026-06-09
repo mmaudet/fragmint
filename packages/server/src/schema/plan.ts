@@ -51,30 +51,6 @@ export const SectionFragmentSelectionSchema = z.object({
   proposed_fragment_id: z.string().optional(),
 });
 
-export const TableSourceSchema = z.object({
-  collection_id: z.string().optional(),
-  fragment_ids: z.array(z.string()).optional(),
-  payload_schema: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  order_by: z.object({
-    field: z.string(),
-    direction: z.enum(['asc', 'desc']),
-  }).optional(),
-});
-
-export const SectionBlockSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('prose'),
-    generated_markdown: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal('table'),
-    collection_id: z.string(),
-    columns: z.array(z.string()).optional(),
-  }),
-]);
-export type SectionBlock = z.infer<typeof SectionBlockSchema>;
-
 export const GroundednessFlagSchema = z.object({
   text: z.string(),
   risk: z.enum(['high', 'medium', 'low']),
@@ -95,11 +71,6 @@ export const PlanSectionSchema = z.object({
   writer_instructions: z.string().optional(),
   /** Section-level retrieval quality: good (top llm≥9) / partial (top llm 7-8) / poor (top llm≤6) / empty (no candidates). */
   section_confidence: z.enum(['good', 'partial', 'poor', 'empty']).optional(),
-  render_mode: z.enum(['prose', 'table', 'data_point', 'list']).optional(),
-  table_source: TableSourceSchema.optional(),
-  columns: z.array(z.string()).optional(),
-  data_field: z.string().optional(),
-  blocks: z.array(SectionBlockSchema).optional(),
   reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).optional(),
 });
 
@@ -120,7 +91,6 @@ export type PlanSection = z.infer<typeof PlanSectionSchema>;
 export type PlanFilters = z.infer<typeof PlanFiltersSchema>;
 export type SectionFragmentSelection = z.infer<typeof SectionFragmentSelectionSchema>;
 export type FragmentCandidate = z.infer<typeof FragmentCandidateSchema>;
-export type TableSource = z.infer<typeof TableSourceSchema>;
 
 export const CreatePlanSchema = z.object({
   title: z.string().min(1).max(200).optional(),

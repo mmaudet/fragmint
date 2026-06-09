@@ -236,18 +236,6 @@ export interface SectionFragmentSelection {
   proposed_fragment_id?: string;
 }
 
-export interface TableSource {
-  collection_id?: string;
-  fragment_ids?: string[];
-  payload_schema?: string;
-  tags?: string[];
-  order_by?: { field: string; direction: 'asc' | 'desc' };
-}
-
-export type SectionBlock =
-  | { type: 'prose'; generated_markdown?: string }
-  | { type: 'table'; collection_id: string; columns?: string[] };
-
 export interface FragmentCollection {
   id: string;
   title: string;
@@ -276,11 +264,6 @@ export interface PlanSection {
   inferred_type?: string;
   writer_instructions?: string;
   section_confidence?: 'good' | 'partial' | 'poor' | 'empty';
-  render_mode?: 'prose' | 'table' | 'data_point' | 'list';
-  table_source?: TableSource;
-  columns?: string[];
-  data_field?: string;
-  blocks?: SectionBlock[];
 }
 
 export interface PlanState {

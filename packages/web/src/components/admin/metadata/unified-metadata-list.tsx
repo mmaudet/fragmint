@@ -273,17 +273,15 @@ export function UnifiedMetadataList() {
               <option value="none">{t('admin', 'filterTagPrefixNone')}</option>
             </select>
           )}
-          {isPendingView && (
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={onlySimilar}
-                onChange={(e) => updateFilters({ similar: e.target.checked ? 'true' : null })}
-                className="rounded"
-              />
-              {t('admin', 'filterSimilarOnly')}
-            </label>
-          )}
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={onlySimilar}
+              onChange={(e) => updateFilters({ similar: e.target.checked ? 'true' : null })}
+              className="rounded"
+            />
+            {t('admin', 'filterSimilarOnly')}
+          </label>
           <select
             value={sortBy}
             onChange={(e) => updateFilters({ sort: e.target.value })}

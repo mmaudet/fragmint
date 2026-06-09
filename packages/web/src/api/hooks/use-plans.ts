@@ -162,21 +162,6 @@ export function useGenerateSection(id: string) {
   });
 }
 
-export function useFragmentCollections() {
-  return useQuery<FragmentCollection[]>({
-    queryKey: ['fragment-collections'],
-    queryFn: () => apiRequest<FragmentCollection[]>('GET', '/v1/fragment-collections'),
-  });
-}
-
-export function useFragmentCollection(id: string | null) {
-  return useQuery<FragmentCollection>({
-    queryKey: ['fragment-collection', id],
-    enabled: !!id,
-    queryFn: () => apiRequest<FragmentCollection>('GET', `/v1/fragment-collections/${id}`),
-  });
-}
-
 export function useFragmentCollectionsByFragmentId(fragmentId: string | null) {
   return useQuery<FragmentCollection[]>({
     queryKey: ['fragment-collections-by-fragment', fragmentId],
