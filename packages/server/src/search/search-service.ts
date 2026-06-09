@@ -1,5 +1,5 @@
 // packages/server/src/search/search-service.ts
-import { eq, like, and, or, desc, inArray, ne, isNull, lte, gte } from 'drizzle-orm';
+import { eq, like, and, or, desc, inArray, ne, isNull, lte, gte, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 import type { EmbeddingClient } from './embedding-client.js';
@@ -467,7 +467,9 @@ export class SearchService {
           : eq(fragments.collection_slug, filters.collectionSlug),
       );
     }
-    const rows = await this.db.select().from(fragments).where(and(...conditions)).limit(limit);
+    const rows = await this.db.select().from(fragments).where(and(...conditions))
+      .orderBy(sql`CASE ${fragments.quality} WHEN 'approved' THEN 2 WHEN 'reviewed' THEN 1 ELSE 0 END DESC`)
+      .limit(limit);
     return rows.map((row) => ({
       id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
       type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,

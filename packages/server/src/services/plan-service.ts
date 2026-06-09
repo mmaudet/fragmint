@@ -415,7 +415,7 @@ export class PlanService {
       knownTagsHint ? Promise.resolve(knownTagsHint) : this.getKnownTags(),
       knownDomainsHint ? Promise.resolve(knownDomainsHint) : this.getKnownDomains(),
     ]);
-    const poolLimit = limit * 4;
+    const poolLimit = Math.max(50, limit * 4);
     const { forcedCandidates, detectedTags, detectedDomains } = await this.computePoolA(
       section, filters, collectionSlug, knownTags, knownDomains, poolLimit,
     );
