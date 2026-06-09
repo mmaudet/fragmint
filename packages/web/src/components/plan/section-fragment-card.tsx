@@ -33,21 +33,17 @@ export function SectionFragmentCard({
   const [editedBody, setEditedBody] = useState<string | null>(null);
   const [propose, setPropose] = useState(selection?.propose_to_library ?? false);
 
+  const isInline = candidate.fragment_id.startsWith('inline_');
   const { data: fullFragment, isLoading: fragmentLoading } = useFragment(
     collectionSlug,
-    editing || expanded ? candidate.fragment_id : null,
+    (editing || expanded) && !isInline ? candidate.fragment_id : null,
   );
 
   const approved = !!selection;
 
   const cleanTitle = (candidate.title ?? '').replace(/^[-–]\s+/, '');
   const rawBody = editedBody ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt ?? '';
-  // Strip title only for the edit textarea, to avoid showing it twice when editing.
-  const strippedBody = rawBody.startsWith(cleanTitle) && cleanTitle.length > 0
-    ? rawBody.slice(cleanTitle.length).replace(/^\n+/, '')
-    : rawBody;
-  // Edit textarea uses stripped body.
-  const displayBody = strippedBody;
+  const displayBody = rawBody;
   // Card display: strip leading title heading to avoid repeating it below CardHeader.
   // Exception: table fragments (body starts with |) keep their header row intact so GFM renders correctly.
   const cardBody = (() => {
@@ -266,15 +262,17 @@ export function SectionFragmentCard({
                 <Trash2 className="h-4 w-4 mr-1" />
                 {t('planGeneration', 'reject')}
               </Button>
-              <a
-                href={`/ui/fragments?fragment=${candidate.fragment_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto text-xs text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Voir le fragment
-              </a>
+              {!isInline && (
+                <a
+                  href={`/ui/fragments?fragment=${candidate.fragment_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-xs text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Voir le fragment
+                </a>
+              )}
             </div>
           </>
         )}

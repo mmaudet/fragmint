@@ -202,9 +202,9 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
               <code className="text-sm font-medium px-1.5 py-0.5 bg-muted rounded">
                 {tagDisplayLabel(cleanLabel)}
               </code>
-              {tagPrefix ? (
+              {(tagPrefix ?? (item.category && item.category in TAG_PREFIX_LABELS ? item.category : null)) ? (
                 <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 font-medium">
-                  {TAG_PREFIX_LABELS[tagPrefix]}
+                  {TAG_PREFIX_LABELS[(tagPrefix ?? item.category)!]}
                 </span>
               ) : kind === 'tag' && !String(item.id).includes(':') ? (
                 <span className="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 font-medium">

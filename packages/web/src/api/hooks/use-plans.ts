@@ -9,11 +9,12 @@ export function usePlans() {
   });
 }
 
-export function usePlan(id: string | null) {
+export function usePlan(id: string | null, opts?: { refetchInterval?: number | false }) {
   return useQuery<Plan>({
     queryKey: ['plans', id],
     enabled: !!id,
     queryFn: () => apiRequest<Plan>('GET', `/v1/plans/${id}`),
+    refetchInterval: opts?.refetchInterval,
   });
 }
 
@@ -136,7 +137,7 @@ export function useValidateFragments(id: string) {
 export interface AddFragmentArgs {
   sectionId: string;
   fragment_id?: string;
-  manual?: { body: string; type?: string; lang?: string; domain?: string };
+  manual?: { body: string; type?: string; lang?: string; domain?: string; propose_to_library?: boolean };
 }
 
 export function useAddFragmentToSection(id: string) {

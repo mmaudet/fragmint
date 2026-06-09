@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Plan, PlanSection, SectionFragmentSelection } from '@/api/types';
-import { useSectionSearch, useUpdatePlan, useValidateFragments } from '@/api/hooks/use-plans';
+import { useUpdatePlan, useValidateFragments } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
 import { AddFragmentDialog } from './add-fragment-dialog';
 import { useFragmentCollections } from '@/api/hooks/use-plans';
-import { Plus, Loader2, AlertTriangle, Info, Table2, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Loader2, AlertTriangle, Info, Table2, Trash2, ExternalLink, CheckCircle2, X } from 'lucide-react';
 import type { FragmentCollection } from '@/api/types';
 import { toast } from 'sonner';
 
@@ -52,12 +52,43 @@ function CollectionCard({ collection, onDetach }: { collection: FragmentCollecti
   );
 }
 
-export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?: () => void }) {
+const HELP_DISMISS_KEY = 'fragmint.plan-step-help.dismissed.1';
+
+function readDismissed() {
+  try { return localStorage.getItem(HELP_DISMISS_KEY) === '1'; } catch { return false; }
+}
+function writeDismissed() {
+  try { localStorage.setItem(HELP_DISMISS_KEY, '1'); } catch { /* ignore */ }
+}
+
+export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: { plan: Plan; onValidated?: () => void; isSearching?: boolean; onSearchAll?: () => void }) {
   const { t, lang } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+  const [helpDismissed, setHelpDismissed] = useState(readDismissed);
   const update = useUpdatePlan(plan.id);
-  const search = useSectionSearch(plan.id);
+
+  function dismissHelp() { writeDismissed(); setHelpDismissed(true); }
+
+  function approveAllGlobal() {
+    const newSections = plan.state.sections.map((s) => {
+      const newSelections: SectionFragmentSelection[] = s.candidates.map((c) => ({
+        fragment_id: c.fragment_id,
+        body: c.body_excerpt ?? '',
+        edited: false,
+        propose_to_library: false,
+      }));
+      const existingOther = s.selected.filter(
+        (sel) => !s.candidates.some((c) => c.fragment_id === sel.fragment_id),
+      );
+      return { ...s, selected: [...existingOther, ...newSelections] };
+    });
+    update.mutate({ sections: newSections });
+  }
+
+  function rejectAllGlobal() {
+    update.mutate({ sections: plan.state.sections.map((s) => ({ ...s, candidates: [], selected: [] })) });
+  }
   const validate = useValidateFragments(plan.id);
   const { data: collections = [] } = useFragmentCollections();
   const collectionsById = Object.fromEntries(collections.map((c) => [c.id, c]));
@@ -72,6 +103,10 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
     : active.candidates.some(c => c.confidence_level === 'high') ? 'good'
     : active.candidates.some(c => c.confidence_level === 'medium') ? 'partial'
     : 'poor';
+
+  // True when a bulk search is running and this section hasn't returned results yet.
+  // Prevents "Aucun fragment trouvé" from flashing before the search completes.
+  const activePending = !!isSearching && (active?.candidates?.length ?? 0) === 0;
 
   function updateSection(sectionId: string, fn: (s: PlanSection) => PlanSection) {
     const next = sections.map((s) => (s.id === sectionId ? fn(s) : s));
@@ -101,24 +136,108 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
     updateSection(section.id, () => next);
   }
 
+  function approveAllCandidates(section: PlanSection) {
+    const newSelections: SectionFragmentSelection[] = section.candidates.map((c) => ({
+      fragment_id: c.fragment_id,
+      body: c.body_excerpt ?? '',
+      edited: false,
+      propose_to_library: false,
+    }));
+    const existingOther = section.selected.filter(
+      (s) => !section.candidates.some((c) => c.fragment_id === s.fragment_id),
+    );
+    updateSection(section.id, (s) => ({ ...s, selected: [...existingOther, ...newSelections] }));
+  }
+
+  function rejectAllCandidates(section: PlanSection) {
+    updateSection(section.id, (s) => ({ ...s, candidates: [], selected: [] }));
+  }
+
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col">
+      {!helpDismissed && (
+        <div className="border-b bg-muted/40 px-4 py-3 space-y-3 shrink-0">
+          <div className="flex items-start gap-3">
+            <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <p className="flex-1 text-sm text-muted-foreground leading-relaxed">
+              {t('planGeneration', 'step2Help')}
+            </p>
+            <button
+              onClick={dismissHelp}
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              aria-label={t('planGeneration', 'helpClose')}
+              title={t('planGeneration', 'helpClose')}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="pl-7 space-y-3">
+            <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
+              <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
+              <p><span className="font-medium">{t('planGeneration', 'confidenceHigh')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
+              <p><span className="font-medium">{t('planGeneration', 'confidenceMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
+              <p><span className="font-medium">{t('planGeneration', 'confidenceLow')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
+              <p><span className="font-medium">{t('planGeneration', 'confidenceUnknown')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={onSearchAll} disabled={isSearching}>
+                {isSearching && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                {t('planGeneration', 'searchAllSections')}
+                {isSearching && (
+                  <span className="ml-1.5 text-xs opacity-60">
+                    {sections.filter(s => (s.candidates?.length ?? 0) > 0).length} / {sections.length}
+                  </span>
+                )}
+              </Button>
+              <div className="ml-auto flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-primary border-primary/40 hover:bg-primary/10"
+                  onClick={approveAllGlobal}
+                  disabled={update.isPending}
+                >
+                  {t('planGeneration', 'approveAllSections')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={rejectAllGlobal}
+                  disabled={update.isPending}
+                >
+                  {t('planGeneration', 'rejectAllSections')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex h-[calc(100vh-4rem)] min-h-0">
       <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
         {sections.map((s, i) => {
           const reviewed = s.selected.length > 0;
+          const hasCandidates = (s.candidates?.length ?? 0) > 0;
+          const pending = isSearching && !hasCandidates;
+          const done = isSearching && hasCandidates;
           return (
             <button
               key={s.id}
               onClick={() => setActiveIdx(i)}
               className={cn(
-                'w-full text-left px-2 py-1.5 rounded text-sm flex items-center justify-between',
+                'w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-1.5',
                 i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
               )}
             >
-              <span className="truncate">
+              <span className="truncate flex-1 min-w-0">
                 {i + 1}. {s.title}
               </span>
-              {reviewed && <span className="text-primary text-xs">✓</span>}
+              {pending && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground/60" />}
+              {done && !reviewed && <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500/70" />}
+              {!isSearching && !reviewed && hasCandidates && (
+                <span className="text-[10px] text-muted-foreground/60 shrink-0">{s.candidates.length}</span>
+              )}
+              {reviewed && <span className="text-primary text-xs shrink-0">✓</span>}
             </button>
           );
         })}
@@ -139,25 +258,36 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                     {active.description}
                   </p>
 
-                  <div className="flex gap-2 flex-wrap pt-1 border-t">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => search.mutate({ sectionId: active.id })}
-                      disabled={search.isPending}
-                    >
-                      {search.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                      {t('planGeneration', 'reSearch')}
-                    </Button>
+                  <div className="flex gap-2 flex-wrap items-center">
                     <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
                       <Plus className="h-4 w-4 mr-1" />
                       {t('planGeneration', 'addFragment')}
                     </Button>
+                    {active.candidates.length > 0 && (
+                      <div className="ml-auto flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-primary border-primary/40 hover:bg-primary/10"
+                          onClick={() => approveAllCandidates(active)}
+                        >
+                          {t('planGeneration', 'approveAll')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                          onClick={() => rejectAllCandidates(active)}
+                        >
+                          {t('planGeneration', 'rejectAll')}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
 
-              {sectionConfidence === 'empty' && (
+              {sectionConfidence === 'empty' && !activePending && (
                 <div className="mt-3 flex items-start gap-2 rounded-md bg-muted border border-border px-3 py-2 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                   <span>{t('planGeneration', 'sectionConfidenceEmpty')}</span>
@@ -175,17 +305,13 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
                   <span>{t('planGeneration', 'sectionConfidencePartial')}</span>
                 </div>
               )}
-              {active.candidates.length > 0 && active.section_confidence === 'partial' && (
-                <div className="mt-3 flex items-start gap-2 rounded-md bg-muted/60 border border-border px-3 py-2 text-xs text-muted-foreground">
-                  <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span>
-                    {lang === 'fr'
-                      ? `${active.candidates.length} fragment${active.candidates.length > 1 ? 's' : ''} pertinent${active.candidates.length > 1 ? 's' : ''} trouvé${active.candidates.length > 1 ? 's' : ''}. Le système n'a pas trouvé d'autres fragments suffisamment pertinents pour cette section.`
-                      : `${active.candidates.length} relevant fragment${active.candidates.length > 1 ? 's' : ''} found. The system did not find enough relevant fragments for this section.`}
-                  </span>
+              {activePending && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{lang === 'fr' ? 'Recherche en cours…' : 'Searching…'}</span>
                 </div>
               )}
-              {active.candidates.length === 0 && !active.table_source?.collection_id && (
+              {active.candidates.length === 0 && !active.table_source?.collection_id && !activePending && (
                 <p className="mt-4 text-sm text-muted-foreground">
                   {t('planGeneration', 'noCandidates')}
                 </p>
@@ -230,6 +356,7 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
           </Button>
         </div>
       </main>
+      </div>
 
       {active && (
         <AddFragmentDialog
@@ -237,9 +364,6 @@ export function FragmentsStep({ plan, onValidated }: { plan: Plan; onValidated?:
           onOpenChange={setAddOpen}
           planId={plan.id}
           sectionId={active.id}
-          onAttachCollection={(collectionId) =>
-            updateSection(active.id, (s) => ({ ...s, table_source: { collection_id: collectionId } }))
-          }
         />
       )}
     </div>

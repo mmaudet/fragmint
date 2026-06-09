@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePlan, useUpdatePlan, useSearchAllSections } from '@/api/hooks/use-plans';
+import { usePlan, useSearchAllSections } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { X, Info, Lock, ArrowLeft, Loader2 } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Lock, ArrowLeft } from 'lucide-react';
 import { SpecStep } from './spec-step';
 import { FragmentsStep } from './fragments-step';
 import { DraftsStep } from './drafts-step';
@@ -14,7 +12,6 @@ import { ExportStep } from './export-step';
 import type { PlanStatus } from '@/api/types';
 
 const STEP_KEYS = ['step1', 'step2', 'step3', 'step4'] as const;
-const HELP_DISMISS_PREFIX = 'fragmint.plan-step-help.dismissed.';
 
 function isStepUnlocked(stepIdx: number, status: PlanStatus): boolean {
   switch (stepIdx) {
@@ -45,47 +42,23 @@ function defaultStepFromStatus(status: PlanStatus | undefined): number {
   }
 }
 
-function readDismissed(stepIdx: number): boolean {
-  try {
-    return localStorage.getItem(`${HELP_DISMISS_PREFIX}${stepIdx}`) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function writeDismissed(stepIdx: number) {
-  try {
-    localStorage.setItem(`${HELP_DISMISS_PREFIX}${stepIdx}`, '1');
-  } catch {
-    /* ignore */
-  }
-}
-
 export function Workspace({ planId }: { planId: string }) {
   const { t } = useI18n();
   const nav = useNavigate();
-  const { data: plan, isLoading } = usePlan(planId);
-  const [step, setStep] = useState<number | null>(null);
-  const [, forceRender] = useState(0);
-  const [globalOverride, setGlobalOverride] = useState(plan?.state.writer_prompt_override ?? '');
-  const update = useUpdatePlan(planId);
   const searchAll = useSearchAllSections(planId);
+  const { data: plan, isLoading } = usePlan(planId, {
+    refetchInterval: searchAll.isPending ? 1500 : false,
+  });
+  const [step, setStep] = useState<number | null>(null);
 
   if (isLoading || !plan) return <p className="p-6 text-muted-foreground">Loading…</p>;
 
   const status = plan.status as PlanStatus;
   const activeStep = step ?? defaultStepFromStatus(status);
-  const helpKey = STEP_KEYS[activeStep];
-  const helpDismissed = readDismissed(activeStep);
-
-  function dismissHelp() {
-    writeDismissed(activeStep);
-    forceRender((n) => n + 1);
-  }
 
   return (
     <div className="flex flex-col h-full">
-      <header className="border-b p-4 flex items-center gap-4">
+      <header className="sticky top-0 z-10 bg-background border-b p-4 flex items-center gap-4 h-16 shrink-0">
         <Button
           variant="ghost"
           size="sm"
@@ -117,72 +90,16 @@ export function Workspace({ planId }: { planId: string }) {
         </nav>
       </header>
 
-      {!helpDismissed && (
-        <div className="border-b bg-muted/40 px-4 py-3 space-y-3">
-          <div className="flex items-start gap-3">
-            <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-            <p className="flex-1 text-sm text-muted-foreground leading-relaxed">
-              {t('planGeneration', `${helpKey}Help` as 'step1Help')}
-            </p>
-            <button
-              onClick={dismissHelp}
-              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              aria-label={t('planGeneration', 'helpClose')}
-              title={t('planGeneration', 'helpClose')}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {activeStep === 1 && (
-            <div className="pl-7 space-y-3">
-              <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
-                <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'confidenceHigh')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'confidenceMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'confidenceLow')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
-                <p><span className="font-medium">{t('planGeneration', 'confidenceUnknown')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => searchAll.mutate()}
-                disabled={searchAll.isPending}
-              >
-                {searchAll.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                {t('planGeneration', 'searchAllSections')}
-              </Button>
-            </div>
-          )}
-          {activeStep === 2 && (
-            <div className="pl-7 space-y-1">
-              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                {t('planGeneration', 'writerOverride')}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">
-                      <Info className="h-3 w-3" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    {t('planGeneration', 'writerOverrideTooltip')}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <Textarea
-                rows={2}
-                placeholder={t('planGeneration', 'writerOverridePlaceholder')}
-                value={globalOverride}
-                onChange={(e) => setGlobalOverride(e.target.value)}
-                onBlur={() => update.mutate({ writer_prompt_override: globalOverride })}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="flex-1 overflow-y-auto">
-        {activeStep === 0 && <SpecStep plan={plan} onValidated={() => setStep(1)} />}
-        {activeStep === 1 && <FragmentsStep plan={plan} onValidated={() => setStep(2)} />}
+        {activeStep === 0 && <SpecStep plan={plan} onValidated={() => { setStep(1); searchAll.mutate(); }} />}
+        {activeStep === 1 && (
+          <FragmentsStep
+            plan={plan}
+            onValidated={() => setStep(2)}
+            isSearching={searchAll.isPending}
+            onSearchAll={() => searchAll.mutate()}
+          />
+        )}
         {activeStep === 2 && <DraftsStep plan={plan} onAssembled={() => setStep(3)} />}
         {activeStep === 3 && <ExportStep plan={plan} />}
       </div>

@@ -7,14 +7,56 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Loader2, Info, Copy, Check } from 'lucide-react';
+import { Loader2, Info, Copy, Check, AlertTriangle, ShieldAlert, X } from 'lucide-react';
+import type { GroundednessFlag } from '@/api/types';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+
+const RISK_CONFIG = {
+  high: { label: 'Risque élevé', icon: ShieldAlert, className: 'border-destructive/30 bg-destructive/5 text-destructive' },
+  medium: { label: 'Risque moyen', icon: AlertTriangle, className: 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400' },
+  low: { label: 'Risque faible', icon: Info, className: 'border-yellow-400/30 bg-yellow-400/5 text-yellow-700 dark:text-yellow-400' },
+} as const;
+
+function GroundednessPanel({ flags }: { flags?: GroundednessFlag[] }) {
+  if (!flags || flags.length === 0) return null;
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-xs font-medium text-muted-foreground">Vérification de fidélité ({flags.length} signal{flags.length > 1 ? 's' : ''})</p>
+      {flags.map((f, i) => {
+        const cfg = RISK_CONFIG[f.risk];
+        const Icon = cfg.icon;
+        return (
+          <div key={i} className={`flex gap-2 rounded border px-3 py-2 text-xs ${cfg.className}`}>
+            <Icon className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="font-medium">{cfg.label} — <span className="font-mono">"{f.text}"</span></p>
+              <p className="opacity-80">{f.reason}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const HELP_DISMISS_KEY = 'fragmint.plan-step-help.dismissed.2';
+
+function readDismissed() {
+  try { return localStorage.getItem(HELP_DISMISS_KEY) === '1'; } catch { return false; }
+}
+function writeDismissed() {
+  try { localStorage.setItem(HELP_DISMISS_KEY, '1'); } catch { /* ignore */ }
+}
 
 export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: () => void }) {
   const { t } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [progress, setProgress] = useState<{ i: number; total: number } | null>(null);
   const [copiedSection, setCopiedSection] = useState(false);
+  const [helpDismissed, setHelpDismissed] = useState(readDismissed);
+  const [globalOverride, setGlobalOverride] = useState(plan.state.writer_prompt_override ?? '');
+
+  function dismissHelp() { writeDismissed(); setHelpDismissed(true); }
 
   function copyToClipboard(text: string, setCopied: (v: boolean) => void) {
     navigator.clipboard.writeText(text).then(() => {
@@ -97,7 +139,7 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <div className="border-b p-3 space-y-2">
         <div className="flex items-center gap-3">
           <Button onClick={generateAll} disabled={progress !== null}>
@@ -139,23 +181,74 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
         </p>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
-          {sections.map((s, i) => (
+      {!helpDismissed && (
+        <div className="border-b bg-muted/40 px-4 py-3 space-y-3 shrink-0">
+          <div className="flex items-start gap-3">
+            <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <p className="flex-1 text-sm text-muted-foreground leading-relaxed">
+              {t('planGeneration', 'step3Help')}
+            </p>
             <button
-              key={s.id}
-              onClick={() => setActiveIdx(i)}
-              className={cn(
-                'w-full text-left px-2 py-1.5 rounded text-sm flex items-center justify-between',
-                i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
-              )}
+              onClick={dismissHelp}
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              aria-label={t('planGeneration', 'helpClose')}
+              title={t('planGeneration', 'helpClose')}
             >
-              <span className="truncate">
-                {i + 1}. {s.title}
-              </span>
-              {s.generated_markdown && <span className="text-primary text-xs">✓</span>}
+              <X className="h-4 w-4" />
             </button>
-          ))}
+          </div>
+          <div className="pl-7 space-y-1">
+            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              {t('planGeneration', 'writerOverride')}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help">
+                    <Info className="h-3 w-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {t('planGeneration', 'writerOverrideTooltip')}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Textarea
+              rows={2}
+              placeholder={t('planGeneration', 'writerOverridePlaceholder')}
+              value={globalOverride}
+              onChange={(e) => setGlobalOverride(e.target.value)}
+              onBlur={() => update.mutate({ writer_prompt_override: globalOverride })}
+            />
+          </div>
+        </div>
+      )}
+      <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+        <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
+          {sections.map((s, i) => {
+            const worstFlag = s.groundedness_flags?.reduce<'high' | 'medium' | 'low' | null>(
+              (acc, f) => (acc === 'high' ? acc : f.risk === 'high' ? 'high' : acc === 'medium' ? acc : f.risk === 'medium' ? 'medium' : 'low'),
+              null,
+            ) ?? null;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveIdx(i)}
+                className={cn(
+                  'w-full text-left px-2 py-1.5 rounded text-sm flex items-center justify-between gap-1',
+                  i === activeIdx ? 'bg-primary/15' : 'hover:bg-muted',
+                )}
+              >
+                <span className="truncate flex-1">
+                  {i + 1}. {s.title}
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {worstFlag === 'high' && <span className="h-2 w-2 rounded-full bg-destructive" title="Hallucination risk: high" />}
+                  {worstFlag === 'medium' && <span className="h-2 w-2 rounded-full bg-amber-500" title="Hallucination risk: medium" />}
+                  {worstFlag === 'low' && <span className="h-2 w-2 rounded-full bg-yellow-400" title="Hallucination risk: low" />}
+                  {s.generated_markdown && !worstFlag && <span className="text-primary text-xs">✓</span>}
+                </span>
+              </button>
+            );
+          })}
         </aside>
 
         <main className="flex-1 overflow-y-auto p-6">
@@ -225,6 +318,7 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     onChange={(e) => saveSectionMarkdown(active, e.target.value)}
                   />
                 </div>
+                <GroundednessPanel flags={active.groundedness_flags} />
               </CardContent>
             </Card>
           )}

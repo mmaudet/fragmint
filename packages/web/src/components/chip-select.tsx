@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { tagDisplayLabel } from '@/lib/tag-display';
 
 interface ChipSelectProps {
   value: string[];
@@ -77,7 +78,7 @@ export function ChipSelect({ value, onChange, suggestions, placeholder }: ChipSe
             key={v}
             className="flex items-center gap-1 bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-xs"
           >
-            {v}
+            {tagDisplayLabel(v)}
             <button
               type="button"
               onClick={(e) => {
@@ -120,7 +121,7 @@ export function ChipSelect({ value, onChange, suggestions, placeholder }: ChipSe
               }}
               onMouseEnter={() => setActiveIndex(i)}
             >
-              {s}
+              {tagDisplayLabel(s)}
             </button>
           ))}
         </div>

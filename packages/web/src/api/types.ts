@@ -258,6 +258,12 @@ export interface FragmentCollection {
   updated_at: string;
 }
 
+export interface GroundednessFlag {
+  text: string;
+  risk: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
 export interface PlanSection {
   id: string;
   title: string;
@@ -265,6 +271,7 @@ export interface PlanSection {
   candidates: FragmentCandidate[];
   selected: SectionFragmentSelection[];
   generated_markdown?: string;
+  groundedness_flags?: GroundednessFlag[];
   filters_override?: PlanFilters;
   inferred_type?: string;
   writer_instructions?: string;
