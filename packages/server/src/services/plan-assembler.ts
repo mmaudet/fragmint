@@ -8,10 +8,6 @@ import { makeSemaphore, PlanService, type PlanRecord } from './plan-service.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx, renderMarkdownToPptx } from './pandoc-render.js';
 import { renderMarpFromString } from './render-marp.js';
-import { renderDocxWithTables, type DocxSection } from './render-docx-table.js';
-import { renderPptxWithTables, type PptxSection } from './render-pptx-table.js';
-import { buildGfmTable, buildMarkdownList } from './table-assembler.js';
-import { resolveTableRows, resolveRowsFromCollection } from './plan-table-resolver.js';
 
 // Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
 const LINAGORA_MARP_STYLE = `
@@ -169,67 +165,23 @@ export class PlanAssembler extends PlanService {
       ...(p.state.reference_docs ?? []),
       ...(section.reference_docs ?? []),
     ];
-    const hasTableBlock = (section.blocks ?? []).some((b) => b.type === 'table');
-
     const fragmentBodyList = fragments_for_writer.map((f) => f.body);
-    let updatedSections: typeof p.state.sections;
 
-    if (section.blocks && section.blocks.length > 0) {
-      // Blocks mode: generate each prose block independently
-      const proseIndices = section.blocks
-        .map((b, i) => (b.type === 'prose' ? i : -1))
-        .filter((i) => i !== -1);
-
-      const updatedBlocks = [...section.blocks];
-      for (const idx of proseIndices) {
-        const isFirst = idx === proseIndices[0];
-        const isLast = idx === proseIndices[proseIndices.length - 1];
-        const role = hasTableBlock
-          ? isFirst && proseIndices.length > 1 ? 'intro'
-            : isLast && proseIndices.length > 1 ? 'conclusion'
-            : 'standalone'
-          : 'standalone';
-        const messages = buildSectionMessages({
-          section: { title: section.title, description: section.description },
-          fragments: fragments_for_writer,
-          lang: p.state.filters.lang ?? 'fr',
-          max_chars: this.config.fragmentMaxChars,
-          writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
-          plan_title: p.title,
-          spec_prompt: p.state.spec_prompt,
-          reference_docs: referenceDocs.length ? referenceDocs : undefined,
-          has_table_block: hasTableBlock,
-          prose_block_role: role,
-        });
-        const out = await this.requireLlm().chatMessages(messages);
-        updatedBlocks[idx] = { type: 'prose', generated_markdown: out.trim() };
-      }
-      updatedSections = p.state.sections.map((s) =>
-        s.id === sectionId ? { ...s, blocks: updatedBlocks } : s,
-      );
-      const allProse = updatedBlocks
-        .filter((b) => b.type === 'prose')
-        .map((b) => (b as { type: 'prose'; generated_markdown?: string }).generated_markdown ?? '')
-        .join('\n\n');
-      this.scheduleGroundednessCheck(planId, sectionId, allProse, fragmentBodyList);
-    } else {
-      // Legacy mode: generate section.generated_markdown
-      const messages = buildSectionMessages({
-        section: { title: section.title, description: section.description },
-        fragments: fragments_for_writer,
-        lang: p.state.filters.lang ?? 'fr',
-        max_chars: this.config.fragmentMaxChars,
-        writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
-        plan_title: p.title,
-        spec_prompt: p.state.spec_prompt,
-        reference_docs: referenceDocs.length ? referenceDocs : undefined,
-      });
-      const out = await this.requireLlm().chatMessages(messages);
-      updatedSections = p.state.sections.map((s) =>
-        s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
-      );
-      this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList);
-    }
+    const messages = buildSectionMessages({
+      section: { title: section.title, description: section.description },
+      fragments: fragments_for_writer,
+      lang: p.state.filters.lang ?? 'fr',
+      max_chars: this.config.fragmentMaxChars,
+      writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
+      plan_title: p.title,
+      spec_prompt: p.state.spec_prompt,
+      reference_docs: referenceDocs.length ? referenceDocs : undefined,
+    });
+    const out = await this.requireLlm().chatMessages(messages);
+    const updatedSections = p.state.sections.map((s) =>
+      s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
+    );
+    this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList);
 
     const now = new Date().toISOString();
     await Promise.all(
@@ -255,11 +207,7 @@ export class PlanAssembler extends PlanService {
   async generateAllSections(planId: string): Promise<PlanRecord | null> {
     const p = await this.get(planId);
     if (!p) return null;
-    // Generate prose sections sequentially to avoid LLM rate limits.
-    // Blocks-based sections always run (generateSection handles table blocks internally).
-    // Legacy non-prose sections (render_mode set and not 'prose') are skipped.
     for (const section of p.state.sections) {
-      if (!section.blocks && section.render_mode && section.render_mode !== 'prose') continue;
       try {
         await this.generateSection(planId, section.id);
       } catch (err) {
@@ -267,10 +215,6 @@ export class PlanAssembler extends PlanService {
       }
     }
     return this.assemble(planId);
-  }
-
-  private async resolveRows(section: PlanSection): Promise<Record<string, unknown>[]> {
-    return resolveTableRows(section, this.config.collectionService, this.config.fragments);
   }
 
   async assemble(id: string): Promise<PlanRecord | null> {
@@ -282,36 +226,20 @@ export class PlanAssembler extends PlanService {
       parts.push(`# ${s.title}`);
       parts.push('');
 
-      if (s.blocks && s.blocks.length > 0) {
-        // Blocks-based rendering: interleave prose and table blocks
-        for (const block of s.blocks) {
-          if (block.type === 'prose') {
-            if (block.generated_markdown) parts.push(block.generated_markdown.trim());
-          } else if (block.type === 'table') {
-            const cs = this.config.collectionService;
-            const fs = this.config.fragments;
-            if (cs && fs) {
-              const rows = await resolveRowsFromCollection(block.collection_id, cs, fs);
-              const cols = block.columns ?? (rows[0] ? Object.keys(rows[0]) : []);
-              const table = buildGfmTable(rows, cols);
-              if (table) parts.push(table);
-            }
-          }
-          parts.push('');
-        }
-      } else if (s.render_mode === 'table') {
-        const rows = await this.resolveRows(s);
-        const table = buildGfmTable(rows, s.columns ?? []);
-        if (table) parts.push(table);
-        parts.push('');
-      } else if (s.render_mode === 'list') {
-        const list = buildMarkdownList(s.selected.map((sel) => sel.body).filter(Boolean));
-        if (list) parts.push(list);
-        parts.push('');
-      } else {
-        if (s.generated_markdown) parts.push(s.generated_markdown.trim());
-        parts.push('');
+      if (s.generated_markdown) {
+        const md = s.generated_markdown.trim();
+        const firstNewline = md.indexOf('\n');
+        const firstLine = firstNewline >= 0 ? md.slice(0, firstNewline) : md;
+        const headingText = firstLine.match(/^#{1,6}\s+(.+)$/)?.[1]?.trim();
+        const isTitleDupe = headingText?.toLowerCase() === s.title.trim().toLowerCase();
+        const body = !isTitleDupe
+          ? md
+          : firstNewline >= 0
+          ? md.slice(firstNewline + 1).replace(/^\n+/, '')
+          : '';
+        if (body) parts.push(body);
       }
+      parts.push('');
     }
 
     return this.update(id, { draft_markdown: parts.join('\n'), draft_dirty: false });
@@ -337,38 +265,6 @@ export class PlanAssembler extends PlanService {
       throw new Error('No assembled draft to export — call /assemble first');
     }
 
-    const hasTableSection = p.state.sections.some(
-      (s) => s.render_mode === 'table' || (s.blocks ?? []).some((b) => b.type === 'table'),
-    );
-    const tableTemplatePath = this.config.docxTableTemplatePath;
-
-    if (hasTableSection && tableTemplatePath) {
-      const docxSections: DocxSection[] = await Promise.all(
-        p.state.sections.map(async (s) => {
-          if (s.render_mode === 'table') {
-            const rows = await this.resolveRows(s);
-            return {
-              title: s.title,
-              is_table: true,
-              prose: '',
-              rows,
-              columns: s.columns ?? [],
-            };
-          }
-          return {
-            title: s.title,
-            is_table: false,
-            prose: s.generated_markdown ?? '',
-            rows: [],
-            columns: [],
-          };
-        }),
-      );
-      const buf = await renderDocxWithTables(tableTemplatePath, p.title, docxSections);
-      await this.update(id, { status: 'completed' });
-      return { content: buf, filename: `${slugify(p.title)}.docx` };
-    }
-
     const reference = args.styleTemplatePath ?? this.config.docxReferencePath;
     const buf = await renderMarkdownToDocx(p.state.draft_markdown, reference);
     await this.update(id, { status: 'completed' });
@@ -383,34 +279,6 @@ export class PlanAssembler extends PlanService {
     if (!p) throw new Error('Plan not found');
     if (!p.state.draft_markdown?.trim()) {
       throw new Error('No assembled draft to export — call /assemble first');
-    }
-
-    const hasTableSection = p.state.sections.some(
-      (s) => s.render_mode === 'table' || (s.blocks ?? []).some((b) => b.type === 'table'),
-    );
-
-    if (hasTableSection) {
-      const pptxSections: PptxSection[] = await Promise.all(
-        p.state.sections.map(async (s) => {
-          if (s.render_mode === 'table') {
-            const rows = await this.resolveRows(s);
-            return {
-              title: s.title,
-              render_mode: 'table' as const,
-              rows,
-              columns: s.columns ?? [],
-            };
-          }
-          return {
-            title: s.title,
-            render_mode: 'prose' as const,
-            prose: s.generated_markdown ?? '',
-          };
-        }),
-      );
-      const buf = await renderPptxWithTables(p.title, pptxSections);
-      await this.update(id, { status: 'completed' });
-      return { content: buf, filename: `${slugify(p.title)}.pptx` };
     }
 
     const buf = await renderMarkdownToPptx(p.state.draft_markdown, args.styleTemplatePath);
