@@ -700,7 +700,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
     expect(temperatures).toContain(0.4);
   });
 
-  it('uses minimum of 2 agent scores as final score', async () => {
+  it('uses average of 2 agent scores as final score', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
       if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
@@ -717,16 +717,16 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
     const results = await retriever.searchForSection({ text: 'test', filters: {}, collectionSlug: null });
 
-    // min(0.8, 0.3) = 0.3
+    // avg(0.8, 0.3) = 0.55 → Math.round(5.5) = 6 → score = 0.6
     expect(results).toHaveLength(1);
-    expect(results[0].score).toBeCloseTo(0.3);
+    expect(results[0].score).toBeCloseTo(0.6);
   });
 
-  it('drops fragment when min score is below threshold (0.3)', async () => {
+  it('drops fragment when avg score is below threshold (0.3)', async () => {
     const llmSpy = vi.fn(async (_msgs: unknown[], opts?: { temperature?: number }) => {
       if (opts?.temperature === 0.1) return '["frag-uuid-1"]'; // phase1
-      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":8,"reason":"agent1"}]'; // 0.8
-      return '[{"id":"frag-uuid-1","score":2,"reason":"agent2"}]'; // 0.2 < threshold
+      if (opts?.temperature === 0.2) return '[{"id":"frag-uuid-1","score":2,"reason":"agent1"}]'; // 0.2
+      return '[{"id":"frag-uuid-1","score":2,"reason":"agent2"}]'; // 0.2
     });
     const fakeLlm = { chatMessages: llmSpy } as unknown as LlmClient;
 
@@ -739,7 +739,7 @@ describe('AgenticRetriever — self-consistency (Phase 2)', () => {
 
     const results = await retriever.searchForSection({ text: 'test', filters: {}, collectionSlug: null });
 
-    // min(0.8, 0.2) = 0.2 < 0.3 → dropped
+    // avg(0.2, 0.2) = 0.2 < 0.3 → dropped
     expect(results).toHaveLength(0);
   });
 

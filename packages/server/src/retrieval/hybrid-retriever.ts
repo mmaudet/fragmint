@@ -106,8 +106,22 @@ export class HybridRetriever implements FragmentRetriever {
         `[hybrid][judge] truncation detected: ${llmScoreMap.size}/${allCandidates.length} fragments scored — keeping non-scored fragments in pool`,
       );
     }
+
+    // Re-inject forced-only candidates dropped by LLM truncation.
+    // They have no vector rank (absent from list1) and no LLM score (absent from list2),
+    // so they are invisible in fused — the isTruncated guard below never fires for them.
+    const fusedSet = new Set(fused.map(({ item }) => item.id));
+    const fusedFinal = isTruncated
+      ? [
+          ...fused,
+          ...forcedOnly
+            .filter((c) => !llmScoreMap.has(c.id) && !fusedSet.has(c.id))
+            .map((c) => ({ item: { id: c.id, _data: c }, rrf_score: 0 as number })),
+        ]
+      : fused;
+
     const floorFiltered = this.llmFloor > 0
-      ? fused.filter(({ item }) => {
+      ? fusedFinal.filter(({ item }) => {
           const llmScore = llmScoreMap.get(item.id);
           if (judgeResponded && !llmScoreMap.has(item.id)) {
             if (isTruncated) {
@@ -126,13 +140,28 @@ export class HybridRetriever implements FragmentRetriever {
           }
           return true;
         })
-      : fused;
+      : fusedFinal;
 
     // Step 6 — Build result with score_breakdown
     const list1IndexMap = new Map(list1.map((item, i) => [item.id, i + 1]));
     const list2IndexMap = new Map(list2.map((item, i) => [item.id, i + 1]));
 
-    const results = floorFiltered.slice(0, limit).map(({ item, rrf_score }) => {
+    // Type-boosted ranking: fragments whose type matches the section's inferred_type get a
+    // 2.5× RRF multiplier before slicing. Without this, forced-only type-match fragments
+    // (no vector rank → low rrf_score) are always squeezed out by vector-backed argument
+    // fragments, even though they are the only candidates that survive cross-section dedup
+    // for their section type (e.g. the sole introduction-type fragment for an Introduction
+    // section never enters top-K and the section ends up empty).
+    const RANKING_TYPE_BOOST = 2.5;
+    const rankedFiltered = query.inferred_type
+      ? [...floorFiltered].sort((a, b) => {
+          const aBoost = a.item._data.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
+          const bBoost = b.item._data.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
+          return b.rrf_score * bBoost - a.rrf_score * aBoost;
+        })
+      : floorFiltered;
+
+    const results = rankedFiltered.slice(0, limit).map(({ item, rrf_score }) => {
       const c = item._data;
       const vectorScore = Math.min(1.0, vectorScoreMap.get(c.id) ?? 0);
       const llmScore = llmScoreMap.get(c.id); // undefined if judge failed for this fragment

@@ -26,6 +26,25 @@ function extractType(lines: string[]): { filtered: string[]; inferred_type: stri
   return { filtered, inferred_type };
 }
 
+const MAX_SECTIONS = 13;
+
+/**
+ * Enforces structural invariants after LLM generation:
+ * - Drops any sections that appear after the conclusion (LLMs often add extras).
+ * - Caps at MAX_SECTIONS, keeping conclusion last when present.
+ */
+export function sanitizeSections(sections: ParsedSection[]): ParsedSection[] {
+  const conclusionIdx = sections.findLastIndex((s) => s.inferred_type === 'conclusion');
+  const truncated = conclusionIdx >= 0 ? sections.slice(0, conclusionIdx + 1) : sections;
+
+  if (truncated.length <= MAX_SECTIONS) return truncated;
+
+  const conclusion = conclusionIdx >= 0 ? truncated[truncated.length - 1] : null;
+  const body = conclusion ? truncated.slice(0, -1) : truncated;
+  const kept = body.slice(0, conclusion ? MAX_SECTIONS - 1 : MAX_SECTIONS);
+  return conclusion ? [...kept, conclusion] : kept;
+}
+
 export function parsePlanSections(markdown: string): ParsedSection[] {
   const trimmed = markdown.trim();
   if (trimmed === '') return [];

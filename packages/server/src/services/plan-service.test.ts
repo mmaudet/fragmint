@@ -246,7 +246,8 @@ describe('PlanService.validateFragments', () => {
 
 describe('PlanService.generateSection', () => {
   it('calls the LLM with title/description/fragments and stores generated_markdown', async () => {
-    const llm = fakeLlm(['Generated body of the section.']);
+    // Second response is for the async groundedness check (fire-and-forget, '[]' = no flags)
+    const llm = fakeLlm(['Generated body of the section.', '[]']);
     const svc = makeServiceFull({ llm, search: fakeSearch([]) });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
     await svc.update(p.id, {
@@ -266,7 +267,7 @@ describe('PlanService.generateSection', () => {
     });
     const out = await svc.generateSection(p.id, 'sec_aaa');
     expect(out!.state.sections[0].generated_markdown).toContain('Generated body');
-    expect(llm.chatMessages).toHaveBeenCalledTimes(1);
+    expect(llm.chatMessages).toHaveBeenCalledTimes(2);
   });
 });
 

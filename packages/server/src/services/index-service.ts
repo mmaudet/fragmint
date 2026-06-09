@@ -99,10 +99,10 @@ export class IndexService {
     return format === 'json' ? data : renderMarkdown(data);
   }
 
-  async getData(forceRefresh = false, collectionSlug?: string): Promise<IndexData> {
-    if (collectionSlug) {
+  async getData(forceRefresh = false, collectionSlug?: string, lang?: string): Promise<IndexData> {
+    if (collectionSlug || lang) {
       // Filtered queries never use the global cache
-      return this.generate(collectionSlug);
+      return this.generate(collectionSlug, lang);
     }
     const now = Date.now();
     if (!forceRefresh && this.cachedData && now - this.cacheTimestamp < this.CACHE_TTL) {
@@ -113,9 +113,10 @@ export class IndexService {
     return this.cachedData;
   }
 
-  private async generate(collectionSlug?: string): Promise<IndexData> {
+  private async generate(collectionSlug?: string, lang?: string): Promise<IndexData> {
     const conditions: SQL[] = [eq(fragments.quality, 'approved')];
     if (collectionSlug) conditions.push(eq(fragments.collection_slug, collectionSlug));
+    if (lang) conditions.push(eq(fragments.lang, lang));
 
     const rows = await this.db
       .select()

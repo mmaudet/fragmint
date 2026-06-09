@@ -1,5 +1,6 @@
 import type { ChatMessage } from './llm-client.js';
-import type { PlanFilters } from '../schema/plan.js';
+import type { PlanFilters, GroundednessFlag } from '../schema/plan.js';
+export type { GroundednessFlag };
 
 export interface BuildPlanArgs {
   spec_prompt: string;
@@ -10,6 +11,11 @@ export interface BuildPlanArgs {
 }
 
 const PLAN_SYSTEM = `You produce structured document plans in Markdown. Output ONLY the plan.
+
+Rules:
+- Aim for 8 to 12 sections. Never exceed 13.
+- Group related sub-topics into one section rather than creating one section per keyword.
+- If a conclusion section is included, it MUST be the very last section — nothing comes after it.
 
 Format for each section:
 ## Section title
@@ -33,8 +39,9 @@ The <slug> MUST be one of:
 No body content. No commentary outside section descriptions.
 
 When a corpus context is provided:
-- Prefer types listed under "Types" — those have matching fragments in the library.
-- You may use other valid types (faq, bio, clause, conclusion) if editorially appropriate, but note in the description that no library content exists for that section.
+- ONLY use types listed under "Types" in the corpus. Do NOT use any other type even if editorially appropriate — a section with no matching fragments will be empty and must be omitted.
+- For each type you plan to use, check its domain coverage. Do NOT include a section of that type if its coverage is limited to domains unrelated to the specification topic (e.g. if pricing only covers "twake" and "linto" but the spec is about "mirai" and "openrag", omit the pricing section).
+- If you feel a testimonial, faq, bio, or clause section is needed but that type is not in the corpus, replace it with the closest available type (e.g. use-case instead of testimonial, methodology instead of faq).
 - Table titles in the corpus (e.g. "Choix du modèle de langage", "New additional features", "Proposition financière") are internal data labels from source documents. They MUST NOT appear as section names in your plan.
   Use them only inside section descriptions, with a phrasing like "may include data from the table titled '...'".
   Correct:   section name "Tarification annuelle des prestations", description "...may include data from the table titled 'New additional features'..."
@@ -169,4 +176,65 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
     { role: 'system', content: system },
     { role: 'user', content: lines.join('\n') },
   ];
+}
+
+const GROUNDEDNESS_SYSTEM = `You are a factual accuracy auditor for AI-generated documents.
+
+Compare the generated draft against the provided source fragments.
+Identify assertions in the draft that are NOT directly supported by those fragments.
+
+Flag an assertion when:
+- It states a fact, figure, percentage, date, or amount not present in any fragment
+- It modifies a specific value from a fragment (e.g. "99.5%" becomes "nearly 100%", "216 minutes" becomes "~3.5h")
+- It changes the scope of a commitment ("under certain conditions" → "guaranteed", "may" → "will")
+- It creates a causal or logical link between two fragments that neither fragment establishes
+
+Risk levels:
+- high: invented fact, modified number/amount/percentage, changed condition or scope
+- medium: causal link between fragments not present in any source, overgeneralization
+- low: paraphrase that subtly shifts meaning without inventing new information
+
+Return ONLY a valid JSON array. If the draft is fully grounded, return [].
+Each item must have exactly: { "text": "exact phrase from the draft", "risk": "high|medium|low", "reason": "concise explanation" }
+Do not wrap in markdown code blocks.`;
+
+export function buildGroundednessMessages(
+  draft: string,
+  fragmentBodies: string[],
+): ChatMessage[] {
+  const lines: string[] = [];
+  if (fragmentBodies.length === 0) {
+    lines.push('(no source fragments — all assertions in the draft are potentially ungrounded)');
+  } else {
+    lines.push('Source fragments:');
+    fragmentBodies.forEach((body, i) => {
+      lines.push(`--- Fragment ${i + 1} ---`);
+      lines.push(body.slice(0, 2000));
+    });
+  }
+  lines.push('');
+  lines.push('Generated draft:');
+  lines.push(draft);
+
+  return [
+    { role: 'system', content: GROUNDEDNESS_SYSTEM },
+    { role: 'user', content: lines.join('\n') },
+  ];
+}
+
+export function parseGroundednessFlags(raw: string): GroundednessFlag[] {
+  try {
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (f): f is GroundednessFlag =>
+        typeof f?.text === 'string' &&
+        (f?.risk === 'high' || f?.risk === 'medium' || f?.risk === 'low') &&
+        typeof f?.reason === 'string',
+    );
+  } catch {
+    return [];
+  }
 }

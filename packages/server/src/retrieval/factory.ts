@@ -79,7 +79,7 @@ function build(mode: RetrievalMode, deps: RetrieverDeps): FragmentRetriever {
       // defines the mode's conservative precision strategy. Not env-configurable by design.
       return new AgenticRetriever(deps.indexService, deps.llm, deps.fragmentService, {
         selfConsistency: true,
-        minScore: deps.agenticMinScore ?? 0.5,
+        minScore: deps.agenticMinScore ?? 0.35,
       });
     case 'hybrid':
       return new HybridRetriever(

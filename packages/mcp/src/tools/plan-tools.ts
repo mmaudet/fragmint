@@ -136,7 +136,9 @@ export function planGenerateHandler(client: FragmintApiClient): ToolHandler {
     const id = args.id as string | undefined;
     if (!id) return toolError('plan_generate: id is required');
     try {
-      const plan = await client.post<{ data: { state: { sections: Array<{ id: string; title: string; description: string }> } } }>(`/v1/plans/${id}/generate-plan`, {});
+      const body: Record<string, unknown> = {};
+      if (args.extra_instructions) body.extra_instructions = args.extra_instructions as string;
+      const plan = await client.post<{ data: { state: { sections: Array<{ id: string; title: string; description: string }> } } }>(`/v1/plans/${id}/generate-plan`, body);
       const sections = (plan as any)?.data?.state?.sections ?? [];
       const outline = sections.map((s: any, i: number) => `${i + 1}. **${s.title}** — ${s.description}`).join('\n');
       return {

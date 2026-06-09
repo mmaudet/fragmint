@@ -3,7 +3,8 @@ import { eq, sql } from 'drizzle-orm';
 import { fragments, planFragmentUsages } from '../db/schema.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import { type PlanSection } from '../schema/plan.js';
-import { buildSectionMessages } from './plan-prompts.js';
+import { buildSectionMessages, buildGroundednessMessages, parseGroundednessFlags } from './plan-prompts.js';
+import { makeSemaphore, PlanService, type PlanRecord } from './plan-service.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx, renderMarkdownToPptx } from './pandoc-render.js';
 import { renderMarpFromString } from './render-marp.js';
@@ -11,7 +12,6 @@ import { renderDocxWithTables, type DocxSection } from './render-docx-table.js';
 import { renderPptxWithTables, type PptxSection } from './render-pptx-table.js';
 import { buildGfmTable, buildMarkdownList } from './table-assembler.js';
 import { resolveTableRows, resolveRowsFromCollection } from './plan-table-resolver.js';
-import { PlanService, type PlanRecord } from './plan-service.js';
 
 // Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
 const LINAGORA_MARP_STYLE = `
@@ -33,7 +33,50 @@ function buildMarpContent(
   return frontmatter + draftMarkdown;
 }
 
+// Tags may come from the SQLite row (serialized JSON string) or parsed frontmatter (already an array).
+function parseTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((t): t is string => typeof t === 'string');
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((t): t is string => typeof t === 'string');
+    } catch { /* fall through */ }
+  }
+  return [];
+}
+
 export class PlanAssembler extends PlanService {
+  private _groundSemaphore: ReturnType<typeof makeSemaphore> | null = null;
+  private get groundSemaphore() {
+    if (!this._groundSemaphore) {
+      this._groundSemaphore = makeSemaphore(this.config.llmConcurrency ?? 3);
+    }
+    return this._groundSemaphore;
+  }
+
+  private scheduleGroundednessCheck(
+    planId: string,
+    sectionId: string,
+    draft: string,
+    fragmentBodies: string[],
+  ): void {
+    void this.groundSemaphore(async () => {
+      try {
+        const msgs = buildGroundednessMessages(draft, fragmentBodies);
+        const raw = await this.requireLlm().chatMessages(msgs, { temperature: 0 });
+        const flags = parseGroundednessFlags(raw);
+        const latest = await this.get(planId);
+        if (!latest) return;
+        const updated = latest.state.sections.map((s) =>
+          s.id === sectionId ? { ...s, groundedness_flags: flags } : s,
+        );
+        await this.update(planId, { sections: updated });
+      } catch (err) {
+        console.warn(`[groundedness] section ${sectionId}:`, err instanceof Error ? err.message : err);
+      }
+    });
+  }
+
   async validateFragments(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
@@ -60,23 +103,7 @@ export class PlanAssembler extends PlanService {
               'fr';
             const lang: string = /^[a-z]{2}$/.test(rawLang) ? rawLang : 'fr';
 
-            // Tags may come from the SQLite row (serialized JSON string) or the
-            // parsed frontmatter (already an array). Handle both shapes.
-            let tags: string[] = [];
-            const frontmatterTags = original?.frontmatter?.tags as unknown;
-            const rawTags: unknown = original?.tags ?? frontmatterTags;
-            if (Array.isArray(rawTags)) {
-              tags = rawTags.filter((t): t is string => typeof t === 'string');
-            } else if (typeof rawTags === 'string' && rawTags.length > 0) {
-              try {
-                const parsed = JSON.parse(rawTags);
-                if (Array.isArray(parsed)) {
-                  tags = parsed.filter((t): t is string => typeof t === 'string');
-                }
-              } catch {
-                tags = [];
-              }
-            }
+            const tags = parseTags(original?.tags ?? original?.frontmatter?.tags);
 
             const input: CreateFragmentInput = {
               type,
@@ -144,6 +171,7 @@ export class PlanAssembler extends PlanService {
     ];
     const hasTableBlock = (section.blocks ?? []).some((b) => b.type === 'table');
 
+    const fragmentBodyList = fragments_for_writer.map((f) => f.body);
     let updatedSections: typeof p.state.sections;
 
     if (section.blocks && section.blocks.length > 0) {
@@ -179,6 +207,11 @@ export class PlanAssembler extends PlanService {
       updatedSections = p.state.sections.map((s) =>
         s.id === sectionId ? { ...s, blocks: updatedBlocks } : s,
       );
+      const allProse = updatedBlocks
+        .filter((b) => b.type === 'prose')
+        .map((b) => (b as { type: 'prose'; generated_markdown?: string }).generated_markdown ?? '')
+        .join('\n\n');
+      this.scheduleGroundednessCheck(planId, sectionId, allProse, fragmentBodyList);
     } else {
       // Legacy mode: generate section.generated_markdown
       const messages = buildSectionMessages({
@@ -195,11 +228,13 @@ export class PlanAssembler extends PlanService {
       updatedSections = p.state.sections.map((s) =>
         s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
       );
+      this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList);
     }
 
     const now = new Date().toISOString();
     await Promise.all(
       section.selected.map(async (sel) => {
+        if (sel.fragment_id.startsWith('inline_')) return;
         await this.db.insert(planFragmentUsages).values({
           id: randomUUID(),
           plan_id: planId,
@@ -407,17 +442,12 @@ export class PlanAssembler extends PlanService {
     if (!p.state.draft_markdown?.trim()) {
       throw new Error('No assembled draft to export — call /assemble first');
     }
-    // Convert markdown headings into reveal.js <section> slides.
-    // Each `## ` or `# ` heading starts a new slide.
-    const raw = p.state.draft_markdown;
-    const slideBlocks = raw
+    const slideBlocks = p.state.draft_markdown
       .split(/(?=^#{1,2} )/m)
       .map((block) => block.trim())
       .filter(Boolean);
-
     const sectionsHtml = slideBlocks
       .map((block) => {
-        // Convert basic markdown: bold, inline code, lists (enough for slide bullets)
         const html = block
           .replace(/^#{1,2} (.+)$/m, '<h2>$1</h2>')
           .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -427,28 +457,33 @@ export class PlanAssembler extends PlanService {
         return `<section>${html}</section>`;
       })
       .join('\n');
+    const fullHtml = buildRevealHtml(p.title, sectionsHtml, opts.revealTheme ?? 'white');
+    await this.update(id, { status: 'completed' });
+    return { content: Buffer.from(fullHtml), filename: `${slugify(p.title)}.html` };
+  }
+}
 
-    const revealTheme = opts.revealTheme ?? 'white';
-    const isLinagora = revealTheme === 'linagora';
-    const themeLink = isLinagora
-      ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css">`
-      : `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${revealTheme}.css">`;
-    const customStyle = isLinagora
-      ? `
+function buildRevealHtml(title: string, sectionsHtml: string, revealTheme: string): string {
+  const isLinagora = revealTheme === 'linagora';
+  const themeLink = isLinagora
+    ? `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css">`
+    : `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/${revealTheme}.css">`;
+  const customStyle = isLinagora
+    ? `
     .reveal h1, .reveal h2, .reveal h3 { text-transform: none; color: #2B579A; }
     .reveal { font-family: "Calibri", sans-serif; font-size: 28px; }
     .reveal ul { text-align: left; }
     .reveal .slides section { border-top: 3px solid #2B579A; padding-top: 10px; }`
-      : `
+    : `
     .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
     .reveal { font-size: 28px; }
     .reveal ul { text-align: left; }`;
-    const fullHtml = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${p.title}</title>
+  <title>${title}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
   ${themeLink}
   <style>${customStyle}
@@ -462,7 +497,4 @@ ${sectionsHtml}
   <script>Reveal.initialize({ hash: true, transition: 'slide' });</script>
 </body>
 </html>`;
-    await this.update(id, { status: 'completed' });
-    return { content: Buffer.from(fullHtml), filename: `${slugify(p.title)}.html` };
-  }
 }

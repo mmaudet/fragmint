@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, and, desc, inArray, ne, isNotNull, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, ne, isNotNull, sql, or, like } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { plans, fragmentTypes, fragmentDomains, fragments, fragmentCollections } from '../db/schema.js';
 import {
@@ -7,12 +7,13 @@ import {
   type PlanState,
   type PlanStatus,
   type PlanFilters,
+  type PlanSection,
 } from '../schema/plan.js';
 import { buildPlanMessages } from './plan-prompts.js';
-import { parsePlanSections } from './plan-section-parser.js';
+import { parsePlanSections, sanitizeSections } from './plan-section-parser.js';
 import { deriveTitle } from '../git/fragment-file.js';
 import type { LlmClient } from './llm-client.js';
-import type { SearchService } from '../search/search-service.js';
+import type { SearchService, SearchResult } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import type { FragmentCandidate } from '../schema/plan.js';
@@ -27,7 +28,7 @@ import type { FragmentCollectionService } from './fragment-collection-service.js
 
 const SECTION_SCORE_THRESHOLD = 0.2;
 
-function makeSemaphore(limit: number) {
+export function makeSemaphore(limit: number) {
   let active = 0;
   const queue: Array<() => void> = [];
   return async function<T>(fn: () => Promise<T>): Promise<T> {
@@ -323,6 +324,70 @@ export class PlanService {
     return this.config.fragments;
   }
 
+  private async computePoolA(
+    section: { title: string; description: string },
+    filters: PlanFilters,
+    collectionSlug: string | null,
+    knownTags: string[],
+    knownDomains: string[],
+    poolLimit: number,
+  ): Promise<{ forcedCandidates: SearchResult[]; detectedTags: string[]; detectedDomains: string[] }> {
+    const sectionText = `${section.title} ${section.description}`.toLowerCase();
+    const detectedTags = knownTags.filter((tag: string) => {
+      const kw = (tag.includes(':') ? tag.split(':')[1] : tag).toLowerCase();
+      return kw.length >= 3 && (sectionText.includes(kw) || sectionText.includes(kw.replace(/-/g, ' ')));
+    });
+    // Title-only domain detection to avoid false positives from description text
+    const titleText = section.title.toLowerCase();
+    const detectedDomains = knownDomains.filter((domain) => {
+      const kw = domain.toLowerCase().replace(/-/g, ' ');
+      return kw.length >= 3 && (titleText.includes(kw) || titleText.includes(domain.toLowerCase()));
+    });
+
+    if (!this.config.search || (detectedTags.length === 0 && detectedDomains.length === 0)) {
+      return { forcedCandidates: [], detectedTags, detectedDomains };
+    }
+
+    const searchFilters = {
+      quality_min: 'approved' as const,
+      collectionSlug: collectionSlug ?? undefined,
+      lang: filters.lang,
+    };
+    // Namespaced tags (e.g. "produit:twake-workplace") are high-precision — search them first
+    // so their fragments fill the priority slots. Bare tags ("migration", "sla") backfill only
+    // if slots remain. Without this, generic bare tags ("alternative", "solution") crowd out
+    // the specific matches.
+    const namespacedTags = detectedTags.filter((t) => t.includes(':'));
+    const bareTags = detectedTags.filter((t) => !t.includes(':'));
+
+    const [namespacedForced, ...domainForcedArrays] = await Promise.all([
+      namespacedTags.length > 0
+        ? this.config.search.searchByTags(namespacedTags, searchFilters, poolLimit)
+        : Promise.resolve([]),
+      ...detectedDomains.map((domain) =>
+        this.config.search!.searchByDomain(domain, searchFilters, poolLimit),
+      ),
+    ]);
+
+    const seenIds = new Set<string>();
+    const priorityResults = [...namespacedForced, ...domainForcedArrays.flat()].filter((r) => {
+      if (seenIds.has(r.id)) return false;
+      seenIds.add(r.id);
+      return true;
+    });
+
+    // Fill remaining slots with bare-tag matches
+    const remainingSlots = poolLimit - priorityResults.length;
+    const bareForced = bareTags.length > 0 && remainingSlots > 0
+      ? await this.config.search.searchByTags(bareTags, searchFilters, remainingSlots)
+      : [];
+    const forcedCandidates = [
+      ...priorityResults,
+      ...bareForced.filter((r) => !seenIds.has(r.id)),
+    ];
+    return { forcedCandidates, detectedTags, detectedDomains };
+  }
+
   private async runSectionSearch(
     section: { title: string; description: string; inferred_type?: string },
     filters: PlanFilters,
@@ -331,6 +396,8 @@ export class PlanService {
     specContext?: string,
     topK?: number,
     planTitle?: string,
+    knownTagsHint?: string[],
+    knownDomainsHint?: string[],
   ): Promise<FragmentCandidate[]> {
     const specExtract = specContext
       ? extractRelevantSpecContext(specContext, 1500, section.title)
@@ -344,46 +411,14 @@ export class PlanService {
     const limit = topK ?? getSectionTopK();
 
     // Pool A — detect referential tags + domains in section text, fetch forced candidates
-    const sectionText = `${section.title} ${section.description}`.toLowerCase();
     const [knownTags, knownDomains] = await Promise.all([
-      this.getKnownTags(),
-      this.getKnownDomains(),
+      knownTagsHint ? Promise.resolve(knownTagsHint) : this.getKnownTags(),
+      knownDomainsHint ? Promise.resolve(knownDomainsHint) : this.getKnownDomains(),
     ]);
-    const detectedTags = knownTags.filter((tag: string) => {
-      const kw = (tag.includes(':') ? tag.split(':')[1] : tag).toLowerCase();
-      return kw.length >= 3 && sectionText.includes(kw);
-    });
-    // Detect domain slugs whose lowercase name appears in the section TITLE.
-    // Title-only (not description) to avoid false positives like injecting Twake fragments
-    // for an MIRAI section whose description happens to mention "outils Twake".
-    const titleText = section.title.toLowerCase();
-    const detectedDomains = knownDomains.filter((domain) => {
-      const kw = domain.toLowerCase().replace(/-/g, ' ');
-      return kw.length >= 3 && (titleText.includes(kw) || titleText.includes(domain.toLowerCase()));
-    });
-
-    const searchFilters = { quality_min: 'approved' as const, collectionSlug: collectionSlug ?? undefined, lang: filters.lang };
     const poolLimit = limit * 4;
-
-    // Fetch tag-forced and domain-forced candidates in parallel
-    const [tagForced, ...domainForcedArrays] = await Promise.all([
-      detectedTags.length > 0 && this.config.search
-        ? this.config.search.searchByTags(detectedTags, searchFilters, poolLimit)
-        : Promise.resolve([]),
-      ...detectedDomains.map((domain) =>
-        this.config.search
-          ? this.config.search.searchByDomain(domain, searchFilters, poolLimit)
-          : Promise.resolve([]),
-      ),
-    ]);
-
-    // Merge all pool-A candidates, deduplicating by fragment ID
-    const seenPoolA = new Set<string>();
-    const forcedCandidates = [...tagForced, ...domainForcedArrays.flat()].filter((c) => {
-      if (seenPoolA.has(c.id)) return false;
-      seenPoolA.add(c.id);
-      return true;
-    });
+    const { forcedCandidates, detectedTags, detectedDomains } = await this.computePoolA(
+      section, filters, collectionSlug, knownTags, knownDomains, poolLimit,
+    );
 
     const query: SectionQuery = {
       text: enrichedText,
@@ -394,7 +429,7 @@ export class PlanService {
       forced_candidates: forcedCandidates,
     };
     console.debug(
-      `[plan-service] "${section.title.slice(0, 30)}" detected_tags=${JSON.stringify(detectedTags)} detected_domains=${JSON.stringify(detectedDomains)} pool_a=${forcedCandidates.length}`,
+      `[plan-service] "${section.title.slice(0, 30)}" detected_tags=${JSON.stringify(detectedTags)} detected_domains=${JSON.stringify(detectedDomains)} forced=${forcedCandidates.length}`,
     );
 
     const results: RetrievedFragment[] = await retriever.searchForSection(query, limit);
@@ -435,6 +470,7 @@ export class PlanService {
 
   private async inferSectionTypes(
     sections: { id: string; title: string; description: string }[],
+    concurrency = 3,
   ): Promise<Map<string, string | undefined>> {
     const knownTypes = (await this.db.select({ slug: fragmentTypes.slug }).from(fragmentTypes))
       .map((r) => r.slug)
@@ -444,8 +480,9 @@ export class PlanService {
     ).map((r) => r.slug);
 
     const llm = this.requireLlm();
+    const throttle = makeSemaphore(concurrency);
     const entries = await Promise.all(
-      sections.map(async (s) => {
+      sections.map((s) => throttle(async () => {
         try {
           const c = await llm.classify(`${s.title}\n${s.description}`, knownTypes, knownDomains);
           const t = knownTypes.includes(c.type) ? c.type : undefined;
@@ -454,7 +491,7 @@ export class PlanService {
           console.error(`Section "${s.title}" type inference failed:`, err);
           return [s.id, undefined] as const;
         }
-      }),
+      })),
     );
     return new Map(entries);
   }
@@ -462,7 +499,7 @@ export class PlanService {
   async generatePlan(id: string): Promise<PlanRecord | null> {
     const p = await this.get(id);
     if (!p) return null;
-    const corpusSummary = await this.buildCorpusSummary();
+    const corpusSummary = await this.buildCorpusSummary(p.state.filters);
     const messages = buildPlanMessages({
       spec_prompt: p.state.spec_prompt,
       filters: p.state.filters,
@@ -471,14 +508,35 @@ export class PlanService {
       corpus_summary: corpusSummary,
     });
     const out = await this.requireLlm().chatMessages(messages);
-    return this.update(id, { plan_markdown: out.trim(), status: 'plan_generated' });
+    const sections = sanitizeSections(parsePlanSections(out.trim()));
+    const sanitizedMarkdown = sections
+      .map((s) => `## ${s.title}\n**Type:** ${s.inferred_type ?? 'argument'}\n${s.description}`)
+      .join('\n\n');
+    return this.update(id, { plan_markdown: sanitizedMarkdown, status: 'plan_generated' });
   }
 
-  private async buildCorpusSummary(): Promise<string | undefined> {
+  private async buildCorpusSummary(filters?: PlanFilters): Promise<string | undefined> {
+    const tagFilters = filters?.tags?.filter((t) => t.length > 0) ?? [];
+    const domainFilters = filters?.domain?.filter((d) => d.length > 0) ?? [];
+
+    let scopeCondition;
+    if (tagFilters.length > 0 || domainFilters.length > 0) {
+      const parts = [
+        ...(tagFilters.length > 0
+          ? [or(...tagFilters.map((t) => like(fragments.tags, `%"${t}"%`)))]
+          : []),
+        ...(domainFilters.length > 0 ? [inArray(fragments.domain, domainFilters)] : []),
+      ];
+      scopeCondition = parts.length === 1 ? parts[0] : or(...parts);
+    }
+    const qualityFilter = scopeCondition
+      ? and(eq(fragments.quality, 'approved'), scopeCondition)
+      : eq(fragments.quality, 'approved');
+
     const domainRows = await this.db
       .select({ domain: fragments.domain, n: sql<number>`count(*)` })
       .from(fragments)
-      .where(eq(fragments.quality, 'approved'))
+      .where(qualityFilter)
       .groupBy(fragments.domain)
       .orderBy(desc(sql`count(*)`))
       .limit(12);
@@ -486,12 +544,12 @@ export class PlanService {
     const total = domainRows.reduce((s, r) => s + r.n, 0);
     if (total < 20) return undefined;
 
-    const typeRows = await this.db
-      .select({ type: fragments.type, n: sql<number>`count(*)` })
+    const typeDomainRows = await this.db
+      .select({ type: fragments.type, domain: fragments.domain, n: sql<number>`count(*)` })
       .from(fragments)
-      .where(eq(fragments.quality, 'approved'))
-      .groupBy(fragments.type)
-      .orderBy(desc(sql`count(*)`));
+      .where(qualityFilter)
+      .groupBy(fragments.type, fragments.domain)
+      .orderBy(fragments.type, desc(sql`count(*)`));
 
     const collRows = await this.db
       .select({
@@ -504,7 +562,18 @@ export class PlanService {
       .where(isNotNull(fragmentCollections.payload_schema));
 
     const domainStr = domainRows.map((r) => `${r.domain} (${r.n})`).join(', ');
-    const typeStr = typeRows.map((r) => `${r.type} (${r.n})`).join(', ');
+
+    const typeMap = new Map<string, { total: number; domains: string[] }>();
+    for (const r of typeDomainRows) {
+      const entry = typeMap.get(r.type) ?? { total: 0, domains: [] };
+      entry.total += r.n;
+      entry.domains.push(`${r.domain} (${r.n})`);
+      typeMap.set(r.type, entry);
+    }
+    const typeStr = [...typeMap.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([type, { total, domains }]) => `${type} (${total}): ${domains.join(', ')}`)
+      .join('\n  ');
 
     const structuredColls = collRows
       .map((r) => {
@@ -522,7 +591,8 @@ export class PlanService {
     const lines: string[] = [
       `Available corpus (${total} approved fragments):`,
       `Domains: ${domainStr}`,
-      `Types: ${typeStr}`,
+      `Types (with domain coverage):`,
+      `  ${typeStr}`,
     ];
 
     if (structuredColls.length > 0) {
@@ -568,64 +638,29 @@ export class PlanService {
     const parsed = parsePlanSections(p.state.plan_markdown);
     const oldById = new Map(p.state.sections.map((s) => [s.id, s]));
 
-    const retrieverSnapshot = this.requireRetriever();
     const concurrency = this.config.llmConcurrency ?? 3;
-    const throttle = makeSemaphore(concurrency);
-    console.log(`[plan-service] validatePlan starting (mode=${getCurrentMode()}, sections=${parsed.length}, concurrency=${concurrency})`);
-
     const sectionsNeedingInference = parsed.filter((ps) => !ps.inferred_type);
     const inferredById = sectionsNeedingInference.length > 0
-      ? await this.inferSectionTypes(sectionsNeedingInference)
+      ? await this.inferSectionTypes(sectionsNeedingInference, concurrency)
       : new Map<string, string | undefined>();
-    console.log(`[plan-service] type inference: ${parsed.length - sectionsNeedingInference.length} from prompt, ${sectionsNeedingInference.length} via LLM classify`);
 
-    const newSections = await Promise.all(
-      parsed.map((ps) => throttle(async () => {
-        const previous = oldById.get(ps.id);
-        const filters = previous?.filters_override ?? p.state.filters;
-        const inferred_type = ps.inferred_type ?? inferredById.get(ps.id) ?? previous?.inferred_type;
-        let candidates: FragmentCandidate[] = [];
-        try {
-          candidates = await this.runSectionSearch(
-            { ...ps, inferred_type },
-            filters,
-            p.collection_slug,
-            retrieverSnapshot,
-            p.state.spec_prompt,
-            undefined,
-            p.title,
-          );
-        } catch (err) {
-          console.error(`Section "${ps.title}" search failed:`, err);
-          candidates = [];
-        }
-        const section_confidence = computeSectionConfidence(candidates);
-        const topLlm = candidates
-          .map((c) => c.score_breakdown?.llm_score)
-          .filter((s): s is number => s !== undefined)
-          .reduce((max, s) => Math.max(max, s), -Infinity);
-        console.log(
-          `[plan] section "${ps.title.slice(0, 40)}": top_llm=${topLlm === -Infinity ? 'none' : topLlm} → ${section_confidence}`,
-        );
-        return {
-          id: ps.id,
-          title: ps.title,
-          description: ps.description,
-          candidates,
-          selected: previous?.selected ?? [],
-          generated_markdown: previous?.generated_markdown,
-          filters_override: previous?.filters_override,
-          inferred_type,
-          section_confidence,
-        };
-      })),
-    );
+    const newSections = parsed.map((ps) => {
+      const previous = oldById.get(ps.id);
+      const inferred_type = ps.inferred_type ?? inferredById.get(ps.id) ?? previous?.inferred_type;
+      return {
+        id: ps.id,
+        title: ps.title,
+        description: ps.description,
+        candidates: previous?.candidates ?? [],
+        selected: previous?.selected ?? [],
+        generated_markdown: previous?.generated_markdown,
+        filters_override: previous?.filters_override,
+        inferred_type,
+        section_confidence: previous?.section_confidence,
+      };
+    });
 
-    const dedupedSections = dedupCandidatesAcrossSections(newSections).map((s) => ({
-      ...s,
-      section_confidence: computeSectionConfidence(s.candidates ?? []),
-    }));
-    return this.update(id, { sections: dedupedSections, status: 'plan_validated' });
+    return this.update(id, { sections: newSections, status: 'plan_validated' });
   }
 
   async searchSection(
@@ -646,7 +681,7 @@ export class PlanService {
     }
 
     const retrieverSnapshot = this.requireRetriever();
-    const candidates = await this.runSectionSearch(
+    const freshCandidates = await this.runSectionSearch(
       { ...section, inferred_type },
       filters,
       p.collection_slug,
@@ -655,14 +690,56 @@ export class PlanService {
       args.top_k,
       p.title,
     );
+
+    // Re-compute Pool A for all other sections (tag/domain search only, no LLM) to get
+    // the same dedup competition as searchAllSections.
+    const [knownTags, knownDomains] = await Promise.all([
+      this.getKnownTags(),
+      this.getKnownDomains(),
+    ]);
+    const poolLimit = (args.top_k ?? getSectionTopK()) * 4;
+    const otherPoolAs = await Promise.all(
+      p.state.sections
+        .filter((s) => s.id !== sectionId)
+        .map((s) =>
+          this.computePoolA(
+            s,
+            s.filters_override ?? p.state.filters,
+            p.collection_slug,
+            knownTags,
+            knownDomains,
+            poolLimit,
+          ).then(({ forcedCandidates: poolA }) => ({ id: s.id, poolA })),
+        ),
+    );
+    const poolAById = new Map(otherPoolAs.map((o) => [o.id, o.poolA]));
+    const virtualSections = p.state.sections.map((s) => {
+      if (s.id === sectionId) return { ...s, inferred_type, candidates: freshCandidates };
+      const poolA = poolAById.get(s.id);
+      const candidates: FragmentCandidate[] = poolA?.length
+        ? poolA.map((r) => ({
+            fragment_id: r.id,
+            score: r.score,
+            title: r.title,
+            body_excerpt: r.body_excerpt,
+            quality: r.quality,
+            type: r.type,
+            payload_schema: r.payload_schema,
+          }))
+        : (s.candidates ?? []);
+      return { ...s, candidates };
+    });
+    const deduped = dedupCandidatesAcrossSections(virtualSections);
+    const dedupedCandidates = deduped.find((s) => s.id === sectionId)?.candidates ?? [];
+
     const updatedSections = p.state.sections.map((s) =>
       s.id === sectionId
         ? {
             ...s,
-            candidates,
+            candidates: dedupedCandidates,
             filters_override: args.filters_override ?? s.filters_override,
             inferred_type,
-            section_confidence: computeSectionConfidence(candidates),
+            section_confidence: computeSectionConfidence(dedupedCandidates),
           }
         : s,
     );
@@ -680,13 +757,24 @@ export class PlanService {
       throw Object.assign(new Error('Outline must be validated first. Call plan_validate_outline after the user approves the outline.'), { statusCode: 409 });
     }
     const sections = p.state.sections;
-    const toInfer = sections.filter((s) => !s.inferred_type);
-    const inferredById = toInfer.length > 0 ? await this.inferSectionTypes(toInfer) : new Map<string, string | undefined>();
-
     const retrieverSnapshot = this.requireRetriever();
     const concurrency = this.config.llmConcurrency ?? 3;
     const throttle = makeSemaphore(concurrency);
     console.log(`[plan-service] searchAllSections starting (mode=${getCurrentMode()}, sections=${sections.length}, concurrency=${concurrency})`);
+
+    const toInfer = sections.filter((s) => !s.inferred_type);
+    const [inferredById, knownTags, knownDomains] = await Promise.all([
+      toInfer.length > 0
+        ? this.inferSectionTypes(toInfer, concurrency)
+        : Promise.resolve(new Map<string, string | undefined>()),
+      this.getKnownTags(),
+      this.getKnownDomains(),
+    ]);
+
+    // Progressive saves — serialize DB writes via mutex so concurrent section completions
+    // don't race on the plan state JSON.
+    const saveMutex = makeSemaphore(1);
+    const doneById = new Map<string, PlanSection>();
 
     const rawSections = await Promise.all(sections.map((s) => throttle(async () => {
       const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
@@ -701,6 +789,8 @@ export class PlanService {
           p.state.spec_prompt,
           args.top_k,
           p.title,
+          knownTags,
+          knownDomains,
         );
       } catch (err) {
         console.error(`[searchAllSections] section "${s.title}" failed:`, err);
@@ -713,7 +803,16 @@ export class PlanService {
       console.log(
         `[plan] section "${s.title.slice(0, 40)}": top_llm=${topLlm === -Infinity ? 'none' : topLlm} → ${section_confidence}`,
       );
-      return { ...s, candidates, inferred_type, section_confidence };
+      const result: PlanSection = { ...s, candidates, inferred_type, section_confidence };
+
+      // Immediately persist this section so the frontend can poll and show progress.
+      await saveMutex(async () => {
+        doneById.set(s.id, result);
+        const progressSections = sections.map((sec) => doneById.get(sec.id) ?? sec);
+        await this.update(planId, { sections: progressSections });
+      });
+
+      return result;
     })));
     const updatedSections = dedupCandidatesAcrossSections(rawSections).map((s) => ({
       ...s,
@@ -765,7 +864,7 @@ export class PlanService {
     sectionId: string,
     args: {
       fragment_id?: string;
-      manual?: { body: string; type?: string; lang: string; domain: string };
+      manual?: { body: string; type?: string; lang: string; domain: string; propose_to_library?: boolean };
     },
     author: string,
     authorRole: string,
@@ -792,48 +891,54 @@ export class PlanService {
       bodyExcerpt = fragment.body_excerpt;
       quality = fragment.quality;
     } else if (args.manual) {
-      const fragments = this.requireFragments();
-      const inferredType = section.inferred_type;
-      const type =
-        args.manual.type &&
-        FRAGMENT_TYPES.includes(args.manual.type as (typeof FRAGMENT_TYPES)[number])
-          ? (args.manual.type as (typeof FRAGMENT_TYPES)[number])
-          : inferredType && FRAGMENT_TYPES.includes(inferredType as (typeof FRAGMENT_TYPES)[number])
-            ? (inferredType as (typeof FRAGMENT_TYPES)[number])
-            : 'introduction';
-      const input: CreateFragmentInput = {
-        type,
-        domain: args.manual.domain,
-        tags: [],
-        lang: args.manual.lang,
-        body: args.manual.body,
-        translation_of: null,
-        parent_id: null,
-        generation: 0,
-        valid_from: null,
-        valid_until: null,
-        harvest_confidence: null,
-        source_position: null,
-        payload: null,
-        payload_schema: null,
-        origin: 'manual',
-        origin_source: null,
-        origin_page: null,
-        access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
-      };
-      const created = await fragments.create(
-        input,
-        author,
-        authorRole,
-        ip,
-        collectionGitPath,
-        p.collection_slug ?? undefined,
-      );
-      fragmentId = created.id;
       title = deriveTitle(args.manual.body);
       bodyExcerpt = args.manual.body.slice(0, 200);
       quality = 'draft';
       preSelectBody = args.manual.body;
+
+      if (args.manual.propose_to_library) {
+        const fragments = this.requireFragments();
+        const inferredType = section.inferred_type;
+        const type =
+          args.manual.type &&
+          FRAGMENT_TYPES.includes(args.manual.type as (typeof FRAGMENT_TYPES)[number])
+            ? (args.manual.type as (typeof FRAGMENT_TYPES)[number])
+            : inferredType && FRAGMENT_TYPES.includes(inferredType as (typeof FRAGMENT_TYPES)[number])
+              ? (inferredType as (typeof FRAGMENT_TYPES)[number])
+              : 'introduction';
+        const input: CreateFragmentInput = {
+          type,
+          domain: args.manual.domain,
+          tags: [],
+          lang: args.manual.lang,
+          body: args.manual.body,
+          translation_of: null,
+          parent_id: null,
+          generation: 0,
+          valid_from: null,
+          valid_until: null,
+          harvest_confidence: null,
+          source_position: null,
+          payload: null,
+          payload_schema: null,
+          origin: 'manual',
+          origin_source: null,
+          origin_page: null,
+          access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
+        };
+        const created = await fragments.create(
+          input,
+          author,
+          authorRole,
+          ip,
+          collectionGitPath,
+          p.collection_slug ?? undefined,
+        );
+        fragmentId = created.id;
+      } else {
+        // Inline fragment — stored only in plan state, not in the library
+        fragmentId = `inline_${randomUUID()}`;
+      }
     } else {
       return null;
     }
@@ -854,7 +959,7 @@ export class PlanService {
           fragment_id: fragmentId,
           body: preSelectBody,
           edited: false,
-          propose_to_library: false,
+          propose_to_library: args.manual?.propose_to_library ?? false,
         },
       ];
     }

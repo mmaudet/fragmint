@@ -4,7 +4,7 @@ import { buildReadableIdMap, renderMarkdown, renderToc } from '../services/index
 import type { FragmentService } from '../services/fragment-service.js';
 import type { PlanFilters } from '../schema/plan.js';
 import type { FragmentRetriever, RetrievedFragment, SectionQuery } from './fragment-retriever.js';
-import { TYPE_BOOST } from './fragment-retriever.js';
+import { TYPE_BOOST, enrichQueryWithFilters } from './fragment-retriever.js';
 
 const PHASE2_SCORE_MIN = 0.3;
 const BATCH_JUDGE_SIZE = 25; // max candidates per LLM call — above this, Phase 2 batches sequentially
@@ -31,7 +31,15 @@ export class AgenticRetriever implements FragmentRetriever {
   }
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
-    const indexData = await this.indexService.getData(false, query.collectionSlug ?? undefined);
+    // Soft-enrich query text with domain/tags hints (same pattern as hybrid).
+    // These become readable hints in Phase 0/1/2 prompts without hard-constraining the LLM.
+    const enrichedQuery: SectionQuery = {
+      ...query,
+      text: enrichQueryWithFilters(query.text, query.filters),
+    };
+    query = enrichedQuery;
+
+    const indexData = await this.indexService.getData(false, query.collectionSlug ?? undefined, query.filters.lang ?? undefined);
 
     // Phase 0 — TOC filtering (only when no domain filter AND index large enough to justify it)
     let activeData = indexData;
@@ -177,7 +185,7 @@ export class AgenticRetriever implements FragmentRetriever {
         // Normalize to 0-1 for STRONG_DISAGREEMENT comparison
         const norm1 = j1.score / 10;
         const norm2 = j2.score / 10;
-        const finalNorm = Math.min(norm1, norm2);
+        const finalNorm = (norm1 + norm2) / 2;
         const disagreement = Math.abs(norm1 - norm2);
 
         if (disagreement > STRONG_DISAGREEMENT_THRESHOLD) {
@@ -189,7 +197,7 @@ export class AgenticRetriever implements FragmentRetriever {
         } else {
           console.debug(
             `[retrieval][agentic-only][phase2][${id.slice(0, 8)}] ` +
-              `agent1=${norm1.toFixed(2)} agent2=${norm2.toFixed(2)} → final=${finalNorm.toFixed(2)} (min)`,
+              `agent1=${norm1.toFixed(2)} agent2=${norm2.toFixed(2)} → final=${finalNorm.toFixed(2)} (avg)`,
           );
         }
 
@@ -230,9 +238,9 @@ export class AgenticRetriever implements FragmentRetriever {
     }>,
     temperature?: number,
   ): Promise<Map<string, { score: number; reason?: string }> | null> {
-    // If too many candidates, split into sequential chunks to avoid LLM JSON malformation.
-    // Sequential keeps us within the section-level semaphore budget — parallel chunks would
-    // multiply concurrent calls beyond FRAGMINT_LLM_CONCURRENCY.
+    // If too many candidates, split into sequential chunks to stay within LLM context limits.
+    // Sequential (not parallel) keeps us within the section-level semaphore budget —
+    // parallel chunks would multiply concurrent LLM calls beyond FRAGMINT_LLM_CONCURRENCY.
     if (candidates.length > BATCH_JUDGE_SIZE) {
       const merged = new Map<string, { score: number; reason?: string }>();
       for (let i = 0; i < candidates.length; i += BATCH_JUDGE_SIZE) {
@@ -253,22 +261,21 @@ export class AgenticRetriever implements FragmentRetriever {
       .join('\n\n');
 
     const contextLine = query.spec_context
-      ? `\nDocument context (spec): "${query.spec_context.slice(0, 300)}"\n`
+      ? `\nBackground (document context): "${query.spec_context.slice(0, 300)}"\n`
       : '';
 
     const prompt = `Evaluate the relevance of each fragment for the following document section.
-${contextLine}
 Section: "${query.text}"
-
+${contextLine}
 Fragments:
 ${list}
 
-Score each fragment 0 to 10. Be strict and discriminating:
-9-10 = perfect fit (type AND content directly relevant)
-7-8 = good fit
-5-6 = partial fit
-3-4 = weak fit
-0-2 = poor fit or type mismatch
+Score each fragment 0 to 10 based solely on content relevance to the section:
+9-10 = directly addresses the section topic
+7-8 = clearly relevant
+5-6 = partially relevant, related topic
+3-4 = tangentially related
+0-2 = not relevant
 
 Return a JSON array: [{"id": "...", "score": N, "reason": "one sentence"}, ...]
 Include ALL ${candidates.length} fragments. Return ONLY the JSON array.`;
@@ -461,7 +468,8 @@ function filterIndexData(data: IndexData, selected: string[]): IndexData {
 function buildFiltersDesc(filters: PlanFilters): string {
   const parts: string[] = [];
   if (filters.lang) parts.push(`Language: ${filters.lang}`);
-  if (filters.domain?.length) parts.push(`Domain(s): ${filters.domain.join(', ')}`);
+  // Domain filter is NOT injected here: it creates a hard bias in Phase 1 that prevents
+  // relevant cross-domain fragments from being selected. Pool A handles domain forcing.
   if (filters.type) parts.push(`Type: ${filters.type}`);
   if (filters.tags?.length) parts.push(`Tags: ${filters.tags.join(', ')}`);
   return parts.join('\n');

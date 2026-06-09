@@ -75,6 +75,13 @@ export const SectionBlockSchema = z.discriminatedUnion('type', [
 ]);
 export type SectionBlock = z.infer<typeof SectionBlockSchema>;
 
+export const GroundednessFlagSchema = z.object({
+  text: z.string(),
+  risk: z.enum(['high', 'medium', 'low']),
+  reason: z.string(),
+});
+export type GroundednessFlag = z.infer<typeof GroundednessFlagSchema>;
+
 export const PlanSectionSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -82,6 +89,7 @@ export const PlanSectionSchema = z.object({
   candidates: z.array(FragmentCandidateSchema).default([]),
   selected: z.array(SectionFragmentSelectionSchema).default([]),
   generated_markdown: z.string().optional(),
+  groundedness_flags: z.array(GroundednessFlagSchema).optional(),
   filters_override: PlanFiltersSchema.optional(),
   inferred_type: z.string().optional(),
   writer_instructions: z.string().optional(),
@@ -160,6 +168,7 @@ export const AddFragmentToSectionSchema = z
           .regex(/^[a-z]{2}$/)
           .default('fr'),
         domain: z.string().min(1).default('other'),
+        propose_to_library: z.boolean().default(false),
       })
       .optional(),
   })
