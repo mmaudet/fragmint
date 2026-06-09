@@ -2226,3 +2226,239 @@ Piste A (OpenCode plugin) is intentionally excluded from this plan. It will be a
 **2. Inline Execution** — execute tasks sequentially in this session with checkpoints
 
 Which approach?
+
+---
+
+## État d'implémentation — 08 juin 2026
+
+Implémentation complète (Tasks 1-12). Résumé des décisions prises et des ajouts au-delà du plan initial.
+
+### Tâches livrées
+
+| Tâche | Fichier(s) | Statut |
+|-------|-----------|--------|
+| Task 1 — `retrieval_mode` config | `config.ts` | ✅ |
+| Task 2 — Interface `FragmentRetriever` | `retrieval/fragment-retriever.ts` | ✅ |
+| Task 3 — `VectorRetriever` | `retrieval/vector-retriever.ts` | ✅ |
+| Task 3.5 — `collectionSlug` dans `IndexService` | `services/index-service.ts` | ✅ |
+| Task 4 — `AgenticRetriever` | `retrieval/agentic-retriever.ts` | ✅ |
+| Task 5 — `HybridRetriever` | `retrieval/hybrid-retriever.ts` | ✅ |
+| Task 6 — Factory | `retrieval/factory.ts` | ✅ |
+| Task 7 — Wiring `PlanService` | `services/plan-service.ts` | ✅ |
+| Task 8 — Wiring `index.ts` | `index.ts` | ✅ |
+| Task 9 — Admin endpoint toggle | `routes/admin-routes.ts` | ✅ |
+| Task 10 — Logs | tous les retrievers | ✅ |
+| Task 11 — Fix UUID mapping bug | `agentic-retriever.ts` | ✅ |
+| Task 12 — Phase 0 TOC filtering (agentic) | `agentic-retriever.ts` | ✅ |
+
+### Variables d'environnement
+
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `FRAGMINT_RETRIEVAL_MODE` | `vector-only` | Mode actif parmi `vector-only`, `agentic-only`, `hybrid` |
+| `FRAGMINT_SECTION_TOP_K` | `5` | Nombre de fragments retournés par section |
+| `FRAGMINT_LLM_CONCURRENCY` | `3` | Appels LLM simultanés max (semaphore partagé) |
+| `FRAGMINT_LLM_TIMEOUT` | `60000` | Timeout par appel LLM en ms |
+
+### Décisions techniques prises durant l'implémentation
+
+#### `payload_schema` propagé dans les 3 chemins
+Champ `payload_schema?: string | null` ajouté à `RetrievedFragment` et propagé depuis SQLite dans `VectorRetriever`, `AgenticRetriever`, et `HybridRetriever`. Permet à l'UI de détecter les fragments tabulaires (`pricing-line-v1`, `generic-row-v1`) et d'afficher le badge 📊.
+
+#### `TYPE_BOOST = 1.1`
+Boost multiplicatif appliqué au score final quand `fragment.type === query.inferred_type`. Non-bloquant : ne filtre pas les fragments de type différent, booste seulement. Implémenté dans `HybridRetriever` (ligne post-RRF) et `AgenticRetriever` (ligne post-LLM score).
+
+#### Poids RRF preset `literature`
+`HybridRetriever` utilise le preset `literature` par défaut : ratio 30/70 vecteur/LLM (via RRF pondéré). Conforme à la littérature quand le LLM judge est plus fiable que le vecteur sur des corpus spécialisés. Paramètre `weightsPreset` passable à la construction.
+
+#### Filtre qualité `approved` dans le pré-filtre vector
+`HybridRetriever.searchForSection` passe `quality_min: 'approved'` au `SearchService`. Exclut les fragments `draft` et `reviewed` du pool candidate en mode hybrid. Décision de prod : mieux vaut un pool réduit de haute qualité qu'un pool bruité.
+
+#### Déduplication cross-sections
+`dedupCandidatesAcrossSections` dans `plan-service.ts` (lignes 67-108) : chaque fragment est assigné à la section qui le score le mieux. Si un fragment apparaît dans plusieurs sections, il n'est conservé que pour la section avec le score le plus élevé. Exécuté après chaque `searchAllSections` et `searchForSection`.
+
+Deuxième niveau de dédup intra-retrieval : `seenIds` Set dans `runSectionSearch` empêche les doublons dans une même passe d'un seul retriever.
+
+#### `spec_context` dans `SectionQuery`
+Les 300 premiers caractères du `spec_prompt` du plan sont injectés dans le prompt LLM judge de `HybridRetriever` et `AgenticRetriever`. Corrige le bug évalué le 2026-05-27 : sans ce contexte, le LLM classait "RGPD" #1 pour "Présentation LinShare".
+
+#### `forced_candidates` (Pool A)
+`SectionQuery.forced_candidates` : fragments pré-injectés depuis le pool tag-match (Pool A) avant retrieval. Les retrievers doivent les inclure dans le pool candidate LLM même s'ils sont sous le seuil de score vector. Garantit que les fragments explicitement taggés pour un type/domaine sont toujours proposés.
+
+#### Chunks séquentiels dans HybridRetriever
+Le batch LLM (phase 2 du hybrid) évalue les candidats en séquence plutôt qu'en parallèle. Empêche le contournement du semaphore FRAGMINT_LLM_CONCURRENCY par burst de N appels simultanés sur ai.linagora.com (throttle prod).
+
+#### LLM retry exponentiel
+`llm-client.ts` : retry sur status 429 et 503 uniquement, max 3 tentatives, backoff exponentiel (1s, 2s). Évite de retry sur les erreurs 4xx déterministes (400, 401, 422).
+
+#### TOC filtering dans AgenticRetriever (Task 12)
+Phase 0 du `AgenticRetriever` : si l'index contient plus d'un seuil de fragments ET qu'aucun filtre `domain` n'est actif, un premier appel LLM sélectionne les combinaisons `(domain, type)` pertinentes depuis le TOC de l'index. Réduit le pool candidate avant la Phase 1 (sélection par IDs) et la Phase 2 (re-rank). Corrige les problèmes de scalabilité identifiés en Task 12.
+
+### Ce qui reste à faire (hors scope de ce plan)
+
+- **`payload_schema` dans le frontmatter** : le script `patch-tableau-tags.ts` (non commité) doit taguer les 75 fragments `source:tableau` existants avec `payload_schema: generic-row-v1`. Sans ça, le badge 📊 n'apparaît pas sur les fragments IRA tabulaires.
+- **Évaluation quantitative** : golden dataset (voir `.claude/mission/EVALS.md`) — comparer les 3 modes sur le corpus IRA/LinTO/MIRAI/OpenRAG.
+- **Multi-agent self-consistency** : voir `docs/superpowers/plans/2026-05-27-multi-agent-self-consistency.md` — N agents parallèles + vote majoritaire pour réduire la variance du LLM judge.
+
+---
+
+## Fonctionnement des 3 modes
+
+### Préambule commun
+
+Les 3 modes partagent les mécanismes suivants appliqués avant ou après le retrieval :
+
+- **`enrichQueryWithFilters`** : domain et tags du plan sont injectés comme préfixe textuel dans la requête (`"Domaine : cloud. Tags : produit:Twake.\n<texte de la section>"`). Ce sont des hints souples — ils biaisent l'embedding/LLM sans exclure les fragments hors-domaine.
+- **`forced_candidates` (Pool A)** : fragments pré-sélectionnés par tag dans `plan-service.ts` avant d'appeler le retriever. Modes `hybrid` et `agentic-only` les injectent dans leur pool LLM judge. `vector-only` les ignore (pas de LLM pour les prioriser).
+- **`TYPE_BOOST = 1.1`** : boost ×1.1 sur le score final quand `fragment.type === query.inferred_type`. Non-bloquant : ne filtre pas les autres types.
+- **`quality_min: 'approved'`** : filtre dur sur la qualité dans les pré-filtres vector (hybrid et vector-only). Les fragments `draft` et `reviewed` ne passent pas en mode production.
+- **Fallback SQLite LIKE** : si Milvus est désactivé (`FRAGMINT_MILVUS_ENABLED=false`), `SearchService.search` fait un `LIKE %query%` en SQLite. Dans ce cas `score: null` — jamais un score fictif.
+
+---
+
+### Mode `vector-only`
+
+**Usage** : baseline rapide, sans LLM. Fiable sur des collections homogènes avec des fragments bien rédigés. Moins bon sur des sections abstraites ou des corpus multi-domaines.
+
+```
+SectionQuery (text + filters + collectionSlug)
+    │
+    ▼ enrichQueryWithFilters()
+    │
+    ▼ SearchService.search(enrichedText, { type, lang, collectionSlug, quality_min: 'approved' }, limit)
+    │   └── Milvus cosine similarity OR SQLite LIKE fallback
+    │
+    ▼ filtre score >= 0.2
+    │
+    ▼ TYPE_BOOST si inferred_type match
+    │
+    ▼ RetrievedFragment[] triés par score desc
+```
+
+**Constantes :**
+- `SCORE_THRESHOLD = 0.2` — seuil minimal de cosine similarity
+- `forced_candidates` ignorés (pas de LLM pour les prioriser équitablement)
+
+**`score_breakdown` :** `{ method: 'vector', vector_score: <cosine 0-1> }` ou `{ method: 'sqlite_like' }` si Milvus off.
+
+---
+
+### Mode `hybrid`
+
+**Usage** : mode recommandé pour la prod. Combine la précision du vecteur (couverture) avec le jugement contextuel du LLM (pertinence sémantique fine). Résistant aux défaillances LLM (dégradation progressive vers vector-only).
+
+```
+SectionQuery
+    │
+    ├── Phase 1a : vector candidates (limit × 4, quality_min: approved)
+    │   └── Milvus cosine similarity top-K × 4
+    │
+    ├── Phase 1b : merge Pool A (tag-forced non déjà dans le pool vector)
+    │
+    ├── Phase 2 : LLM batch judge (un seul appel LLM sur TOUS les candidats)
+    │   ├── Prompt compact : "Section: '...'. Fragments: 1. ID:xxx Title: ... Excerpt: ..."
+    │   ├── spec_context injecté (300 chars du spec_prompt du plan)
+    │   ├── Réponse attendue : {"frag-id": score, ...} (0-10) ou [{id, score}] (fallback)
+    │   ├── Si LLM échoue totalement → Map vide → dégradation vers ranking vector pur
+    │   └── Si truncation (< 90% scorés) → fragments non-scorés gardés (rank vector only)
+    │
+    ├── Phase 3 : RRF fusion (2 listes : vector rank + LLM rank)
+    │   ├── Algorithme : Cormack 2009, k = 60
+    │   ├── Poids : preset 'literature' → [3, 7] (30% vecteur, 70% LLM)
+    │   └── Score RRF normalisé × (llm_score / 10) → score final
+    │
+    ├── Phase 4 : LLM floor — éjecte fragments avec llm_score < 3 (sauf si truncation)
+    │
+    ▼ Top-K résultats avec TYPE_BOOST éventuel
+```
+
+**Dégradation progressive :**
+
+| Situation | Comportement |
+|-----------|-------------|
+| LLM échoue totalement | Ranking vector pur (list1 uniquement), aucun fragment éjecté |
+| LLM truncation (< 90% scorés) | Fragments non-scorés conservés avec rank vector, pas de floor |
+| Fragment absent de la réponse LLM (non-truncation) | Éjecté (rejet implicite) |
+| Fragment avec llm_score < 3 | Éjecté par le floor |
+
+**`score_breakdown` :** `{ method: 'hybrid_rrf', vector_score, vector_rank, llm_score, llm_rank, rrf_score, rrf_k: 60, final_score }`. `llm_score` absent si le judge a échoué pour ce fragment.
+
+---
+
+### Mode `agentic-only`
+
+**Usage** : corpus large, sections abstraites, ou quand l'embedding seul manque de contexte (ex. sections de synthèse transverse). Plus lent (2-3 appels LLM par section), meilleure couverture conceptuelle.
+
+```
+SectionQuery
+    │
+    ├── Phase 0 (TOC filtering) — uniquement si : index > 200 fragments ET pas de filtre domain
+    │   ├── LLM lit le TOC (domain → type → count)
+    │   ├── Sélectionne les combinaisons (domain:type) pertinentes
+    │   └── filterIndexData() → activeData réduit aux combinaisons retenues
+    │       Si LLM échoue → fallback sur l'index complet
+    │
+    ├── Phase 1 (sélection) — LLM lit l'index Markdown (tous les fragments d'activeData)
+    │   ├── Prompt : "Section: '...'. Index: [TM-arg-001] Twake Mail — argument..."
+    │   ├── LLM retourne une liste triée de readable IDs (du plus au moins pertinent)
+    │   ├── idMap résout readable IDs → UUIDs SQLite
+    │   ├── Cap : limit × 4 IDs max
+    │   └── temperature : 0.1 (déterministe)
+    │
+    ├── Phase 1b : merge Pool A (tag-forced non déjà dans la liste Phase 1)
+    │
+    ├── Phase 2 (batch scoring) — LLM score 0-10 chaque candidat
+    │   ├── Mode standard : 1 appel LLM
+    │   │   ├── Prompt : fragment title + excerpt 200 chars, retour JSON array [{id, score, reason}]
+    │   │   └── Si 0 UUID matché → hard failure → score neutre (5) en fallback
+    │   │
+    │   ├── Mode self-consistency (option) : 2 appels parallèles à temp=0.2 et temp=0.4
+    │   │   ├── Score final = moyenne des 2 agents (normalisés 0-1)
+    │   │   ├── Si désaccord > 0.3 → warning log (signal de fragment ambigu)
+    │   │   ├── Si un agent échoue → fallback sur l'autre
+    │   │   └── Justification = agent le plus pessimiste
+    │   │
+    │   └── Chunks de 25 si > BATCH_JUDGE_SIZE candidats (séquentiels en prod pour throttle)
+    │
+    ├── Filtre score >= 0.3 (PHASE2_SCORE_MIN)
+    │
+    ├── TYPE_BOOST si inferred_type match
+    │
+    ▼ Tri par score desc puis qualité (approved > reviewed > draft), slice(limit)
+```
+
+**`score_breakdown` :** `{ method: 'agentic', llm_score: 0-10, consistency_delta? }`. Pas de `vector_score` (pas de Milvus).
+
+**Constantes :**
+- `PHASE0_THRESHOLD = 200` — seuil pour activer le TOC filtering
+- `BATCH_JUDGE_SIZE = 25` — max fragments par appel LLM en Phase 2
+- `PHASE2_SCORE_MIN = 0.3` — seuil de rejet après scoring
+- `PHASE1_TEMPERATURE = 0.1` — température Phase 0 et Phase 1
+- `STRONG_DISAGREEMENT_THRESHOLD = 0.3` — seuil d'alerte en self-consistency
+
+---
+
+### Comparaison des 3 modes
+
+| Critère | `vector-only` | `hybrid` | `agentic-only` |
+|---------|--------------|---------|----------------|
+| Appels LLM par section | 0 | 1 | 2-3 |
+| Latence typique | < 1s | 3-8s | 10-30s |
+| Corpus homogène | ✅ Excellent | ✅ Excellent | ✅ Bon |
+| Section abstraite / transverse | ⚠ Moyen | ✅ Bon | ✅ Excellent |
+| Résistance à la défaillance LLM | ✅ N/A | ✅ Dégradation progressive | ⚠ Fallback score neutre |
+| Explique le choix (justification) | ❌ | ⚠ Score LLM seulement | ✅ Raison par fragment |
+| Recommandé en prod | Baseline | **Oui (défaut)** | Corpus > 200 frags |
+| `forced_candidates` (Pool A) | ❌ Ignorés | ✅ Injectés dans le judge | ✅ Injectés dans Phase 2 |
+
+---
+
+### Pipeline commun autour du retrieval (`plan-service.ts`)
+
+Les 3 modes sont appelés depuis `PlanService.runSectionSearch` qui gère :
+
+1. **Construction de `SectionQuery`** : injecte `spec_context` (300 chars du spec_prompt), `forced_candidates` (Pool A tag-match), `inferred_type` déduit de la section.
+2. **Déduplication intra-retrieval** : `seenIds` Set évite les doublons dans une même passe.
+3. **`dedupCandidatesAcrossSections`** : après un `searchAllSections`, chaque fragment est assigné à la section qui le score le mieux — un fragment ne peut apparaître que dans une seule section.
+4. **Conversion `RetrievedFragment` → `FragmentCandidate`** : ajout du `confidence_level` (`high` si score ≥ 0.7, `medium` si ≥ 0.4, sinon `low`) et du `body_excerpt`.
+5. **Semaphore** : les appels LLM sont bornés par `FRAGMINT_LLM_CONCURRENCY` (default 3) via `makeSemaphore`.
