@@ -221,7 +221,7 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
           </div>
         </div>
       )}
-      <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex h-full overflow-hidden">
         <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
           {sections.map((s, i) => {
             const worstFlag = s.groundedness_flags?.reduce<'high' | 'medium' | 'low' | null>(

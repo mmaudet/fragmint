@@ -408,8 +408,6 @@ const translations = {
     addFragment: { fr: 'Ajouter un fragment', en: 'Add a fragment' },
     approveAll: { fr: 'Tout approuver', en: 'Approve all' },
     rejectAll: { fr: 'Tout rejeter', en: 'Reject all' },
-    approveAllSections: { fr: 'Tout approuver', en: 'Approve all' },
-    rejectAllSections: { fr: 'Tout rejeter', en: 'Reject all' },
     addFromLibrary: { fr: 'Depuis la bibliothèque', en: 'From library' },
     addManually: { fr: 'Manuel', en: 'Manual' },
     addFromCollection: { fr: 'Tableau', en: 'Table' },

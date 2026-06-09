@@ -61,6 +61,19 @@ function writeDismissed() {
   try { localStorage.setItem(HELP_DISMISS_KEY, '1'); } catch { /* ignore */ }
 }
 
+function buildApprovedSection(s: PlanSection): PlanSection {
+  const newSelections: SectionFragmentSelection[] = s.candidates.map((c) => ({
+    fragment_id: c.fragment_id,
+    body: c.body_excerpt ?? '',
+    edited: false,
+    propose_to_library: false,
+  }));
+  const existingOther = s.selected.filter(
+    (sel) => !s.candidates.some((c) => c.fragment_id === sel.fragment_id),
+  );
+  return { ...s, selected: [...existingOther, ...newSelections] };
+}
+
 export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: { plan: Plan; onValidated?: () => void; isSearching?: boolean; onSearchAll?: () => void }) {
   const { t, lang } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
@@ -71,19 +84,7 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
   function dismissHelp() { writeDismissed(); setHelpDismissed(true); }
 
   function approveAllGlobal() {
-    const newSections = plan.state.sections.map((s) => {
-      const newSelections: SectionFragmentSelection[] = s.candidates.map((c) => ({
-        fragment_id: c.fragment_id,
-        body: c.body_excerpt ?? '',
-        edited: false,
-        propose_to_library: false,
-      }));
-      const existingOther = s.selected.filter(
-        (sel) => !s.candidates.some((c) => c.fragment_id === sel.fragment_id),
-      );
-      return { ...s, selected: [...existingOther, ...newSelections] };
-    });
-    update.mutate({ sections: newSections });
+    update.mutate({ sections: plan.state.sections.map(buildApprovedSection) });
   }
 
   function rejectAllGlobal() {
@@ -106,7 +107,7 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
 
   // True when a bulk search is running and this section hasn't returned results yet.
   // Prevents "Aucun fragment trouvé" from flashing before the search completes.
-  const activePending = !!isSearching && (active?.candidates?.length ?? 0) === 0;
+  const activePending = isSearching && (active?.candidates?.length ?? 0) === 0;
 
   function updateSection(sectionId: string, fn: (s: PlanSection) => PlanSection) {
     const next = sections.map((s) => (s.id === sectionId ? fn(s) : s));
@@ -137,16 +138,7 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
   }
 
   function approveAllCandidates(section: PlanSection) {
-    const newSelections: SectionFragmentSelection[] = section.candidates.map((c) => ({
-      fragment_id: c.fragment_id,
-      body: c.body_excerpt ?? '',
-      edited: false,
-      propose_to_library: false,
-    }));
-    const existingOther = section.selected.filter(
-      (s) => !section.candidates.some((c) => c.fragment_id === s.fragment_id),
-    );
-    updateSection(section.id, (s) => ({ ...s, selected: [...existingOther, ...newSelections] }));
+    updateSection(section.id, buildApprovedSection);
   }
 
   function rejectAllCandidates(section: PlanSection) {
@@ -197,7 +189,7 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
                   onClick={approveAllGlobal}
                   disabled={update.isPending}
                 >
-                  {t('planGeneration', 'approveAllSections')}
+                  {t('planGeneration', 'approveAll')}
                 </Button>
                 <Button
                   size="sm"
@@ -206,14 +198,14 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
                   onClick={rejectAllGlobal}
                   disabled={update.isPending}
                 >
-                  {t('planGeneration', 'rejectAllSections')}
+                  {t('planGeneration', 'rejectAll')}
                 </Button>
               </div>
             </div>
           </div>
         </div>
       )}
-      <div className="flex h-[calc(100vh-4rem)] min-h-0">
+      <div className="flex h-full min-h-0">
       <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
         {sections.map((s, i) => {
           const reviewed = s.selected.length > 0;

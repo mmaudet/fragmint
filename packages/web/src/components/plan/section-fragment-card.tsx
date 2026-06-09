@@ -33,10 +33,11 @@ export function SectionFragmentCard({
   const [editedBody, setEditedBody] = useState<string | null>(null);
   const [propose, setPropose] = useState(selection?.propose_to_library ?? false);
 
-  const isInline = candidate.fragment_id.startsWith('inline_');
+  const effectiveFragmentId = selection?.proposed_fragment_id ?? candidate.fragment_id;
+  const isInline = effectiveFragmentId.startsWith('inline_');
   const { data: fullFragment, isLoading: fragmentLoading } = useFragment(
     collectionSlug,
-    (editing || expanded) && !isInline ? candidate.fragment_id : null,
+    (editing || expanded) && !isInline ? effectiveFragmentId : null,
   );
 
   const approved = !!selection;
@@ -264,7 +265,7 @@ export function SectionFragmentCard({
               </Button>
               {!isInline && (
                 <a
-                  href={`/ui/fragments?fragment=${candidate.fragment_id}`}
+                  href={`/ui/fragments?fragment=${effectiveFragmentId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ml-auto text-xs text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1"

@@ -110,14 +110,16 @@ export class HybridRetriever implements FragmentRetriever {
     // Re-inject forced-only candidates dropped by LLM truncation.
     // They have no vector rank (absent from list1) and no LLM score (absent from list2),
     // so they are invisible in fused — the isTruncated guard below never fires for them.
-    const fusedSet = new Set(fused.map(({ item }) => item.id));
     const fusedFinal = isTruncated
-      ? [
-          ...fused,
-          ...forcedOnly
-            .filter((c) => !llmScoreMap.has(c.id) && !fusedSet.has(c.id))
-            .map((c) => ({ item: { id: c.id, _data: c }, rrf_score: 0 as number })),
-        ]
+      ? (() => {
+          const fusedSet = new Set(fused.map(({ item }) => item.id));
+          return [
+            ...fused,
+            ...forcedOnly
+              .filter((c) => !llmScoreMap.has(c.id) && !fusedSet.has(c.id))
+              .map((c) => ({ item: { id: c.id, _data: c }, rrf_score: 0 as number })),
+          ];
+        })()
       : fused;
 
     const floorFiltered = this.llmFloor > 0
