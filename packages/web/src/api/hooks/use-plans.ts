@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, collectionApiUrl, getToken } from '@/api/client';
-import type { Plan, PlanFilters, PlanSection, PlanStatus, FragmentCollection } from '@/api/types';
+import type { Plan, PlanFilters, PlanSection, PlanStatus, FragmentCollection, PlanTemplate } from '@/api/types';
 
 export function usePlans() {
   return useQuery<Plan[]>({
@@ -18,10 +18,18 @@ export function usePlan(id: string | null, opts?: { refetchInterval?: number | f
   });
 }
 
+export function usePlanTemplates(status?: string) {
+  const params = status ? `?status=${status}` : '';
+  return useQuery<PlanTemplate[]>({
+    queryKey: ['plan-templates', status],
+    queryFn: () => apiRequest<PlanTemplate[]>('GET', `/v1/plan-templates${params}`),
+  });
+}
+
 export function useCreatePlan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title?: string; spec_prompt: string; filters?: PlanFilters }) =>
+    mutationFn: (input: { title?: string; spec_prompt?: string; filters?: PlanFilters; template_id?: string }) =>
       apiRequest<Plan>('POST', '/v1/plans', input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans'] }),
   });
@@ -156,8 +164,8 @@ export function useAddFragmentToSection(id: string) {
 export function useGenerateSection(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (sectionId: string) =>
-      apiRequest<Plan>('POST', `/v1/plans/${id}/sections/${sectionId}/generate`),
+    mutationFn: ({ sectionId, constraint }: { sectionId: string; constraint?: string }) =>
+      apiRequest<Plan>('POST', `/v1/plans/${id}/sections/${sectionId}/generate`, constraint ? { constraint } : undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plans', id] }),
   });
 }
@@ -168,6 +176,18 @@ export function useFragmentCollectionsByFragmentId(fragmentId: string | null) {
     enabled: !!fragmentId,
     queryFn: () =>
       apiRequest<FragmentCollection[]>('GET', `/v1/fragment-collections?fragment_id=${fragmentId}`),
+  });
+}
+
+export function useDeleteFragmentCollectionBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest<{ deleted: number }>('POST', '/v1/fragment-collections/bulk-delete', { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fragment-collections-admin'] });
+      qc.invalidateQueries({ queryKey: ['fragment-collections-by-fragment'] });
+    },
   });
 }
 

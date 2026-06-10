@@ -41,6 +41,7 @@ export function RenameDialog({ proposal, open, onOpenChange }: Props) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="kebab-case-name"
+              autoFocus
             />
             <p className="text-xs text-muted-foreground mt-1">{t('admin', 'renameDialogHint')}</p>
           </div>

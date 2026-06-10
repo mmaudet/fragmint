@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Plan, PlanSection } from '@/api/types';
 import { useGenerateSection, useUpdatePlan, useAssemble } from '@/api/hooks/use-plans';
 import { Button } from '@/components/ui/button';
@@ -64,9 +65,26 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
       setTimeout(() => setCopied(false), 1500);
     });
   }
+  const qc = useQueryClient();
   const update = useUpdatePlan(plan.id);
   const generate = useGenerateSection(plan.id);
   const assemble = useAssemble(plan.id);
+  const [checkingGroundedness, setCheckingGroundedness] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!checkingGroundedness) return;
+    const start = Date.now();
+    const timer = setInterval(async () => {
+      const fresh = qc.getQueryData<Plan>(['plans', plan.id]);
+      const s = fresh?.state.sections.find((sec) => sec.id === checkingGroundedness);
+      if (s?.groundedness_flags?.length || Date.now() - start > 25_000) {
+        setCheckingGroundedness(null);
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ['plans', plan.id] });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [checkingGroundedness]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sections = plan.state.sections;
   const active = sections[activeIdx];
@@ -94,9 +112,10 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
     };
   }, []);
 
-  async function generateOne(sectionId: string) {
+  async function generateOne(sectionId: string, constraint?: string) {
     try {
-      await generate.mutateAsync(sectionId);
+      await generate.mutateAsync({ sectionId, constraint });
+      setCheckingGroundedness(sectionId);
     } catch (e: any) {
       toast.error(`Section generation failed: ${e.message ?? e}`);
     }
@@ -106,7 +125,7 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
     setProgress({ i: 0, total: sections.length });
     for (let i = 0; i < sections.length; i++) {
       try {
-        await generate.mutateAsync(sections[i].id);
+        await generate.mutateAsync({ sectionId: sections[i].id });
         setProgress({ i: i + 1, total: sections.length });
       } catch (e: any) {
         toast.error(`Failed on section "${sections[i].title}": ${e.message ?? e}`);
@@ -114,6 +133,14 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
       }
     }
     setProgress(null);
+  }
+
+  function buildGroundednessConstraint(flags: Plan['state']['sections'][0]['groundedness_flags']): string {
+    if (!flags?.length) return '';
+    const lines = flags.map(
+      (f) => `- [${f.risk}] "${f.text}" — ${f.reason}`,
+    );
+    return `The following claims were flagged as unsupported by source fragments. Do NOT include them in the rewrite:\n${lines.join('\n')}\n\nCRITICAL: Only include information explicitly stated in the provided fragments. Do not infer, extrapolate, or add any details, names, figures, or claims that are not directly present in the fragment text.`;
   }
 
   function saveSectionMarkdown(s: PlanSection, md: string) {
@@ -294,16 +321,38 @@ export function DraftsStep({ plan, onAssembled }: { plan: Plan; onAssembled?: ()
                     No fragments approved — output may be weak.
                   </p>
                 )}
-                <Button
-                  size="sm"
-                  onClick={() => generateOne(active.id)}
-                  disabled={generate.isPending}
-                >
-                  {generate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  {active.generated_markdown
-                    ? t('planGeneration', 'regenerate')
-                    : t('planGeneration', 'generateSection')}
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={() => generateOne(active.id)}
+                    disabled={generate.isPending}
+                  >
+                    {generate.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {active.generated_markdown
+                      ? t('planGeneration', 'regenerate')
+                      : t('planGeneration', 'generateSection')}
+                  </Button>
+                  {active.groundedness_flags && active.groundedness_flags.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => generateOne(active.id, buildGroundednessConstraint(active.groundedness_flags))}
+                      disabled={generate.isPending}
+                      title="Régénère la section en évitant les affirmations non sourcées détectées"
+                    >
+                      {generate.isPending
+                        ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        : <ShieldAlert className="h-3.5 w-3.5 mr-1.5 text-destructive" />}
+                      {t('planGeneration', 'regenerateWithWarnings')}
+                    </Button>
+                  )}
+                  {checkingGroundedness === active.id && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {t('planGeneration', 'checkingGroundedness')}
+                    </span>
+                  )}
+                </div>
                 <GroundednessPanel flags={active.groundedness_flags} />
                 <div className="relative">
                   <button

@@ -308,11 +308,11 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
               <Check className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'approve')}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setRenameOpen(true); }}>
               <Edit className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'rename')}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setMergeOpen(true); }}>
               <Combine className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'merge')}
             </Button>
@@ -330,11 +330,11 @@ export function UnifiedMetadataCard({ item, kind, selected, onToggle, onRefresh 
         )}
         {item.status === 'active' && (
           <>
-            <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setRenameOpen(true); }}>
               <Edit className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'rename')}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)}>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setMergeOpen(true); }}>
               <Combine className="h-3.5 w-3.5 mr-1.5" />
               {t('admin', 'merge')}
             </Button>

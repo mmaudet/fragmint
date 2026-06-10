@@ -313,7 +313,7 @@ export function FragmentMetaEditor({ edits, types, domains, availableTags, onCha
             onChange={(e) => set({ body: e.target.value })}
           />
         ) : (
-          <div className="text-sm bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[35vh] prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1">
+          <div className="text-sm bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[35vh] prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-semibold prose-table:text-xs prose-td:p-1 prose-th:p-1">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}

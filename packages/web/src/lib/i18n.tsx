@@ -490,6 +490,8 @@ const translations = {
       en: 'Failed to delete plan',
     },
     regenerate: { fr: 'Régénérer', en: 'Regenerate' },
+    regenerateWithWarnings: { fr: 'Régénérer sans les warnings', en: 'Regenerate without warnings' },
+    checkingGroundedness: { fr: 'Vérification en cours…', en: 'Checking groundedness…' },
     filtersHint: {
       fr: "Optionnel — Langue est un filtre strict ; Domaines et Tags orientent la recherche sans exclure.",
       en: 'Optional — Language is a strict filter; Domains and Tags guide the search without excluding.',
@@ -535,6 +537,16 @@ const translations = {
       fr: 'Ex. : Commence par un résumé en 2 phrases.',
       en: 'E.g.: Start with a 2-sentence summary.',
     },
+    step1HelpTemplate: {
+      fr: "Les sections de ce plan sont prédéfinies par le template. Cliquez sur « Rechercher toutes les sections » pour que le système propose des fragments pertinents pour chacune.",
+      en: "This plan's sections are predefined by the template. Click 'Search all sections' to let the system suggest relevant fragments for each one.",
+    },
+    fromBrief: { fr: 'Depuis un brief', en: 'From a brief' },
+    fromTemplate: { fr: 'Depuis un template', en: 'From a template' },
+    selectTemplate: { fr: 'Choisir un template', en: 'Select a template' },
+    createFromTemplate: { fr: 'Créer depuis template', en: 'Create from template' },
+    noTemplates: { fr: 'Aucun template disponible', en: 'No templates available' },
+    templateLabel: { fr: 'Template', en: 'Template' },
   },
   collections: {
     select: { fr: 'Collection', en: 'Collection' },
@@ -806,6 +818,10 @@ const translations = {
     tablesSortOldest: { fr: 'Plus ancien', en: 'Oldest first' },
     tablesSortTitleAsc: { fr: 'Titre A→Z', en: 'Title A→Z' },
     tablesSortTitleDesc: { fr: 'Titre Z→A', en: 'Title Z→A' },
+    tablesDeleteSelected: { fr: 'Supprimer la sélection', en: 'Delete selected' },
+    tablesDeleteConfirmTitle: { fr: 'Supprimer les tableaux sélectionnés ?', en: 'Delete selected tables?' },
+    tablesDeleteConfirmMsg: { fr: 'Cette action supprimera les tableaux sélectionnés et tous leurs fragments membres de façon irréversible.', en: 'This will permanently delete the selected tables and all their member fragments.' },
+    tablesDeleteConfirmBtn: { fr: 'Supprimer', en: 'Delete' },
   },
   supersedure: {
     title: { fr: 'Propositions de remplacement', en: 'Replacement proposals' },

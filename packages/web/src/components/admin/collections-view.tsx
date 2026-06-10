@@ -3,11 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/api/client';
 import type { FragmentCollection, Fragment } from '@/api/types';
 import { FragmentDetail } from '@/components/fragment-detail';
+import { ConfirmModal } from '@/components/admin/confirm-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useSchemaLabel } from '@/components/payload-editor';
 import { useI18n } from '@/lib/i18n';
-import { ChevronDown, ChevronRight, ChevronUp, FileText } from 'lucide-react';
+import { useDeleteFragmentCollectionBatch } from '@/api/hooks/use-plans';
+import { ChevronDown, ChevronRight, ChevronUp, FileText, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 function useAllFragmentCollections() {
   return useQuery<FragmentCollection[]>({
@@ -29,7 +32,15 @@ function useFragmentsByIds(ids: string[], enabled: boolean) {
   });
 }
 
-function CollectionRow({ col }: { col: FragmentCollection }) {
+function CollectionRow({
+  col,
+  selected,
+  onToggle,
+}: {
+  col: FragmentCollection;
+  selected: boolean;
+  onToggle: (id: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [openFragmentId, setOpenFragmentId] = useState<string | null>(null);
   const { data: fragments } = useFragmentsByIds(col.member_ids, expanded);
@@ -42,10 +53,13 @@ function CollectionRow({ col }: { col: FragmentCollection }) {
         className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        <td className="py-2.5 px-3 w-8">
-          {expanded
-            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        <td className="py-2.5 px-3 w-8" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle(col.id)}
+            className="accent-primary cursor-pointer"
+          />
         </td>
         <td className="py-2.5 px-3 font-medium text-sm">{col.title}</td>
         <td className="py-2.5 px-3">
@@ -73,7 +87,7 @@ function CollectionRow({ col }: { col: FragmentCollection }) {
 
       {expanded && (
         <tr className="border-b bg-muted/10">
-          <td colSpan={6} className="px-8 py-2">
+          <td colSpan={7} className="px-8 py-2">
             {!fragments ? (
               <p className="text-xs text-muted-foreground py-1">{t('common', 'loading')}</p>
             ) : fragments.length === 0 ? (
@@ -157,9 +171,18 @@ export function CollectionsView() {
   const [schemaFilter, setSchemaFilter] = useState('');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('date_desc');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { t } = useI18n();
+  const deleteMutation = useDeleteFragmentCollectionBatch();
 
   const handleSort = (col: SortCol, dir: SortDir) => setSort(`${col}_${dir}`);
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
+  const toggleSelectAll = (ids: string[]) =>
+    setSelected((prev) => ids.every((id) => prev.has(id)) ? new Set() : new Set(ids));
 
   const SCHEMA_FILTERS = [
     { value: '', label: t('admin', 'tablesFilterAll') },
@@ -194,9 +217,22 @@ export function CollectionsView() {
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} {t('admin', 'tablesCountSuffix')}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} {t('admin', 'tablesCountSuffix')}
+          </p>
+          {selected.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('admin', 'tablesDeleteSelected')} ({selected.size})
+            </Button>
+          )}
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="text"
@@ -231,7 +267,14 @@ export function CollectionsView() {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
-                <th className="w-8 px-3 py-2" />
+                <th className="w-8 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && filtered.every((c) => selected.has(c.id))}
+                    onChange={() => toggleSelectAll(filtered.map((c) => c.id))}
+                    className="accent-primary cursor-pointer"
+                  />
+                </th>
                 <th className="px-3 py-2 text-left">
                   <SortHeader label={t('admin', 'tablesColTitle')} col="title" sort={sort} onSort={handleSort} />
                 </th>
@@ -251,11 +294,31 @@ export function CollectionsView() {
             </thead>
             <tbody>
               {filtered.map((col) => (
-                <CollectionRow key={col.id} col={col} />
+                <CollectionRow key={col.id} col={col} selected={selected.has(col.id)} onToggle={toggleSelect} />
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {showDeleteConfirm && (
+        <ConfirmModal
+          title={t('admin', 'tablesDeleteConfirmTitle')}
+          message={t('admin', 'tablesDeleteConfirmMsg')}
+          confirmLabel={t('admin', 'tablesDeleteConfirmBtn')}
+          variant="danger"
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={async () => {
+            try {
+              await deleteMutation.mutateAsync([...selected]);
+              toast.success(`${selected.size} tableau(x) supprimé(s)`);
+              setSelected(new Set());
+            } catch (e: any) {
+              toast.error(`Erreur : ${e.message}`);
+            } finally {
+              setShowDeleteConfirm(false);
+            }
+          }}
+        />
       )}
     </div>
   );

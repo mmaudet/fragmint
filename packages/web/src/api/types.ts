@@ -266,6 +266,25 @@ export interface PlanSection {
   section_confidence?: 'good' | 'partial' | 'poor' | 'empty';
 }
 
+export interface PlanTemplateSection {
+  title: string;
+  description: string;
+  inferred_type?: string;
+  domain_hint?: string;
+}
+
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  status: 'active' | 'draft' | 'deprecated';
+  tags: string[];
+  sections: PlanTemplateSection[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PlanState {
   spec_prompt: string;
   filters: PlanFilters;
@@ -275,6 +294,9 @@ export interface PlanState {
   draft_markdown?: string;
   draft_dirty?: boolean;
   export_style_template_id?: string;
+  from_template_id?: string;
+  from_template_version?: string;
+  from_template_name?: string;
 }
 
 export interface Plan {

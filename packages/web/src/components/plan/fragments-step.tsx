@@ -8,17 +8,8 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { SectionFragmentCard } from './section-fragment-card';
 import { AddFragmentDialog } from './add-fragment-dialog';
-import { Plus, Loader2, AlertTriangle, Info, CheckCircle2, X } from 'lucide-react';
+import { Plus, Loader2, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-
-const HELP_DISMISS_KEY = 'fragmint.plan-step-help.dismissed.1';
-
-function readDismissed() {
-  try { return localStorage.getItem(HELP_DISMISS_KEY) === '1'; } catch { return false; }
-}
-function writeDismissed() {
-  try { localStorage.setItem(HELP_DISMISS_KEY, '1'); } catch { /* ignore */ }
-}
 
 function buildApprovedSection(s: PlanSection): PlanSection {
   const newSelections: SectionFragmentSelection[] = s.candidates.map((c) => ({
@@ -37,10 +28,7 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
   const { t, lang } = useI18n();
   const [activeIdx, setActiveIdx] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
-  const [helpDismissed, setHelpDismissed] = useState(readDismissed);
   const update = useUpdatePlan(plan.id);
-
-  function dismissHelp() { writeDismissed(); setHelpDismissed(true); }
 
   function approveAllGlobal() {
     update.mutate({ sections: plan.state.sections.map(buildApprovedSection) });
@@ -141,66 +129,50 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
     updateSection(section.id, (s) => ({ ...s, candidates: [], selected: [] }));
   }
 
+  const isTemplate = !!plan.state.from_template_id;
+  const helpText = isTemplate
+    ? t('planGeneration', 'step1HelpTemplate')
+    : t('planGeneration', 'step2Help');
+
   return (
     <div className="flex flex-col h-full">
-      {!helpDismissed && (
-        <div className="border-b bg-muted/40 px-4 py-3 space-y-3 shrink-0">
-          <div className="flex items-start gap-3">
-            <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-            <p className="flex-1 text-sm text-muted-foreground leading-relaxed">
-              {t('planGeneration', 'step2Help')}
-            </p>
-            <button
-              onClick={dismissHelp}
-              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              aria-label={t('planGeneration', 'helpClose')}
-              title={t('planGeneration', 'helpClose')}
+      <div className="border-b bg-muted/40 px-4 py-3 space-y-2 shrink-0">
+        <div className="flex items-start gap-3">
+          <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+          <p className="flex-1 text-sm text-muted-foreground leading-relaxed">{helpText}</p>
+        </div>
+        <div className="flex items-center gap-2 pl-7">
+          <Button size="sm" variant="outline" onClick={onSearchAll} disabled={isSearching}>
+            {isSearching && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            {t('planGeneration', 'searchAllSections')}
+            {isSearching && (
+              <span className="ml-1.5 text-xs opacity-60">
+                {sections.filter(s => (s.candidates?.length ?? 0) > 0).length} / {sections.length}
+              </span>
+            )}
+          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-primary border-primary/40 hover:bg-primary/10"
+              onClick={approveAllGlobal}
+              disabled={update.isPending}
             >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="pl-7 space-y-3">
-            <div className="text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
-              <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
-              <p><span className="font-medium">{t('planGeneration', 'confidenceHigh')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
-              <p><span className="font-medium">{t('planGeneration', 'confidenceMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
-              <p><span className="font-medium">{t('planGeneration', 'confidenceLow')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
-              <p><span className="font-medium">{t('planGeneration', 'confidenceUnknown')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={onSearchAll} disabled={isSearching}>
-                {isSearching && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                {t('planGeneration', 'searchAllSections')}
-                {isSearching && (
-                  <span className="ml-1.5 text-xs opacity-60">
-                    {sections.filter(s => (s.candidates?.length ?? 0) > 0).length} / {sections.length}
-                  </span>
-                )}
-              </Button>
-              <div className="ml-auto flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-primary border-primary/40 hover:bg-primary/10"
-                  onClick={approveAllGlobal}
-                  disabled={update.isPending}
-                >
-                  {t('planGeneration', 'approveAll')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                  onClick={rejectAllGlobal}
-                  disabled={update.isPending}
-                >
-                  {t('planGeneration', 'rejectAll')}
-                </Button>
-              </div>
-            </div>
+              {t('planGeneration', 'approveAll')}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={rejectAllGlobal}
+              disabled={update.isPending}
+            >
+              {t('planGeneration', 'rejectAll')}
+            </Button>
           </div>
         </div>
-      )}
+      </div>
       <div className="flex flex-1 min-h-0">
       <aside className="w-64 border-r overflow-y-auto p-3 space-y-1">
         {sections.map((s, i) => {
@@ -233,6 +205,13 @@ export function FragmentsStep({ plan, onValidated, isSearching, onSearchAll }: {
 
       <main className="flex-1 flex flex-col">
         <div className="flex-1 overflow-y-auto p-6">
+          <div className="mb-4 text-xs text-muted-foreground border rounded-md px-3 py-2.5 bg-muted/40 space-y-1">
+            <p className="font-medium text-foreground">{t('planGeneration', 'matchLegendTitle')}</p>
+            <p><span className="font-medium">{t('planGeneration', 'confidenceHigh')}</span> — {t('planGeneration', 'matchLegendStrong')}</p>
+            <p><span className="font-medium">{t('planGeneration', 'confidenceMedium')}</span> — {t('planGeneration', 'matchLegendMedium')}</p>
+            <p><span className="font-medium">{t('planGeneration', 'confidenceLow')}</span> — {t('planGeneration', 'matchLegendWeak')}</p>
+            <p><span className="font-medium">{t('planGeneration', 'confidenceUnknown')}</span> — {t('planGeneration', 'matchLegendUnscored')}</p>
+          </div>
           {!active ? (
             <p className="text-muted-foreground">No sections.</p>
           ) : (

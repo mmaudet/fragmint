@@ -42,6 +42,8 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
 
   const search = searchParams.get('q') ?? '';
   const statusFilter = searchParams.get('status') ?? 'all';
+  const typeFilter = searchParams.get('type') ?? 'all';
+  const ownerFilter = searchParams.get('owner') ?? 'all';
   const sortKey = (searchParams.get('sort') ?? 'updated_at') as SortKey;
   const sortDir = (searchParams.get('dir') ?? 'desc') as 'asc' | 'desc';
 
@@ -67,6 +69,11 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
     }, { replace: true });
   }
 
+  const distinctOwners = useMemo(() =>
+    [...new Set(plans.map((p) => p.owner))].sort((a, b) =>
+      displayName(a).localeCompare(displayName(b), 'fr')
+    ), [plans, users]);
+
   const filtered = useMemo(() => {
     let list = plans;
     if (search) {
@@ -74,12 +81,16 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
       list = list.filter((p) => p.title?.toLowerCase().includes(q));
     }
     if (statusFilter !== 'all') list = list.filter((p) => p.status === statusFilter);
+    if (typeFilter !== 'all') list = list.filter((p) =>
+      typeFilter === 'template' ? !!p.state.from_template_id : !p.state.from_template_id
+    );
+    if (ownerFilter !== 'all') list = list.filter((p) => p.owner === ownerFilter);
     return [...list].sort((a, b) => {
       const av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === 'desc' ? -cmp : cmp;
     });
-  }, [plans, search, statusFilter, sortKey, sortDir]);
+  }, [plans, search, statusFilter, typeFilter, ownerFilter, sortKey, sortDir]);
 
   const allFilteredIds = filtered.map((p) => p.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
@@ -145,6 +156,25 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
           <option value="all">Tous les statuts</option>
           {(Object.keys(STATUS_CONFIG) as PlanStatus[]).map((s) => (
             <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+          ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => setParam('type', e.target.value)}
+          className="px-3 py-1.5 border rounded-md text-sm bg-background"
+        >
+          <option value="all">Tous les types</option>
+          <option value="brief">Brief</option>
+          <option value="template">Template</option>
+        </select>
+        <select
+          value={ownerFilter}
+          onChange={(e) => setParam('owner', e.target.value)}
+          className="px-3 py-1.5 border rounded-md text-sm bg-background"
+        >
+          <option value="all">Tous les créateurs</option>
+          {distinctOwners.map((login) => (
+            <option key={login} value={login}>{displayName(login)}</option>
           ))}
         </select>
         <span className="text-xs text-muted-foreground ml-auto">
@@ -227,6 +257,7 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                 </th>
                 <SortTh col="title" label="Nom" />
                 <SortTh col="status" label="Statut" />
+                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Type</th>
                 <SortTh col="owner" label="Créé par" />
                 <SortTh col="created_at" label="Créé" />
                 <SortTh col="updated_at" label="Modifié" />
@@ -263,6 +294,13 @@ export function PlanList({ onCreate }: { onCreate: () => void }) {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={p.status} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {p.state.from_template_id ? (
+                        <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Template</span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Brief</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                       {displayName(p.owner)}

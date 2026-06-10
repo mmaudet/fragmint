@@ -46,29 +46,16 @@ export function SectionFragmentCard({
 
   const approved = !!selection;
 
-  const cleanTitle = (candidate.title ?? '').replace(/^[-–]\s+/, '');
   const rawBody = editedBody ?? fullFragment?.body ?? selection?.body ?? candidate.body_excerpt ?? '';
   const displayBody = rawBody;
-  // Card display: strip leading title heading to avoid repeating it below CardHeader.
-  // Exception: table fragments (body starts with |) keep their header row intact so GFM renders correctly.
   const cardBody = (() => {
     const fullSrc = (selection?.edited ? selection.body : null) ?? fullFragment?.body ?? selection?.body;
     const raw = fullSrc ?? candidate.body_excerpt ?? '';
-    const isTableBody = raw.trimStart().startsWith('|');
-    const firstNewline = raw.indexOf('\n');
-    const firstLine = firstNewline >= 0 ? raw.slice(0, firstNewline) : raw;
-    const firstLinePlain = firstLine.replace(/^#+\s*/, '').trim();
-    // Only strip when the first line is a markdown heading matching the title (e.g. "## Titre\n\nbody").
-    // Do NOT strip when the body simply starts with the same text as the title — CardTitle is no
-    // longer displayed, so stripping would silently eat the first sentence of the fragment.
-    const deduped = !isTableBody && firstNewline >= 0 && firstLinePlain === cleanTitle && cleanTitle.length > 0
-      ? raw.slice(firstNewline + 1).replace(/^\n+/, '')
-      : raw;
-    if (fullSrc) return deduped;
-    const trimmed = deduped.trimEnd();
+    if (fullSrc) return raw;
+    const trimmed = raw.trimEnd();
     if (!trimmed) return '';
     const last = trimmed.slice(-1);
-    if ('.!?,;:)»"\']'.includes(last)) return deduped;
+    if ('.!?,;:)»"\']'.includes(last)) return raw;
     const lastSpace = trimmed.lastIndexOf(' ');
     return (lastSpace > 10 ? trimmed.slice(0, lastSpace) : trimmed) + '…';
   })();
@@ -235,7 +222,7 @@ export function SectionFragmentCard({
                 Chargement…
               </div>
             ) : (
-              <div ref={contentRef} className={`text-sm prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1 ${expanded ? '' : 'line-clamp-6'}`}>
+              <div ref={contentRef} className={`text-sm prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-semibold prose-table:text-xs prose-td:p-1 prose-th:p-1 ${expanded ? '' : 'line-clamp-6'}`}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}

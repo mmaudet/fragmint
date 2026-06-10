@@ -357,7 +357,7 @@ export function FragmentDetailDrawer({ fragmentId, onClose, onUpdate }: Props) {
               {!editing && (
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">Contenu</label>
-                  <div className="text-sm bg-muted/40 rounded p-3 max-h-80 overflow-y-auto border prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-td:p-1 prose-th:p-1">
+                  <div className="text-sm bg-muted/40 rounded p-3 max-h-80 overflow-y-auto border prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-semibold prose-table:text-xs prose-td:p-1 prose-th:p-1">
                     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                       {frag.body ?? frag.body_excerpt ?? '(vide)'}
                     </ReactMarkdown>
