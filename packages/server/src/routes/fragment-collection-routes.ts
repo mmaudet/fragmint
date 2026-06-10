@@ -95,4 +95,18 @@ export function fragmentCollectionRoutes(
       return { data: { id }, meta: null, error: null };
     },
   );
+
+  // POST /v1/fragment-collections/bulk-delete
+  app.post(
+    `${prefix}/fragment-collections/bulk-delete`,
+    { preHandler: adminHandlers },
+    async (request, reply) => {
+      const parsed = z.object({ ids: z.array(z.string()).min(1).max(200) }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      }
+      const result = await service.deleteBatch(parsed.data.ids);
+      return { data: result, meta: null, error: null };
+    },
+  );
 }

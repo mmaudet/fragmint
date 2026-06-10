@@ -522,6 +522,18 @@ export function createDb(path: string | ':memory:') {
     );
     CREATE INDEX IF NOT EXISTS idx_fc_collection_slug ON fragment_collections(collection_slug);
     CREATE INDEX IF NOT EXISTS idx_fc_created_by ON fragment_collections(created_by);
+    CREATE TABLE IF NOT EXISTS plan_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL DEFAULT '1.0.0',
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      sections_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_plan_templates_status ON plan_templates(status);
   `);
 
   // Migration 019 — doc_position for harvest candidates ordering

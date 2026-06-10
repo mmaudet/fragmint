@@ -305,3 +305,15 @@ export const fragmentCollections = sqliteTable('fragment_collections', {
   created_by: text('created_by').notNull(),
   updated_at: text('updated_at').notNull(),
 });
+
+export const planTemplates = sqliteTable('plan_templates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  version: text('version').notNull().default('1.0.0'),
+  description: text('description'),
+  status: text('status').notNull().default('active'),
+  tags_json: text('tags_json').notNull().default('[]'),
+  sections_json: text('sections_json').notNull(),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+});

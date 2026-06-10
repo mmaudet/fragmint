@@ -62,6 +62,8 @@ import { adminReferentialRoutes } from './routes/admin-referential-routes.js';
 import { adminFragmentRoutes } from './routes/admin-fragment-routes.js';
 import { fragmentCollectionRoutes } from './routes/fragment-collection-routes.js';
 import { FragmentCollectionService } from './services/fragment-collection-service.js';
+import { PlanTemplateService } from './services/plan-template-service.js';
+import { planTemplateRoutes } from './routes/plan-template-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
@@ -324,6 +326,8 @@ export async function createServer(options?: {
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
   (app as unknown as { planService: PlanAssembler }).planService = planService;
 
+  const planTemplateService = new PlanTemplateService(db);
+
   // Routes
   authRoutes(app, userService, authenticate);
   indexRoutes(app, indexService, authenticate);
@@ -345,7 +349,8 @@ export async function createServer(options?: {
     defaultReferenceDocName: config.plan_docx_reference_name,
   });
   harvestRoutes(app, harvesterService, authenticate, { db });
-  planRoutes(app, planService, templateService, config.store_path, authenticate, { harvesterService });
+  planTemplateRoutes(app, planTemplateService, authenticate);
+  planRoutes(app, planService, templateService, config.store_path, authenticate, { harvesterService, planTemplateService });
 
   taxonomyRoutes(app, db, authenticate);
   adminMetadataRoutes(app, db, authenticate);
@@ -382,6 +387,7 @@ export async function createServer(options?: {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
     harvesterService,
+    planTemplateService,
   });
 
   // Serve frontend static files

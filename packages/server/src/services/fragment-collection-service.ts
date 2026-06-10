@@ -1,7 +1,7 @@
-import { eq, desc, like } from 'drizzle-orm';
+import { eq, desc, like, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { FragmintDb } from '../db/connection.js';
-import { fragmentCollections } from '../db/schema.js';
+import { fragmentCollections, fragments } from '../db/schema.js';
 
 export type FragmentCollection = {
   id: string;
@@ -106,6 +106,21 @@ export class FragmentCollectionService {
   }
 
   async delete(id: string): Promise<void> {
+    const collection = await this.getById(id);
+    if (collection && collection.member_ids.length > 0) {
+      await this.db.delete(fragments).where(inArray(fragments.id, collection.member_ids));
+    }
     await this.db.delete(fragmentCollections).where(eq(fragmentCollections.id, id));
+  }
+
+  async deleteBatch(ids: string[]): Promise<{ deleted: number }> {
+    if (ids.length === 0) return { deleted: 0 };
+    const collections = await Promise.all(ids.map((id) => this.getById(id)));
+    const memberIds = collections.flatMap((c) => c?.member_ids ?? []);
+    if (memberIds.length > 0) {
+      await this.db.delete(fragments).where(inArray(fragments.id, memberIds));
+    }
+    await this.db.delete(fragmentCollections).where(inArray(fragmentCollections.id, ids));
+    return { deleted: ids.length };
   }
 }
