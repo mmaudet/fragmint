@@ -154,7 +154,7 @@ describe('plan_export', () => {
     expect(parsed.content).toContain('# Plan');
   });
 
-  it('calls postBinary for docx format', async () => {
+  it('calls postBinary for docx format and returns saved_to path', async () => {
     const client = {
       postBinary: vi.fn().mockResolvedValue('UEsDBBQA...'),
     };
@@ -162,7 +162,7 @@ describe('plan_export', () => {
     expect(client.postBinary).toHaveBeenCalledWith('/v1/plans/plan-1/export', { format: 'docx' });
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.format).toBe('docx');
-    expect(parsed.content_base64).toBe('UEsDBBQA...');
+    expect(parsed.saved_to).toMatch(/plan-plan-1\.docx$/);
   });
 
   it('includes style_template_id in docx body when provided', async () => {

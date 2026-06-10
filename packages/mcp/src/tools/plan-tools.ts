@@ -1,4 +1,7 @@
 // packages/mcp/src/tools/plan-tools.ts
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
@@ -18,8 +21,12 @@ export const planCreateDefinition: ToolDefinition = {
     'REQUIRED before calling:\n' +
     '1. Client name or organization (who is this document for?)\n' +
     '2. Language → will set filters.lang (fr or en)\n' +
-    '3. Domain or product (e.g. LinShare, Twake Mail, cloud souverain) → will set filters.domain\n' +
-    '4. Type of document (proposal, report, presentation…)\n\n' +
+    '3. Domain or product (e.g. LinShare, Twake Mail, OpenRAG) → will set filters.domain\n' +
+    '4. Type of document (proposal, report, presentation…)\n' +
+    '5. Namespaced tags for Pool-A retrieval — these anchor fragment search to the right products and client. ' +
+    'Examples: "produit:OpenRAG", "produit:Twake Mail", "client:ministere-interieur". ' +
+    'Infer product tags from item 3. Ask the user if a client tag exists (e.g. "client:mirai"). ' +
+    'Set as filters.tags array. If no relevant tags, pass an empty array.\n\n' +
     'If ANY of the above is missing from the user message, ask ALL missing items in ONE conversational message BEFORE calling this tool. Do not assume defaults.\n\n' +
     'When explaining this workflow to a user, NEVER use code. Use plain numbered steps in the user language.\n\n' +
     'Once you have all required info: create the plan, then immediately call plan_generate to build the outline. The plan drives: spec → outline → fragment search → assembly → export.',
@@ -228,7 +235,10 @@ export function planValidateOutlineHandler(client: FragmintApiClient): ToolHandl
 export const planSearchAllSectionsDefinition: ToolDefinition = {
   name: 'plan_search_all_sections',
   description:
-    'Search fragment candidates for ALL sections of a plan in one call. Use this instead of calling plan_section_search repeatedly. Returns the updated plan with candidates filled for every section.',
+    '⚠️ DO NOT USE — times out in hybrid/agentic mode. Use plan_start_search + plan_check_search instead:\n' +
+    '1. Call plan_start_search to launch the job (returns job_id instantly)\n' +
+    '2. Call plan_check_search every few seconds until status = "done"\n' +
+    '3. When done, plan_check_search returns the full plan with candidates',
   inputSchema: {
     type: 'object',
     properties: {
@@ -239,31 +249,107 @@ export const planSearchAllSectionsDefinition: ToolDefinition = {
   },
 };
 
-export function planSearchAllSectionsHandler(client: FragmintApiClient): ToolHandler {
+export function planSearchAllSectionsHandler(_client: FragmintApiClient): ToolHandler {
+  return async (_args) => ({
+    content: [{
+      type: 'text' as const,
+      text: 'plan_search_all_sections is disabled — use plan_start_search then plan_check_search.',
+    }],
+  });
+}
+
+// ── plan_start_search ─────────────────────────────────────────────────────────
+
+export const planStartSearchDefinition: ToolDefinition = {
+  name: 'plan_start_search',
+  description:
+    'Launch fragment search for all sections as a background job. Returns job_id immediately without waiting. ' +
+    'After calling this, call plan_check_search every 5 seconds until status = "done". ' +
+    'Use this instead of plan_search_all_sections to avoid MCP timeout.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'Plan ID' },
+      top_k: { type: 'number', description: 'Max candidates per section (default: 5)' },
+    },
+    required: ['id'],
+  },
+};
+
+export function planStartSearchHandler(client: FragmintApiClient): ToolHandler {
   return async (args) => {
     const id = args.id as string | undefined;
-    if (!id) return toolError('plan_search_all_sections: id is required');
+    if (!id) return toolError('plan_start_search: id is required');
     try {
       const body = args.top_k ? { top_k: args.top_k } : {};
-      const result = await client.post(`/v1/plans/${id}/search-all-sections`, body);
-      const sections = (result as any)?.data?.state?.sections ?? [];
+      const result = await client.post<{ job_id: string; total_sections: number }>(
+        `/v1/plans/${id}/search-all-sections-async`,
+        body,
+      );
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Search started. job_id: ${result.job_id} (${result.total_sections} sections)\n\nNow call plan_check_search with id="${id}" and job_id="${result.job_id}" every 5 seconds until status = "done".`,
+        }],
+      };
+    } catch (err) {
+      return toolError(`plan_start_search failed: ${errMsg(err)}`);
+    }
+  };
+}
+
+// ── plan_check_search ─────────────────────────────────────────────────────────
+
+export const planCheckSearchDefinition: ToolDefinition = {
+  name: 'plan_check_search',
+  description:
+    'Check the status of a background fragment search job started by plan_start_search. ' +
+    'Returns status "running" or "done". When "done", returns the full plan with all section candidates. ' +
+    'Call every 5 seconds until done, then proceed to plan_approve_fragments.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'Plan ID' },
+      job_id: { type: 'string', description: 'Job ID returned by plan_start_search' },
+    },
+    required: ['id', 'job_id'],
+  },
+};
+
+export function planCheckSearchHandler(client: FragmintApiClient): ToolHandler {
+  return async (args) => {
+    const id = args.id as string | undefined;
+    const job_id = args.job_id as string | undefined;
+    if (!id || !job_id) return toolError('plan_check_search: id and job_id are required');
+    try {
+      const result = await client.get<{ status: string; plan?: unknown }>(
+        `/v1/plans/${id}/search-status?job_id=${encodeURIComponent(job_id)}`,
+      );
+      if (result.status === 'running') {
+        return { content: [{ type: 'text' as const, text: 'status: running — call plan_check_search again in 5 seconds.' }] };
+      }
+      if (result.status !== 'done') {
+        return toolError(`plan_check_search: job failed`);
+      }
+      const sections = (result.plan as any)?.state?.sections ?? [];
       const summary = sections.map((s: any) => {
         const candidates = s.candidates ?? [];
         if (candidates.length === 0) return `**${s.title}**: no fragments found`;
         const frags = candidates.map((c: any, i: number) => {
-          const body = c.body_full ?? c.body_excerpt ?? '(no content)';
-          return `  ${i + 1}. [${c.fragment_id?.slice(0, 8)}…] **${c.title ?? '(untitled)'}** (${c.quality}, score: ${c.score != null ? c.score.toFixed(2) : 'n/a'})\n${body.split('\n').map((l: string) => '     ' + l).join('\n')}`;
+          const excerpt = c.body_full ?? c.body_excerpt ?? '(no content)';
+          return `  ${i + 1}. [${c.fragment_id?.slice(0, 8)}…] **${c.title ?? '(untitled)'}** (${c.quality}, score: ${c.score != null ? c.score.toFixed(2) : 'n/a'})\n${excerpt.split('\n').map((l: string) => '     ' + l).join('\n')}`;
         }).join('\n\n');
         return `**${s.title}** (${candidates.length} fragment${candidates.length > 1 ? 's' : ''}):\n${frags}`;
       }).join('\n\n---\n\n');
+      const found = sections.filter((s: any) => (s.candidates ?? []).length > 0).length;
       return {
         content: [{
           type: 'text' as const,
-          text: `Fragments found per section (full text included):\n\n${summary}\n\n⚠️ NEXT STEP: Show these fragments to the user with their full text. Ask: "Here are the fragments found for each section. Tell me which ones to remove or replace, or confirm to proceed." Wait for approval, then call plan_approve_fragments.`,
+          text: `status: done — fragments found for ${found}/${sections.length} sections:\n\n${summary}\n\n⚠️ NEXT STEP: Show fragments to the user. Ask which to keep or replace, then call plan_approve_fragments.`,
         }],
       };
     } catch (err) {
-      return toolError(`plan_search_all_sections failed: ${errMsg(err)}`);
+      return toolError(`plan_check_search failed: ${errMsg(err)}`);
     }
   };
 }
@@ -311,7 +397,7 @@ export const planExportDefinition: ToolDefinition = {
   name: 'plan_export',
   description:
     'Export a plan as markdown (preview), docx (Word document), or pptx (PowerPoint via Marp). ' +
-    'docx and pptx return base64-encoded binary — decode with `base64 -d > output.docx`.\n\n' +
+    'docx and pptx are saved directly to ~/Downloads/ — the tool returns the full file path.\n\n' +
     'BEFORE calling this tool: call template_list to discover available templates, then ask the user which one to use. ' +
     'Use style_template_id for DOCX corporate styling. Use marp_template_id for PPTX slide themes.',
   inputSchema: {
@@ -355,22 +441,20 @@ export function planExportHandler(client: FragmintApiClient): ToolHandler {
           ...(marpTemplateId && { marp_template_id: marpTemplateId }),
         };
         const content_base64 = await client.postBinary(`/v1/plans/${id}/export`, exportBody);
-        return toolSuccess({
-          format: 'pptx',
-          content_base64,
-          note: 'Decode with: echo "<content_base64>" | base64 -d > output.pptx',
-        });
+        const filename = `plan-${id}.pptx`;
+        const dest = path.join(os.homedir(), 'Downloads', filename);
+        fs.writeFileSync(dest, Buffer.from(content_base64, 'base64'));
+        return toolSuccess({ format: 'pptx', saved_to: dest });
       } else {
         const exportBody = {
           format: 'docx',
           ...(styleTemplateId && { style_template_id: styleTemplateId }),
         };
         const content_base64 = await client.postBinary(`/v1/plans/${id}/export`, exportBody);
-        return toolSuccess({
-          format: 'docx',
-          content_base64,
-          note: 'Decode with: echo "<content_base64>" | base64 -d > output.docx',
-        });
+        const filename = `plan-${id}.docx`;
+        const dest = path.join(os.homedir(), 'Downloads', filename);
+        fs.writeFileSync(dest, Buffer.from(content_base64, 'base64'));
+        return toolSuccess({ format: 'docx', saved_to: dest });
       }
     } catch (err) {
       return toolError(`plan_export (format=${format}) failed: ${errMsg(err)}`);
