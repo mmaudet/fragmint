@@ -1432,12 +1432,17 @@ Les fondations posées en Phase 1 permettent à toute la Phase 2 (modes retrieva
 
 > **À lire après la Partie 1** — architecture des 3 modes de retrieval, index.md Karpathy, supersedure, Skills OpenCode.
 >
-> **État au 2026-05-26** :
+> **État au 2026-06-09** :
 > - ✅ **Piste B livrée** : 3 modes retrieval (vector-only, agentic-only, hybrid) + factory + routes admin
+> - ✅ **LLM endpoint** : basculé sur `chat.lucie.ovh.linagora.com` (Mistral-Small-3.2-24B-Instruct-2506-FP8) + embeddings Qwen3-Embedding-0.6B 1024D
+> - ✅ **Corpus MIRAI** : plan Offre MIRAI testé end-to-end en mode hybrid (top_k=3) ; fragments créés : MIR-ref-001 (certifications), 2 collections pricing (TWA-pri, LIN-pri, payload_schema: pricing-line-v1), 3 cas d'usage MIR-uc
+> - ✅ **DB repair** : corruption SQLite réparée via `.recover` (WAL conflict provoqué par scripts Python directs) — 251 fragments, integrity_check ok
 > - 🔜 **Toggle UI mode retrieval** : composant frontend dans le header admin (spec ci-dessous, §4bis)
 > - 🔜 **Piste A — must-have** : skill `/fragmint` Claude Code/OpenCode (cache index local, workflow plan→fragments→export)
 > - 🔜 **Multi-agent self-consistency — must-have** : 2 judges parallèles dans `AgenticRetriever`, arbitrage si désaccord
 > - ⏸️ **Différés post-mission** : relations explicites, contradictions, knowledge graph
+>
+> ⚠️ **Règle DB** : ne jamais écrire directement dans `.fragmint.db` (Python, sqlite3 CLI, etc.) pendant que le serveur tourne — WAL conflict → corruption index. Toujours : `docker stop` → opération → `docker start`.
 
 ---
 

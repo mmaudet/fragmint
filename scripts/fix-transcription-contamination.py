@@ -250,8 +250,6 @@ def main() -> int:
         print(f"        Tags  : {item['tags'][:5]}…")
 
         if not dry:
-            with open(fpath, "w", encoding="utf-8") as f:
-                f.write(file_content)
             file_path = f"fragments/{filename}"
             conn.execute(
                 """INSERT INTO fragments
@@ -266,8 +264,10 @@ def main() -> int:
                     now, now, item["author"], file_path,
                 ),
             )
-            print(f"        → vault: {filename}")
             print(f"        → DB: INSERT OK")
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(file_content)
+            print(f"        → vault: {filename}")
 
     if not dry:
         conn.commit()

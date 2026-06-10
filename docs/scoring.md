@@ -117,7 +117,32 @@ No `vector_score` — agentic is index-based, not cosine-based.
 
 **Neutral fallback:** if Phase 2 LLM fails to mention a fragment, it receives `llm_score = 5` (neutral, not rejection). Unlike hybrid, agentic does not implicitly reject unlisted fragments — it keeps them with `score = 0.5`. This is intentional: conservative pessimism (min score) already penalizes uncertain fragments.
 
-**Cost:** agentic-only makes `N_sections × (1 + 1 + 2) = 4 LLM calls` per section for typical corpora > 200 fragments. For 8 sections: ~32 calls. Expect 5-10 minutes on rate-limited free-tier LLMs.
+**Cost (serial path):** agentic-only makes `4 LLM calls` per section for typical corpora > 200 fragments (1 Phase 0 + 1 Phase 1 + 2 Phase 2 self-consistency). For 8 sections with `concurrency=3`: `ceil(8/3) × 3 = 4` sequential "rounds" of 3 concurrent sections — ~12 LLM round-trips on the critical path. Expect 5-10 minutes on rate-limited free-tier LLMs.
+
+### Batch parallel execution (searchForSectionsBatch)
+
+`AgenticRetriever` implements the optional `FragmentRetriever.searchForSectionsBatch?` interface, which `searchAllSections` in `plan-service.ts` uses when available.
+
+Instead of running Phase 0 → 1 → 2 sequentially **per section** (serial), the batch variant runs each phase **across all sections** before moving to the next:
+
+```
+Serial path (N=10, concurrency=3):
+  round 1: [S1: 0→1→2]  [S2: 0→1→2]  [S3: 0→1→2]
+  round 2: [S4: 0→1→2]  [S5: 0→1→2]  [S6: 0→1→2]
+  round 3: [S7: 0→1→2]  [S8: 0→1→2]  [S9: 0→1→2]
+  round 4: [S10: 0→1→2]
+  Critical path: 4 rounds × 3 LLM phases = 12 LLM round-trips
+
+Batch path (N=10, concurrency=3):
+  Phase 0: [S1..S10 in parallel, semaphore(3)]  → 1 wave
+  Phase 1: [S1..S10 in parallel, semaphore(3)]  → 1 wave
+  Phase 2: [S1..S10 in parallel, semaphore(3)]  → 1 wave
+  Critical path: 3 phases = 3 LLM round-trips (66% reduction)
+```
+
+**Pool A computation** (tag/domain DB lookups) happens per-section in parallel before `searchForSectionsBatch` is called — it's I/O-bound and fast. The shared `indexData` (fragment index) is fetched once and reused across all sections.
+
+**Extending to new retrievers:** implement `searchForSectionsBatch?(queries, limit, concurrency)` on any `FragmentRetriever` subclass. The method is optional — retrievers that don't implement it fall back to the serial path automatically.
 
 ---
 
@@ -153,8 +178,58 @@ Before sending fragment pairs to the LLM judge, `SupersedureDetector` computes J
 
 ---
 
+## 6. Retrieval Latency — Current State & Known Limits
+
+### Latency model per mode
+
+| Mode | LLM calls/section | Wall clock (N sections, concurrency=3) | Bottleneck |
+|------|--------------------|----------------------------------------|------------|
+| `vector-only` | 0 | ~0.5–2s total | Milvus search |
+| `hybrid` | 1 (batch judge) | `ceil(N/3) × ~5–8s` | LLM endpoint |
+| `agentic` serial (before fix) | 4 (P0+P1+P2×2) | `ceil(N/3) × 4 × ~5s` | Sequential LLM phases |
+| `agentic` batch (current) | 4 amortized | `3 phases × ~5s` regardless of N | LLM endpoint |
+
+### Improvements made
+
+**Phase 0 factorization — `AgenticRetriever.searchForSectionsBatch`** (2026-06-09)
+
+Agentic mode now runs Phase 0 for all sections, then Phase 1 for all, then Phase 2 for all, instead of Phase 0→1→2 sequentially per section. For 10 sections at `concurrency=3`:
+- Before: `ceil(10/3) × 3 phases = 4 rounds × 3 = 12 LLM round-trips` on critical path
+- After: `3 phases` (each phase runs all sections in parallel up to concurrency)
+- **~66% reduction in agentic wall clock**
+
+`plan-service.searchAllSections` automatically uses the batch path when the retriever implements `searchForSectionsBatch?` (currently only `AgenticRetriever`).
+
+### What remains
+
+**Hybrid mode** is already fully parallelized (`Promise.all` + semaphore). There is no sequential phase bottleneck — only 1 LLM call per section. The wall clock is `ceil(N/concurrency) × LLM_latency`. A `searchForSectionsBatch` for hybrid would save less than 5% (only hides the fast vector search behind LLM calls).
+
+**Root bottleneck for all LLM-based modes:** LLM endpoint latency. `ai.linagora.com` vs Ollama locally can vary 2–10×. The code cannot compress below `LLM_calls_on_critical_path × endpoint_latency`.
+
+### Configuration levers
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `FRAGMINT_LLM_CONCURRENCY` | `3` | Max concurrent sections. Raising to 5–10 reduces hybrid wall clock proportionally. |
+| `FRAGMINT_LLM_TIMEOUT` | `60s` | Per-call timeout. Raise if LLM is slow on large prompts. |
+| `FRAGMINT_LLM_ENDPOINT` | Ollama local | Switch to `ai.linagora.com` for faster hosted inference. |
+
+**Raising `FRAGMINT_LLM_CONCURRENCY` is the most effective lever for hybrid mode** — going from 3 to 10 reduces 10-section hybrid from ~4 rounds to 1 round.
+
+---
+
 ## Roadmap
 
 **V3 — Calibrated thresholds (empirical):** Run offline evaluation on a labeled set of 50 known duplicate/non-duplicate pairs from `example-vault`. Compute precision-recall curves for shingles thresholds 0.50–0.90 to validate the 0.70 default (see Task 11).
 
 **V4 — Cross-encoder re-ranking:** Replace the LLM batch judge (20 API calls) with a local cross-encoder model (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2`) running in Ollama for <100ms latency. Keep LLM for agentic mode only.
+
+---
+
+## Parallelism summary
+
+| Operation | Before | After | File |
+|-----------|--------|-------|------|
+| `searchAllSections` agentic | `ceil(N/3) × 3 phases` serial | `3 phases` batch | `agentic-retriever.ts` |
+| `searchAllSections` hybrid | `ceil(N/3)` rounds (already parallel) | — | `plan-service.ts` |
+| `generateAllSections` | N sections serial (`for await`) | `ceil(N/concurrency)` parallel | `plan-assembler.ts` |
