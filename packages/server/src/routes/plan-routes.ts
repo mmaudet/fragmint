@@ -1,8 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireRole } from '../auth/middleware.js';
+import {
+  createSearchJob,
+  resolveSearchJob,
+  failSearchJob,
+  getSearchJob,
+  deleteSearchJob,
+} from './plan-search-jobs.js';
 import type { PlanAssembler } from '../services/plan-assembler.js';
 import type { TemplateService } from '../services/template-service.js';
 import type { HarvesterService } from '../services/harvester-service.js';
+import type { PlanTemplateService } from '../services/plan-template-service.js';
 import {
   CreatePlanSchema,
   UpdatePlanSchema,
@@ -24,7 +32,7 @@ export function planRoutes(
   templateService: TemplateService,
   storePath: string,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
-  options?: { prefix?: string; collectionMiddleware?: any; harvesterService?: HarvesterService },
+  options?: { prefix?: string; collectionMiddleware?: any; harvesterService?: HarvesterService; planTemplateService?: PlanTemplateService },
 ) {
   const prefix = options?.prefix ?? '/v1';
   const readHandlers = options?.collectionMiddleware
@@ -55,6 +63,24 @@ export function planRoutes(
     if (!parsed.success) {
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     }
+    if (parsed.data.template_id) {
+      const planTemplateService = options?.planTemplateService;
+      if (!planTemplateService) {
+        return reply.status(503).send({ data: null, meta: null, error: 'Plan template service unavailable' });
+      }
+      const template = await planTemplateService.getById(parsed.data.template_id);
+      if (!template) {
+        return reply.status(404).send({ data: null, meta: null, error: 'Plan template not found' });
+      }
+      const plan = await planService.createFromTemplate(template, {
+        title: parsed.data.title,
+        owner: request.user.login,
+        collection_slug: request.collection?.slug ?? null,
+        spec_prompt: parsed.data.spec_prompt,
+        filters: parsed.data.filters,
+      });
+      return reply.status(201).send({ data: plan, meta: null, error: null });
+    }
     const plan = await planService.create({
       title: parsed.data.title,
       owner: request.user.login,
@@ -68,7 +94,7 @@ export function planRoutes(
   // LIST
   app.get(`${prefix}/plans`, { preHandler: readHandlers }, async (request) => {
     const plans = await planService.list({
-      owner: request.user.login,
+      owner: request.user.role === 'admin' ? undefined : request.user.login,
       collection_slug: request.collection?.slug,
     });
     return { data: plans, meta: { count: plans.length }, error: null };
@@ -308,6 +334,53 @@ export function planRoutes(
     },
   );
 
+  // SEARCH ALL SECTIONS (async — MCP-friendly, avoids 60s tool call timeout)
+  app.post(
+    `${prefix}/plans/:id/search-all-sections-async`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!(await requireOwnership(request, reply, id))) return;
+      const body = (request.body ?? {}) as { top_k?: number };
+      const plan = await planService.get(id);
+      if (!plan) return reply.status(404).send({ data: null, meta: null, error: 'Plan not found' });
+      const validatedStatuses = ['plan_validated', 'fragments_validated', 'completed'];
+      if (!validatedStatuses.includes(plan.status)) {
+        return reply.status(409).send({ data: null, meta: null, error: 'Outline must be validated first. Call plan_validate_outline.' });
+      }
+      const jobId = createSearchJob(id);
+      planService.searchAllSections(id, { top_k: body.top_k })
+        .then(() => resolveSearchJob(jobId))
+        .catch((err: unknown) => failSearchJob(jobId, String(err)));
+      return reply.status(202).send({
+        data: { job_id: jobId, total_sections: plan.state.sections.length },
+        meta: null,
+        error: null,
+      });
+    },
+  );
+
+  // SEARCH STATUS (poll for async search job)
+  app.get(
+    `${prefix}/plans/:id/search-status`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { job_id } = request.query as { job_id?: string };
+      if (!job_id) return reply.status(400).send({ data: null, meta: null, error: 'job_id required' });
+      const job = getSearchJob(job_id);
+      if (!job || job.planId !== id) return reply.status(404).send({ data: null, meta: null, error: 'Job not found' });
+      if (job.status === 'done') {
+        const updated = await planService.get(id);
+        return { data: { status: 'done', plan: updated }, meta: null, error: null };
+      }
+      if (job.status === 'error') {
+        return reply.status(500).send({ data: { status: 'error' }, meta: null, error: job.error ?? 'Search failed' });
+      }
+      return { data: { status: 'running' }, meta: null, error: null };
+    },
+  );
+
   // APPROVE FRAGMENTS (move candidates to selected, with optional exclusions)
   app.post(
     `${prefix}/plans/:id/approve-fragments`,
@@ -401,7 +474,9 @@ export function planRoutes(
     async (request, reply) => {
       const { id, sectionId } = request.params as { id: string; sectionId: string };
       if (!(await requireOwnership(request, reply, id))) return;
-      const out = await planService.generateSection(id, sectionId);
+      const body = (request.body ?? {}) as { constraint?: string };
+      const constraint = typeof body.constraint === 'string' && body.constraint.trim() ? body.constraint.trim() : undefined;
+      const out = await planService.generateSection(id, sectionId, constraint);
       if (!out)
         return reply
           .status(404)

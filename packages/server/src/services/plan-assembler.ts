@@ -144,7 +144,7 @@ export class PlanAssembler extends PlanService {
     return this.update(id, { sections: newSections, status: 'fragments_validated' });
   }
 
-  async generateSection(planId: string, sectionId: string): Promise<PlanRecord | null> {
+  async generateSection(planId: string, sectionId: string, constraint?: string): Promise<PlanRecord | null> {
     const p = await this.get(planId);
     if (!p) return null;
     const section = p.state.sections.find((s) => s.id === sectionId);
@@ -167,20 +167,20 @@ export class PlanAssembler extends PlanService {
     ];
     const fragmentBodyList = fragments_for_writer.map((f) => f.body);
 
+    const baseOverride = section.writer_instructions ?? p.state.writer_prompt_override;
+    const writer_prompt_override = [baseOverride, constraint].filter(Boolean).join('\n\n') || undefined;
+
     const messages = buildSectionMessages({
       section: { title: section.title, description: section.description },
       fragments: fragments_for_writer,
       lang: p.state.filters.lang ?? 'fr',
       max_chars: this.config.fragmentMaxChars,
-      writer_prompt_override: section.writer_instructions ?? p.state.writer_prompt_override,
+      writer_prompt_override,
       plan_title: p.title,
       spec_prompt: p.state.spec_prompt,
       reference_docs: referenceDocs.length ? referenceDocs : undefined,
     });
     const out = await this.requireLlm().chatMessages(messages);
-    const updatedSections = p.state.sections.map((s) =>
-      s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
-    );
     this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList);
 
     const now = new Date().toISOString();
@@ -201,19 +201,27 @@ export class PlanAssembler extends PlanService {
       }),
     );
 
+    // Re-read before write to avoid stale-state race when called concurrently
+    // from generateAllSections — each call only patches its own section slot.
+    const latest = await this.get(planId);
+    if (!latest) return null;
+    const updatedSections = latest.state.sections.map((s) =>
+      s.id === sectionId ? { ...s, generated_markdown: out.trim() } : s,
+    );
     return this.update(planId, { sections: updatedSections });
   }
 
   async generateAllSections(planId: string): Promise<PlanRecord | null> {
     const p = await this.get(planId);
     if (!p) return null;
-    for (const section of p.state.sections) {
+    const throttle = makeSemaphore(this.config.llmConcurrency ?? 3);
+    await Promise.all(p.state.sections.map((s) => throttle(async () => {
       try {
-        await this.generateSection(planId, section.id);
+        await this.generateSection(planId, s.id);
       } catch (err) {
-        console.error(`[generateAllSections] section "${section.title}" failed:`, err);
+        console.error(`[generateAllSections] section "${s.title}" failed:`, err);
       }
-    }
+    })));
     return this.assemble(planId);
   }
 

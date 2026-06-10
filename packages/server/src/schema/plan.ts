@@ -84,6 +84,9 @@ export const PlanStateSchema = z.object({
   draft_dirty: z.boolean().optional(),
   export_style_template_id: z.string().optional(),
   reference_docs: z.array(z.object({ name: z.string(), content: z.string() })).default([]),
+  from_template_id: z.string().optional(),
+  from_template_version: z.string().optional(),
+  from_template_name: z.string().optional(),
 });
 
 export type PlanState = z.infer<typeof PlanStateSchema>;
@@ -96,6 +99,7 @@ export const CreatePlanSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   spec_prompt: z.string().default(''),
   filters: PlanFiltersSchema.default({}),
+  template_id: z.string().optional(),
 });
 
 export const UpdatePlanSchema = z.object({

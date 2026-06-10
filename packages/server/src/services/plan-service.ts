@@ -25,6 +25,7 @@ import type {
 import { VectorRetriever } from '../retrieval/vector-retriever.js';
 import { getCurrentRetriever, getCurrentMode, getSectionTopK } from '../retrieval/factory.js';
 import type { FragmentCollectionService } from './fragment-collection-service.js';
+import type { PlanTemplate } from '../schema/plan-template.js';
 
 const SECTION_SCORE_THRESHOLD = 0.2;
 
@@ -193,7 +194,7 @@ export interface CreatePlanInput {
 }
 
 export interface ListPlansInput {
-  owner: string;
+  owner?: string;
   collection_slug?: string | null;
 }
 
@@ -252,15 +253,49 @@ export class PlanService {
     return (await this.get(id))!;
   }
 
+  async createFromTemplate(template: PlanTemplate, input: CreatePlanInput): Promise<PlanRecord> {
+    const id = `plan_${randomUUID()}`;
+    const now = new Date().toISOString();
+    const sections: PlanSection[] = template.sections.map((s) => ({
+      id: `sec_${randomUUID()}`,
+      title: s.title,
+      description: s.description,
+      inferred_type: s.inferred_type,
+      candidates: [],
+      selected: [],
+    }));
+    const state: PlanState = PlanStateSchema.parse({
+      spec_prompt: input.spec_prompt ?? '',
+      filters: input.filters ?? {},
+      plan_markdown: '',
+      sections,
+      from_template_id: template.id,
+      from_template_version: template.version,
+      from_template_name: template.name,
+    });
+    await this.db.insert(plans).values({
+      id,
+      title: normalizeTitle(input.title, template.name),
+      owner: input.owner,
+      collection_slug: input.collection_slug,
+      status: 'plan_validated',
+      state_json: JSON.stringify(state),
+      created_at: now,
+      updated_at: now,
+    });
+    return (await this.get(id))!;
+  }
+
   async list(input: ListPlansInput): Promise<PlanRecord[]> {
-    const conds = [eq(plans.owner, input.owner)];
+    const conds = [];
+    if (input.owner) conds.push(eq(plans.owner, input.owner));
     if (input.collection_slug !== undefined && input.collection_slug !== null) {
       conds.push(eq(plans.collection_slug, input.collection_slug));
     }
     const rows = await this.db
       .select()
       .from(plans)
-      .where(and(...conds))
+      .where(conds.length > 0 ? and(...conds) : undefined)
       .orderBy(desc(plans.updated_at));
     return rows.map(rowToRecord);
   }
@@ -776,7 +811,34 @@ export class PlanService {
     const saveMutex = makeSemaphore(1);
     const doneById = new Map<string, PlanSection>();
 
-    const rawSections = await Promise.all(sections.map((s) => throttle(async () => {
+    // Batch path: build all queries in parallel (DB-only Pool A), then run phased LLM
+    // across all sections. Critical path: 3 LLM rounds instead of ceil(N/concurrency)×3.
+    let rawSections: PlanSection[];
+    if (retrieverSnapshot.searchForSectionsBatch) {
+      const limit = args.top_k ?? getSectionTopK();
+      const sectionMeta = await Promise.all(sections.map(async (s) => {
+        const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
+        const filters = s.filters_override ?? p.state.filters;
+        const specExtract = p.state.spec_prompt ? extractRelevantSpecContext(p.state.spec_prompt, 1500, s.title) : undefined;
+        const enrichedText = [s.title, s.description, specExtract].filter(Boolean).join('\n\n').slice(0, 2000);
+        const { forcedCandidates } = await this.computePoolA({ title: s.title, description: s.description }, filters, p.collection_slug, knownTags, knownDomains, Math.max(50, limit * 4));
+        const query: SectionQuery = { text: enrichedText, filters, collectionSlug: p.collection_slug, inferred_type, spec_context: p.state.spec_prompt, forced_candidates: forcedCandidates };
+        return { s, inferred_type, query };
+      }));
+      const allResults = await retrieverSnapshot.searchForSectionsBatch(sectionMeta.map((m) => m.query), limit, concurrency);
+      rawSections = await Promise.all(sectionMeta.map(async ({ s, inferred_type }, i) => {
+        const seenIds = new Set<string>();
+        const candidates: FragmentCandidate[] = (allResults[i] ?? [])
+          .filter((r) => r.retrieval_source === 'tag' || r.score == null || r.score >= SECTION_SCORE_THRESHOLD)
+          .filter((r) => { if (seenIds.has(r.fragment_id)) return false; seenIds.add(r.fragment_id); return true; })
+          .map((r) => ({ fragment_id: r.fragment_id, score: r.score, title: r.title, body_excerpt: r.body_excerpt, quality: r.quality, type: r.type, payload_schema: r.payload_schema ?? null, score_breakdown: r.score_breakdown, justification: r.justification, retrieval_source: r.retrieval_source, confidence_level: computeConfidenceLevel(r.score_breakdown?.llm_score) }));
+        const section_confidence = computeSectionConfidence(candidates);
+        const result: PlanSection = { ...s, candidates, inferred_type, section_confidence };
+        await saveMutex(async () => { doneById.set(s.id, result); await this.update(planId, { sections: sections.map((sec) => doneById.get(sec.id) ?? sec) }); });
+        return result;
+      }));
+    } else {
+    rawSections = await Promise.all(sections.map((s) => throttle(async () => {
       const inferred_type = inferredById.get(s.id) ?? s.inferred_type;
       const filters = s.filters_override ?? p.state.filters;
       let candidates: FragmentCandidate[] = s.candidates ?? [];
@@ -814,6 +876,8 @@ export class PlanService {
 
       return result;
     })));
+    } // end else (serial path)
+
     const updatedSections = dedupCandidatesAcrossSections(rawSections).map((s) => ({
       ...s,
       section_confidence: computeSectionConfidence(s.candidates ?? []),
