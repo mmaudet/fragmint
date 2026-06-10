@@ -4,7 +4,7 @@ import { buildReadableIdMap, renderMarkdown, renderToc } from '../services/index
 import type { FragmentService } from '../services/fragment-service.js';
 import type { PlanFilters } from '../schema/plan.js';
 import type { FragmentRetriever, RetrievedFragment, SectionQuery } from './fragment-retriever.js';
-import { TYPE_BOOST, enrichQueryWithFilters } from './fragment-retriever.js';
+import { TYPE_BOOST } from './fragment-retriever.js';
 
 const PHASE2_SCORE_MIN = 0.3;
 const BATCH_JUDGE_SIZE = 25; // max candidates per LLM call — above this, Phase 2 batches sequentially
@@ -31,50 +31,9 @@ export class AgenticRetriever implements FragmentRetriever {
   }
 
   async searchForSection(query: SectionQuery, limit = 5): Promise<RetrievedFragment[]> {
-    // Soft-enrich query text with domain/tags hints (same pattern as hybrid).
-    // These become readable hints in Phase 0/1/2 prompts without hard-constraining the LLM.
-    const enrichedQuery: SectionQuery = {
-      ...query,
-      text: enrichQueryWithFilters(query.text, query.filters),
-    };
-    query = enrichedQuery;
-
+    query = { ...query, text: enrichQueryForLLM(query.text, query.filters) };
     const indexData = await this.indexService.getData(false, query.collectionSlug ?? undefined, query.filters.lang ?? undefined);
-
-    // Phase 0 — TOC filtering (only when no domain filter AND index large enough to justify it)
-    let activeData = indexData;
-    if (!query.filters.domain?.length && indexData.total > PHASE0_THRESHOLD) {
-      const toc = renderToc(indexData);
-      const combinations = new Set<string>(
-        Object.entries(indexData.subjects).flatMap(([domain, subj]) =>
-          Object.keys(subj.types).map((type) => `${domain}:${type}`),
-        ),
-      );
-      // inferred_type is used only as a Phase 2 score boost (×TYPE_BOOST), NOT as a hard
-      // pre-filter here. Restricting combinations to domain:inferred_type would cut cross-type
-      // relevant fragments (e.g. pricing/engagement fragments for a methodology section).
-      const selected = await this.selectDomainTypes(query, toc, combinations);
-      const sectionLabel = query.text.replace(/\s+/g, ' ').slice(0, 60);
-      const typeHint = query.inferred_type
-        ? ` [inferred_type=${query.inferred_type}]`
-        : ' [inferred_type=none]';
-      if (selected) {
-        console.info(
-          `[retrieval][agentic-only][phase0] "${sectionLabel}"${typeHint} → ${selected.length} combinations: ${selected.join(', ')}`,
-        );
-        activeData = filterIndexData(indexData, selected);
-      } else {
-        console.info(
-          `[retrieval][agentic-only][phase0] "${sectionLabel}"${typeHint} → fallback to full index (${indexData.total} fragments)`,
-        );
-      }
-    } else {
-      const reason = query.filters.domain?.length
-        ? `domain filter: ${query.filters.domain.join(', ')}`
-        : `index small (${indexData.total} <= ${PHASE0_THRESHOLD})`;
-      console.debug(`[retrieval][agentic-only][phase0] skipped (${reason})`);
-    }
-
+    const activeData = await this.computeActiveData(query, indexData);
     const indexMd = renderMarkdown(activeData);
     const idMap = buildReadableIdMap(activeData);
 
@@ -118,33 +77,77 @@ export class AgenticRetriever implements FragmentRetriever {
         `(threshold=${PHASE2_SCORE_MIN}, self-consistency=${this.selfConsistency})`,
     );
 
-    // Type-boosted ranking before top-K slice: mirrors hybrid-retriever RANKING_TYPE_BOOST.
-    // Without this, forced-only type-match fragments (lower base score) are squeezed out
-    // by higher-scored cross-type candidates even after TYPE_BOOST is applied to their score.
-    const RANKING_TYPE_BOOST = 2.5;
-    const qualityRank = (q: string | undefined) => q === 'approved' ? 2 : q === 'reviewed' ? 1 : 0;
-    const ranked = query.inferred_type
-      ? [...kept].sort((a, b) => {
-          const aBoost = a.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
-          const bBoost = b.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
-          const scoreDiff = (b.score ?? 0) * bBoost - (a.score ?? 0) * aBoost;
-          if (scoreDiff !== 0) return scoreDiff;
-          return qualityRank(b.quality ?? undefined) - qualityRank(a.quality ?? undefined);
-        })
-      : kept.sort((a, b) => {
-          const diff = (b.score ?? 0) - (a.score ?? 0);
-          if (diff !== 0) return diff;
-          return qualityRank(b.quality ?? undefined) - qualityRank(a.quality ?? undefined);
-        });
-    return ranked.slice(0, limit);
+    return rankAndSlice(kept, query.inferred_type, limit);
+  }
+
+  // ── Phase 0 helper ───────────────────────────────────────────────────────────
+
+  private async computeActiveData(query: SectionQuery, indexData: IndexData): Promise<IndexData> {
+    if (query.filters.domain?.length || indexData.total <= PHASE0_THRESHOLD) {
+      console.debug(`[retrieval][agentic-only][phase0] skipped (${query.filters.domain?.length ? 'domain filter' : `index small`})`);
+      return indexData;
+    }
+    const toc = renderToc(indexData);
+    const combinations = new Set<string>(
+      Object.entries(indexData.subjects).flatMap(([domain, subj]) =>
+        Object.keys(subj.types).map((type) => `${domain}:${type}`),
+      ),
+    );
+    const selected = await this.selectDomainTypes(query, toc, combinations);
+    const hint = `"${query.text.slice(0, 60)}"${query.inferred_type ? ` [inferred_type=${query.inferred_type}]` : ''}`;
+    if (selected) {
+      console.info(`[retrieval][agentic-only][phase0] ${hint} → ${selected.length} combinations: ${selected.join(', ')}`);
+      return filterIndexData(indexData, selected);
+    }
+    console.info(`[retrieval][agentic-only][phase0] ${hint} → full index (${indexData.total})`);
+    return indexData;
+  }
+
+  // Phase-parallel batch: runs Phase 0 for all sections, then Phase 1, then Phase 2.
+  // Critical path = 3 rounds instead of ceil(N/concurrency)×3. See docs/scoring.md.
+  async searchForSectionsBatch(queries: SectionQuery[], limit: number, concurrency = 3): Promise<RetrievedFragment[][]> {
+    if (queries.length === 0) return [];
+    const enriched = queries.map((q) => ({ ...q, text: enrichQueryForLLM(q.text, q.filters) }));
+    // Fetch one index snapshot per unique (collection, lang) pair — sections with
+    // different filters_override must not inherit the first query's index scope.
+    const indexKey = (q: (typeof enriched)[0]) => `${q.collectionSlug ?? ''}|${q.filters.lang ?? ''}`;
+    const indexDataMap = new Map<string, Awaited<ReturnType<typeof this.indexService.getData>>>();
+    for (const q of enriched) {
+      const key = indexKey(q);
+      if (!indexDataMap.has(key)) {
+        indexDataMap.set(key, await this.indexService.getData(false, q.collectionSlug ?? undefined, q.filters.lang ?? undefined));
+      }
+    }
+    const sem = localSem(concurrency);
+    const phase1Cap = Math.max(limit * PHASE1_MULTIPLIER, 8);
+
+    const activeDataArr = await Promise.all(enriched.map((q) => sem(() => this.computeActiveData(q, indexDataMap.get(indexKey(q))!))));
+
+    const phase1Arr = await Promise.all(enriched.map((q, i) => sem(async () => {
+      const ids = await this.selectCandidates(q, renderMarkdown(activeDataArr[i]), buildReadableIdMap(activeDataArr[i]), phase1Cap, limit);
+      const phase1Set = new Set(ids);
+      const forcedIds = (q.forced_candidates ?? []).map((c) => c.id);
+      const forcedSet = new Set(forcedIds);
+      return { phase1Set, forcedSet, allIds: [...ids, ...forcedIds.filter((id) => !phase1Set.has(id))] };
+    })));
+
+    return Promise.all(enriched.map((q, i) => sem(async () => {
+      const { phase1Set, forcedSet, allIds } = phase1Arr[i];
+      if (allIds.length === 0) return [];
+      const scored = await this.batchScore(q, allIds);
+      const kept = scored
+        .filter((r) => r.score !== null && r.score >= this.minScore)
+        .map((r) => ({ ...r,
+          score: !!q.inferred_type && r.type === q.inferred_type && r.score != null ? r.score * TYPE_BOOST : r.score,
+          retrieval_source: (phase1Set.has(r.fragment_id) && forcedSet.has(r.fragment_id) ? 'both' : forcedSet.has(r.fragment_id) ? 'tag' : 'vector') as 'vector' | 'tag' | 'both',
+        }));
+      return rankAndSlice(kept, q.inferred_type, limit);
+    })));
   }
 
   // ── Phase 2 batch ────────────────────────────────────────────────────────────
 
-  /**
-   * Scores all candidate fragments in a single LLM batch call (two calls when
-   * self-consistency is enabled). Returns one RetrievedFragment per candidate.
-   */
+  /** Scores all candidates; two LLM calls when self-consistency is enabled. */
   private async batchScore(
     query: SectionQuery,
     fragmentIds: string[],
@@ -235,14 +238,7 @@ export class AgenticRetriever implements FragmentRetriever {
     });
   }
 
-  /**
-   * One LLM call that scores all candidates simultaneously.
-   * Returns Map<fragment_id, { score: 0-10, reason? }> on success (null entries get neutral
-   * fallback score), or null on hard failure (exception, no JSON, no UUID matches).
-   *
-   * null signals total failure so callers can fall back to Phase 1 ordering rather than
-   * treating all-neutral as a valid scoring result.
-   */
+  /** One LLM batch call scoring all candidates. Returns null on total failure so callers fall back to Phase 1 order. */
   private async callBatchJudge(
     query: SectionQuery,
     candidates: Array<{
@@ -343,8 +339,6 @@ Include ALL ${candidates.length} fragments. Return ONLY the JSON array.`;
     }
   }
 
-  // ── Phase 1 helpers ──────────────────────────────────────────────────────────
-
   private async selectDomainTypes(
     query: SectionQuery,
     toc: string,
@@ -433,6 +427,29 @@ Return ONLY a JSON array of ID strings, best first: ["TM-arg-001", "LC-intro-003
 
 // ── Module-level helpers ─────────────────────────────────────────────────────
 
+function localSem(n: number) {
+  let r = 0; const q: Array<() => void> = [];
+  return <T>(fn: () => Promise<T>): Promise<T> => new Promise((res, rej) => {
+    const run = () => { r++; fn().then(res, rej).finally(() => { r--; q.shift()?.(); }); };
+    r < n ? run() : q.push(run);
+  });
+}
+
+function rankAndSlice(kept: RetrievedFragment[], inferredType: string | undefined, limit: number): RetrievedFragment[] {
+  const qr = (q: string | undefined) => q === 'approved' ? 2 : q === 'reviewed' ? 1 : 0;
+  const BOOST = 2.5;
+  const sorted = inferredType
+    ? [...kept].sort((a, b) => {
+        const d = (b.score ?? 0) * (b.type === inferredType ? BOOST : 1) - (a.score ?? 0) * (a.type === inferredType ? BOOST : 1);
+        return d !== 0 ? d : qr(b.quality ?? undefined) - qr(a.quality ?? undefined);
+      })
+    : kept.sort((a, b) => {
+        const d = (b.score ?? 0) - (a.score ?? 0);
+        return d !== 0 ? d : qr(b.quality ?? undefined) - qr(a.quality ?? undefined);
+      });
+  return sorted.slice(0, limit);
+}
+
 function buildResult(
   id: string,
   frag: {
@@ -481,12 +498,22 @@ function filterIndexData(data: IndexData, selected: string[]): IndexData {
   return { ...data, subjects, total };
 }
 
+// Tags and domains appended AFTER section text so LLM reads the topic first.
+// enrichQueryWithFilters (hybrid/vector) prepends them for embedding bias — opposite intent.
+function enrichQueryForLLM(text: string, filters: PlanFilters): string {
+  const parts: string[] = [];
+  if (filters.domain?.length) parts.push(`Domaine : ${filters.domain.join(', ')}`);
+  if (filters.tags?.length) parts.push(`Tags : ${filters.tags.join(', ')}`);
+  if (parts.length === 0) return text;
+  return `${text}\n${parts.join('. ')}.`;
+}
+
 function buildFiltersDesc(filters: PlanFilters): string {
   const parts: string[] = [];
   if (filters.lang) parts.push(`Language: ${filters.lang}`);
-  // Domain filter is NOT injected here: it creates a hard bias in Phase 1 that prevents
-  // relevant cross-domain fragments from being selected. Pool A handles domain forcing.
+  // Domain and tag filters are NOT injected here: they create a hard bias in Phase 1 that
+  // prevents relevant fragments from being selected by topic. Tags remain present via
+  // enrichQueryWithFilters (soft semantic context in the section text).
   if (filters.type) parts.push(`Type: ${filters.type}`);
-  if (filters.tags?.length) parts.push(`Tags: ${filters.tags.join(', ')}`);
   return parts.join('\n');
 }

@@ -148,19 +148,8 @@ export class HybridRetriever implements FragmentRetriever {
     const list1IndexMap = new Map(list1.map((item, i) => [item.id, i + 1]));
     const list2IndexMap = new Map(list2.map((item, i) => [item.id, i + 1]));
 
-    // Type-boosted ranking: fragments whose type matches the section's inferred_type get a
-    // 2.5× RRF multiplier before slicing. Without this, forced-only type-match fragments
-    // (no vector rank → low rrf_score) are always squeezed out by vector-backed argument
-    // fragments, even though they are the only candidates that survive cross-section dedup
-    // for their section type (e.g. the sole introduction-type fragment for an Introduction
-    // section never enters top-K and the section ends up empty).
-    const RANKING_TYPE_BOOST = 2.5;
     const rankedFiltered = query.inferred_type
-      ? [...floorFiltered].sort((a, b) => {
-          const aBoost = a.item._data.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
-          const bBoost = b.item._data.type === query.inferred_type ? RANKING_TYPE_BOOST : 1.0;
-          return b.rrf_score * bBoost - a.rrf_score * aBoost;
-        })
+      ? [...floorFiltered].sort((a, b) => b.rrf_score - a.rrf_score)
       : floorFiltered;
 
     const results = rankedFiltered.slice(0, limit).map(({ item, rrf_score }) => {

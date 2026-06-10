@@ -77,6 +77,8 @@ export interface RetrievedFragment {
 
 export interface FragmentRetriever {
   searchForSection(query: SectionQuery, limit?: number): Promise<RetrievedFragment[]>;
+  /** Optional batch variant: runs phases in parallel across all sections. */
+  searchForSectionsBatch?(queries: SectionQuery[], limit: number, concurrency?: number): Promise<RetrievedFragment[][]>;
 }
 
 /** Multiplicative boost applied when a fragment's editorial type matches the section's inferred_type. */
