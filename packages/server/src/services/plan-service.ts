@@ -633,9 +633,8 @@ export class PlanService {
     if (structuredColls.length > 0) {
       lines.push('Structured data sources (internal labels, NOT section names):');
       for (const c of structuredColls) {
-        const tableId = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
         const src = c.source.replace(/\.docx?$/i, '').slice(0, 55);
-        lines.push(`- table_id="${tableId}" (${c.count} rows, schema=${c.schema}, source=${src})`);
+        lines.push(`- "${c.title}" (${c.count} rows, schema=${c.schema}, source=${src})`);
       }
     }
 
