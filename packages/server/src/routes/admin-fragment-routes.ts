@@ -42,7 +42,7 @@ export function adminFragmentRoutes(
     if (q.origin) conditions.push(eq(fragments.origin, q.origin));
     if (q.search) {
       const pattern = `%${q.search}%`;
-      conditions.push(or(like(fragments.title, pattern), like(fragments.body_excerpt, pattern), like(fragments.id, pattern)));
+      conditions.push(or(like(fragments.title, pattern), like(fragments.body_excerpt, pattern), like(fragments.id, pattern), like(fragments.readable_id, pattern), like(fragments.origin_source, pattern)));
     }
 
     const where = conditions.length ? and(...conditions) : undefined;
