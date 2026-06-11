@@ -35,17 +35,18 @@ The <slug> MUST be one of:
 - conclusion     : summary, recap, or closing remarks
 - bio            : author, speaker, or team member profile
 - clause         : contractual clause, term, or condition
+- definition     : glossary entry, term definition, or concept explanation
 
 No body content. No commentary outside section descriptions.
 
 When a corpus context is provided:
-- ONLY use types listed under "Types" in the corpus. Do NOT use any other type even if editorially appropriate — a section with no matching fragments will be empty and must be omitted.
-- For each type you plan to use, check its domain coverage. Do NOT include a section of that type if its coverage is limited to domains unrelated to the specification topic (e.g. if pricing only covers "twake" and "linto" but the spec is about "mirai" and "openrag", omit the pricing section).
-- If you feel a testimonial, faq, bio, or clause section is needed but that type is not in the corpus, replace it with the closest available type (e.g. use-case instead of testimonial, methodology instead of faq).
-- Table titles in the corpus (e.g. "Choix du modèle de langage", "New additional features", "Proposition financière") are internal data labels from source documents. They MUST NOT appear as section names in your plan.
+- Use the corpus to inform which types have rich content available, and prioritise those sections. But DO NOT omit a section solely because its type is absent or scarce in the corpus — if the document specification requires that section, include it. A section with no matching fragments will be generated from the specification alone.
+- For each type you plan to use, check its domain coverage. Prefer types whose coverage matches the specification topic, but do not drop a required section because of domain mismatch.
+- If you feel a testimonial, faq, bio, or clause section is needed but that type is not in the corpus, keep the section with the correct type — the composer will generate it from the specification.
+- Table titles in the corpus (e.g. "Choix du modèle de langage", "Proposition financière") are internal data labels from source documents. They MUST NOT appear as section names in your plan.
   Use them only inside section descriptions, with a phrasing like "may include data from the table titled '...'".
-  Correct:   section name "Tarification annuelle des prestations", description "...may include data from the table titled 'New additional features'..."
-  Incorrect: section name "New additional features" ← do not do this`;
+  Correct:   section name "Tarification annuelle des prestations", description "...may include data from the table titled 'Proposition financière'..."
+  Incorrect: section name "Proposition financière" ← do not do this`;
 
 export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
   const lang = args.filters.lang ?? 'fr';
@@ -93,7 +94,7 @@ export function buildPlanMessages(args: BuildPlanArgs): ChatMessage[] {
 
 export interface BuildSectionArgs {
   section: { title: string; description: string };
-  fragments: Array<{ body: string }>;
+  fragments: Array<{ body: string; payload_schema?: string | null }>;
   lang: string;
   max_chars: number;
   writer_prompt_override?: string;
@@ -117,13 +118,26 @@ to cite. Do NOT:
 Instead, rewrite and weave the fragment content into a single coherent
 section that reads as original prose. You may rephrase freely, reorder
 ideas, and drop fragment content that does not fit the section's scope.
-Stay faithful to the facts in the fragments — do not invent additional
-facts. NEVER invent: phone numbers, email addresses, URLs, postal
-addresses, monetary amounts, discount percentages, promotional offers
-with specific dates or conditions, or named individuals not present in
-the source fragments. If a section expects such content (e.g. contact
-details, pricing) but no fragment provides it, write in general terms
-without fabricating specific values.
+
+Source hierarchy — you have two sources of truth:
+1. The Document specification (brief): defines what THIS project is about
+   — client, product in scope, user count, dates, budget, specific
+   technical context. This is the ground truth for current-project facts.
+2. Source fragments: provide writing style, professional formulations,
+   structural patterns, and reusable commitments from past proposals.
+
+When the brief and a fragment conflict on a project-specific fact
+(client name, product name, user count, scope, dates, budget,
+technical components in scope), the BRIEF WINS. Fragments are
+templates from past projects — authoritative for style and structure,
+not for facts that belong to the current project.
+
+Do not invent facts absent from both sources. NEVER invent: phone
+numbers, email addresses, URLs, postal addresses, monetary amounts,
+discount percentages, promotional offers with specific dates or
+conditions, or named individuals not present in either source.
+If a section expects such content but neither source provides it,
+write in general terms without fabricating specific values.
 
 Output ONLY the section body in Markdown. Do not repeat the section
 title as a heading. No introduction, no closing remark.`;
@@ -158,9 +172,18 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
   if (args.fragments.length === 0) {
     lines.push('(no source fragments — write from the description and reference documents above)');
   } else {
+    const rowCount = args.fragments.filter((f) => f.payload_schema?.endsWith('-row-v1')).length;
+    if (rowCount >= 2) {
+      lines.push(
+        'IMPORTANT: The source fragments below are rows of a structured table. ' +
+          'Output a Markdown table — one row per fragment, in the order given. ' +
+          'Infer column headers from the fragment content. Do not convert them to prose.',
+      );
+      lines.push('');
+    }
     lines.push('Source fragments (use these as the basis for the content):');
     args.fragments.forEach((f, i) => {
-      lines.push(`--- Fragment ${i + 1} ---`);
+      lines.push(`--- Fragment ${i + 1}${f.payload_schema ? ` [${f.payload_schema}]` : ''} ---`);
       lines.push(truncate(f.body, args.max_chars));
     });
   }
@@ -173,31 +196,60 @@ export function buildSectionMessages(args: BuildSectionArgs): ChatMessage[] {
 
 const GROUNDEDNESS_SYSTEM = `You are a factual accuracy auditor for AI-generated documents.
 
-Compare the generated draft against the provided source fragments.
-Identify assertions in the draft that are NOT directly supported by those fragments.
+Compare the generated draft against ALL provided source material: source fragments, the document specification (brief), the section description, and any reference documents.
+An assertion is grounded if it is supported by ANY of these sources — not just the fragments.
+Identify assertions in the draft that are NOT supported by any of the provided source material.
 
 Flag an assertion when:
-- It states a fact, figure, percentage, date, or amount not present in any fragment
-- It modifies a specific value from a fragment (e.g. "99.5%" becomes "nearly 100%", "216 minutes" becomes "~3.5h")
+- It states a fact, figure, percentage, date, or amount not present in any source material
+- It modifies a specific value from a source (e.g. "99.5%" becomes "nearly 100%", "216 minutes" becomes "~3.5h")
 - It changes the scope of a commitment ("under certain conditions" → "guaranteed", "may" → "will")
-- It creates a causal or logical link between two fragments that neither fragment establishes
+- It creates a causal or logical link that none of the source material establishes
 
 Risk levels:
 - high: invented fact, modified number/amount/percentage, changed condition or scope
-- medium: causal link between fragments not present in any source, overgeneralization
+- medium: causal link not present in any source, overgeneralization
 - low: paraphrase that subtly shifts meaning without inventing new information
 
 Return ONLY a valid JSON array. If the draft is fully grounded, return [].
 Each item must have exactly: { "text": "exact phrase from the draft", "risk": "high|medium|low", "reason": "concise explanation" }
 Do not wrap in markdown code blocks.`;
 
+export interface GroundednessContext {
+  spec_prompt?: string;
+  section_description?: string;
+  reference_docs?: Array<{ name: string; content: string }>;
+}
+
 export function buildGroundednessMessages(
   draft: string,
   fragmentBodies: string[],
+  context?: GroundednessContext,
 ): ChatMessage[] {
   const lines: string[] = [];
+
+  if (context?.spec_prompt) {
+    lines.push('Document specification (brief):');
+    lines.push(context.spec_prompt.slice(0, 2000));
+    lines.push('');
+  }
+
+  if (context?.section_description) {
+    lines.push(`Section description: ${context.section_description}`);
+    lines.push('');
+  }
+
+  if (context?.reference_docs?.length) {
+    lines.push('Reference documents:');
+    context.reference_docs.forEach((doc) => {
+      lines.push(`--- ${doc.name} ---`);
+      lines.push(doc.content.slice(0, 1500));
+    });
+    lines.push('');
+  }
+
   if (fragmentBodies.length === 0) {
-    lines.push('(no source fragments — all assertions in the draft are potentially ungrounded)');
+    lines.push('(no source fragments)');
   } else {
     lines.push('Source fragments:');
     fragmentBodies.forEach((body, i) => {
@@ -205,6 +257,7 @@ export function buildGroundednessMessages(
       lines.push(body.slice(0, 2000));
     });
   }
+
   lines.push('');
   lines.push('Generated draft:');
   lines.push(draft);

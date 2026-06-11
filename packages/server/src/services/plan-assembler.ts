@@ -3,11 +3,24 @@ import { eq, sql } from 'drizzle-orm';
 import { fragments, planFragmentUsages } from '../db/schema.js';
 import { FRAGMENT_TYPES, type CreateFragmentInput } from '../schema/fragment.js';
 import { type PlanSection } from '../schema/plan.js';
-import { buildSectionMessages, buildGroundednessMessages, parseGroundednessFlags } from './plan-prompts.js';
+import { buildSectionMessages, buildGroundednessMessages, parseGroundednessFlags, type GroundednessContext } from './plan-prompts.js';
 import { makeSemaphore, PlanService, type PlanRecord } from './plan-service.js';
 import { slugify } from './slugify.js';
 import { renderMarkdownToDocx, renderMarkdownToPptx } from './pandoc-render.js';
 import { renderMarpFromString } from './render-marp.js';
+
+// Schemas whose values are project-specific parameters (substitution from brief is allowed).
+// Do NOT add sla-row-v1: SLA values are Linagora commitments, not project parameters.
+// Do NOT add reference-v1: client references are historical facts.
+// Only add a schema here if its values are intrinsically project-specific
+// and do not require human validation before being included in a proposal.
+export const PARAMETERIZABLE_SCHEMAS = ['pricing-line-v1'];
+
+const PRICING_OVERRIDE_INSTRUCTION = `When a source fragment contains structured tabular data (pricing table), the Document specification takes precedence over fragment values for all monetary amounts, quantities, and totals. Use the fragment for table structure (column names, row labels, format) only.
+
+If the Document specification does not provide a specific value for a cell, mark it as "[à préciser]" rather than copying from the fragment.`;
+
+const TABLE_ROW_INSTRUCTION = `The source fragments are rows of a structured table. You MUST output a Markdown table — one row per fragment, in the order given. Infer column headers from the fragment structure. Do not convert the rows to prose paragraphs.`;
 
 // Marp CSS for the "linagora" pseudo-theme (uses built-in 'default' + custom style overrides).
 const LINAGORA_MARP_STYLE = `
@@ -55,10 +68,11 @@ export class PlanAssembler extends PlanService {
     sectionId: string,
     draft: string,
     fragmentBodies: string[],
+    context?: GroundednessContext,
   ): void {
     void this.groundSemaphore(async () => {
       try {
-        const msgs = buildGroundednessMessages(draft, fragmentBodies);
+        const msgs = buildGroundednessMessages(draft, fragmentBodies, context);
         const raw = await this.requireLlm().chatMessages(msgs, { temperature: 0 });
         const flags = parseGroundednessFlags(raw);
         const latest = await this.get(planId);
@@ -155,11 +169,30 @@ export class PlanAssembler extends PlanService {
     const fragmentsSvc = this.config.fragments;
     const fragments_for_writer = await Promise.all(
       section.selected.map(async (sel) => {
-        if (sel.edited || !fragmentsSvc) return { body: sel.body };
+        if (sel.edited || !fragmentsSvc) return { body: sel.body, payload_schema: null, type: null, payload: null };
         const original = await fragmentsSvc.getById(sel.fragment_id);
-        return { body: original?.body ?? sel.body };
+        return {
+          body: original?.body ?? sel.body,
+          payload_schema: original?.payload_schema ?? null,
+          type: original?.type ?? null,
+          payload: original?.payload ?? null,
+        };
       }),
     );
+
+    // Restore original row order for table fragments using _row_index stored in payload.
+    fragments_for_writer.sort((a, b) => {
+      if (a.payload_schema && a.payload_schema === b.payload_schema) {
+        try {
+          const pa = JSON.parse(a.payload ?? '{}') as Record<string, unknown>;
+          const pb = JSON.parse(b.payload ?? '{}') as Record<string, unknown>;
+          if (pa._row_index !== undefined && pb._row_index !== undefined) {
+            return (pa._row_index as number) - (pb._row_index as number);
+          }
+        } catch { /* non-JSON payload, skip */ }
+      }
+      return 0;
+    });
 
     const referenceDocs = [
       ...(p.state.reference_docs ?? []),
@@ -167,8 +200,18 @@ export class PlanAssembler extends PlanService {
     ];
     const fragmentBodyList = fragments_for_writer.map((f) => f.body);
 
+    const hasParameterizableSchema = fragments_for_writer.some(
+      (f) => f.payload_schema != null && PARAMETERIZABLE_SCHEMAS.includes(f.payload_schema),
+    );
+    const rowFragmentCount = fragments_for_writer.filter((f) => f.payload_schema?.endsWith('-row-v1')).length;
+    const hasTableRows = rowFragmentCount >= 2;
     const baseOverride = section.writer_instructions ?? p.state.writer_prompt_override;
-    const writer_prompt_override = [baseOverride, constraint].filter(Boolean).join('\n\n') || undefined;
+    const writer_prompt_override = [
+      baseOverride,
+      hasTableRows ? TABLE_ROW_INSTRUCTION : undefined,
+      hasParameterizableSchema ? PRICING_OVERRIDE_INSTRUCTION : undefined,
+      constraint,
+    ].filter(Boolean).join('\n\n') || undefined;
 
     const messages = buildSectionMessages({
       section: { title: section.title, description: section.description },
@@ -181,7 +224,11 @@ export class PlanAssembler extends PlanService {
       reference_docs: referenceDocs.length ? referenceDocs : undefined,
     });
     const out = await this.requireLlm().chatMessages(messages);
-    this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList);
+    this.scheduleGroundednessCheck(planId, sectionId, out.trim(), fragmentBodyList, {
+      spec_prompt: p.state.spec_prompt,
+      section_description: section.description,
+      reference_docs: referenceDocs.length ? referenceDocs : undefined,
+    });
 
     const now = new Date().toISOString();
     await Promise.all(

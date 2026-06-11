@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildPlanMessages, buildSectionMessages } from './plan-prompts.js';
+import { PARAMETERIZABLE_SCHEMAS } from './plan-assembler.js';
 
 describe('buildPlanMessages', () => {
   it('builds a system + user message pair from a spec prompt', () => {
@@ -96,5 +97,34 @@ describe('buildSectionMessages', () => {
     });
     expect(msgs[0].content).toContain('NOT external sources');
     expect(msgs[0].content).toContain('quote them verbatim');
+  });
+});
+
+describe('PARAMETERIZABLE_SCHEMAS — pricing override detection', () => {
+  // Test A: pricing-line-v1 triggers override
+  it('pricing-line-v1 is in PARAMETERIZABLE_SCHEMAS', () => {
+    const fragments = [{ body: '| Prix | 1000€ |', payload_schema: 'pricing-line-v1' }];
+    const hasOverride = fragments.some(
+      (f) => f.payload_schema && PARAMETERIZABLE_SCHEMAS.includes(f.payload_schema),
+    );
+    expect(hasOverride).toBe(true);
+  });
+
+  // Test B: sla-row-v1 does NOT trigger override (Linagora commitments protected)
+  it('sla-row-v1 is NOT in PARAMETERIZABLE_SCHEMAS', () => {
+    const fragments = [{ body: 'SLA: 99.9% uptime', payload_schema: 'sla-row-v1' }];
+    const hasOverride = fragments.some(
+      (f) => f.payload_schema && PARAMETERIZABLE_SCHEMAS.includes(f.payload_schema),
+    );
+    expect(hasOverride).toBe(false);
+  });
+
+  // Test C: null payload_schema does NOT trigger override
+  it('null payload_schema does not trigger override', () => {
+    const fragments = [{ body: 'Regular argument fragment', payload_schema: null }];
+    const hasOverride = fragments.some(
+      (f) => f.payload_schema && PARAMETERIZABLE_SCHEMAS.includes(f.payload_schema),
+    );
+    expect(hasOverride).toBe(false);
   });
 });
