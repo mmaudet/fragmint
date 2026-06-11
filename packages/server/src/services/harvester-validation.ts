@@ -179,7 +179,7 @@ async function commitCandidate(
           valid_until: null,
           access: { read: ['*'], write: ['contributor', 'admin'], approve: ['expert', 'admin'] },
           harvest_confidence: candidate.confidence,
-          payload: JSON.stringify(row),
+          payload: JSON.stringify({ ...row, _row_index: i }),
           payload_schema: candidate.payload_schema ?? null,
         } as any,
         userId,
