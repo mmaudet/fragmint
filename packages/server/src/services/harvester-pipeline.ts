@@ -37,6 +37,17 @@ import type { FragmentCollectionService } from './fragment-collection-service.js
 
 const execFileAsync = promisify(execFile);
 
+function cleanedSourceSection(raw: string | undefined): string {
+  return (raw ?? '').replace(/^\d+(\.\d+)*\s+/, '').trim();
+}
+
+function enrichBodyWithSection(body: string, sourceSection: string | undefined): string {
+  const label = cleanedSourceSection(sourceSection);
+  if (!label) return body;
+  if (body.trimStart().startsWith('#')) return body;
+  return `# ${label}\n\n${body}`;
+}
+
 function getMetadataStatus(block: CombinedBlock): string {
   const pc = block.new_proposals?.tags?.length ?? 0;
   if (block.confidence >= 0.85 && pc === 0) return 'auto-validated';
@@ -232,6 +243,10 @@ export async function runPipeline(
         if (isJunky(body)) return false;
         // Drop heading-only bodies (TDC entries that slipped through chunking)
         if (/^#{1,6}\s+[^\n]+$/.test(body)) return false;
+        // Drop title-only fragments: after prepending source section heading, real content < 30 chars
+        const enriched = enrichBodyWithSection(body, b._sourceSection);
+        const realContent = enriched.replace(/^#[^\n]*\n\n?/, '').trim();
+        if (realContent.length < 30) return false;
         return true;
       });
       console.log(`[harvest:${jobId}] ${l1l2Blocks.length} block(s) after dedup+separator-filter`);
@@ -358,7 +373,7 @@ export async function runPipeline(
             id: `hcn-${randomUUID()}`,
             job_id: jobId,
             title: block.title || 'Untitled',
-            body: block.body,
+            body: enrichBodyWithSection(block.body, block._sourceSection),
             type: block.type,
             domain: block.domain,
             lang: block.lang || lang,
