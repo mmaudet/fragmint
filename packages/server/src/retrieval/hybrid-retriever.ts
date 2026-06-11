@@ -204,7 +204,7 @@ export class HybridRetriever implements FragmentRetriever {
     const list = candidates
       .map(
         (c, i) =>
-          `${i + 1}. ID:${c.id} [domain: ${c.domain}]\nTitle: ${c.title ?? ''}\nExcerpt: ${(c.body_excerpt ?? '').slice(0, 120)}`,
+          `${i + 1}. ID:${c.id} [domain: ${c.domain}]\nTitle: ${c.title ?? ''}\nExcerpt: ${(c.body_excerpt ?? '').slice(0, 300)}`,
       )
       .join('\n\n');
 
