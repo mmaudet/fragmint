@@ -2,6 +2,7 @@
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { requireRole } from '../auth/middleware.js';
 import type { TemplateService } from '../services/template-service.js';
 import type { ComposerService } from '../services/composer-service.js';
@@ -16,6 +17,7 @@ export function templateRoutes(
     prefix?: string;
     collectionMiddleware?: any;
     defaultReferenceDocPath?: string;
+    defaultReferenceDocName?: string;
   },
 ) {
   const prefix = options?.prefix ?? '/v1';
@@ -29,9 +31,9 @@ export function templateRoutes(
     ? [authenticate, options.collectionMiddleware]
     : [authenticate, requireRole('admin')];
 
-  const defaultReferenceName = options?.defaultReferenceDocPath
-    ? basename(options.defaultReferenceDocPath)
-    : null;
+  const defaultReferenceName =
+    options?.defaultReferenceDocName ??
+    (options?.defaultReferenceDocPath ? basename(options.defaultReferenceDocPath) : null);
 
   // List templates
   app.get(`${prefix}/templates`, { preHandler: readHandlers }, async (request) => {
@@ -148,6 +150,55 @@ export function templateRoutes(
     },
   );
 
+  // Upload Marp template (.md file + name + optional description)
+  app.post(
+    `${prefix}/templates/marp`,
+    { preHandler: expertHandlers },
+    async (request, reply) => {
+      let fileBuf: Buffer | null = null;
+      let filename = '';
+      let name = '';
+      let description: string | null = null;
+
+      for await (const part of request.parts()) {
+        if (part.type === 'file' && part.fieldname === 'file') {
+          const chunks: Buffer[] = [];
+          for await (const c of part.file) chunks.push(c);
+          fileBuf = Buffer.concat(chunks);
+          filename = part.filename;
+        } else if (part.type === 'field') {
+          const val = part.value as string;
+          if (part.fieldname === 'name') name = val;
+          if (part.fieldname === 'description') description = val;
+        }
+      }
+
+      if (!fileBuf || fileBuf.length === 0 || !filename) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Missing file part' });
+      }
+      if (!name) {
+        return reply.status(400).send({ data: null, meta: null, error: 'Missing name field' });
+      }
+      if (!filename.endsWith('.md')) {
+        return reply
+          .status(400)
+          .send({ data: null, meta: null, error: 'File must be a .md Marp template' });
+      }
+
+      const result = await templateService.createMarp(
+        fileBuf,
+        filename,
+        name,
+        description,
+        request.user.login,
+        request.user.role,
+        request.ip,
+      );
+
+      return reply.status(201).send({ data: result, meta: null, error: null });
+    },
+  );
+
   // Update template (multipart: optional .docx and/or .yaml)
   app.put(`${prefix}/templates/:id`, { preHandler: expertHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -221,16 +272,21 @@ export function templateRoutes(
     },
   );
 
+  const ResolveRequestSchema = z.object({
+    context: z.record(z.unknown()).optional(),
+    overrides: z.record(z.string()).optional(),
+  });
+
   // Resolve slots without rendering (preview what compose would pick)
   app.post(
     `${prefix}/templates/:id/resolve`,
     { preHandler: readHandlers },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as {
-        context?: Record<string, any>;
-        overrides?: Record<string, string>;
-      };
+      const parsed = ResolveRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const body = parsed.data;
       try {
         const result = await composerService.resolveSlots(
           id,
@@ -271,7 +327,10 @@ export function templateRoutes(
     const displayName = name ?? filename;
 
     reply.header('Content-Type', MIME[ext] ?? 'application/octet-stream');
-    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`);
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+    );
     return reply.send(createReadStream(outputPath));
   });
 }

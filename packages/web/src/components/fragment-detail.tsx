@@ -1,30 +1,35 @@
+import { useState } from 'react';
 import {
   useFragment,
   useFragmentHistory,
   useReviewFragment,
   useApproveFragment,
   useUpdateFragment,
+  useDeleteFragment,
 } from '@/api/hooks/use-fragments';
+import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
+import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
-import { useState } from 'react';
+import { useCurrentUser, canDelete } from '@/api/hooks/use-current-user';
 import { QualityBadge } from '@/components/quality-badge';
+import { FragmentMetaEditor, type MetaEdits } from '@/components/fragment-meta-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
+  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetDescription,
-  SheetFooter,
 } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { Pencil, Save, X } from 'lucide-react';
+import { AlertTriangle, Save, Trash2 } from 'lucide-react';
+import { PayloadEditor, STRUCTURED_SCHEMAS, hasPayloadContent, useSchemaLabel } from '@/components/payload-editor';
+import { useFragmentCollectionsByFragmentId } from '@/api/hooks/use-plans';
 
 interface FragmentDetailProps {
   fragmentId: string | null;
@@ -35,143 +40,308 @@ interface FragmentDetailProps {
 function parseTags(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw as string[];
   if (typeof raw === 'string' && raw.length > 0) {
-    try { return JSON.parse(raw) as string[]; } catch { return []; }
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }
 
 export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProps) {
   const { t } = useI18n();
+  const getSchemaLabel = useSchemaLabel();
   const { activeCollection } = useCollection();
-  const { data: fragment, isLoading } = useFragment(activeCollection, fragmentId);
+  const { data: fragment, isLoading, isFetching } = useFragment(activeCollection, fragmentId);
   const { data: history } = useFragmentHistory(activeCollection, fragmentId);
+  const { data: parentCollections } = useFragmentCollectionsByFragmentId(fragmentId);
   const reviewMutation = useReviewFragment(activeCollection);
   const approveMutation = useApproveFragment(activeCollection);
   const updateMutation = useUpdateFragment(activeCollection);
-  const [editMode, setEditMode] = useState(false);
-  const [editBody, setEditBody] = useState('');
+  const deleteMutation = useDeleteFragment(activeCollection);
+  const { data: currentUser } = useCurrentUser();
+  const { data: domainsData } = useDomains();
+  const { data: typesData } = useTypes();
+  const { data: tagsData } = useTags();
+  const domains = (domainsData ?? []).map((d) => d.slug);
+  const types = (typesData ?? []).map((t) => t.slug);
+  const availableTags = (tagsData ?? []).map((t) => t.slug);
+
+  const [editType, setEditType] = useState('');
   const [editDomain, setEditDomain] = useState('');
-  const [editTags, setEditTags] = useState('');
+  const [editLang, setEditLang] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editBody, setEditBody] = useState('');
 
-  const handleReview = () => {
-    if (!fragmentId) return;
-    reviewMutation.mutate(fragmentId, {
-      onSuccess: () => toast.success(t('fragments', 'reviewSuccess')),
-      onError: () => toast.error(t('fragments', 'reviewError')),
-    });
+  const [dirty, setDirty] = useState(false);
+  const [initializedFor, setInitializedFor] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const initEdits = (f: NonNullable<typeof fragment>) => {
+    setEditType(f.type ?? '');
+    setEditDomain(f.domain ?? '');
+    setEditLang(f.lang ?? '');
+    setEditTags(parseTags(f.tags));
+    setEditBody(f.body ?? f.body_excerpt ?? '');
+
+    setDirty(false);
   };
 
-  const handleApprove = () => {
-    if (!fragmentId) return;
-    approveMutation.mutate(fragmentId, {
-      onSuccess: () => toast.success(t('fragments', 'approveSuccess')),
-      onError: () => toast.error(t('fragments', 'approveError')),
-    });
-  };
-
-  const startEdit = () => {
-    if (!fragment) return;
-    setEditBody(fragment.body ?? fragment.body_excerpt ?? '');
-    setEditDomain(fragment.domain ?? '');
-    setEditTags(parseTags(fragment.tags).join(', '));
-    setEditMode(true);
-  };
+  // Initialize only when fragmentId changes, not on refetch after save
+  if (fragment && fragmentId !== initializedFor && !isFetching) {
+    setInitializedFor(fragmentId);
+    initEdits(fragment);
+  }
 
   const handleSave = () => {
     if (!fragmentId) return;
-    const tags = editTags.split(',').map((t) => t.trim()).filter(Boolean);
     updateMutation.mutate(
-      { id: fragmentId, input: { body: editBody, domain: editDomain, tags } },
       {
-        onSuccess: () => { toast.success(t('fragments', 'updateSuccess')); setEditMode(false); },
-        onError: () => toast.error(t('fragments', 'updateError')),
+        id: fragmentId,
+        input: {
+          body: editBody,
+          domain: editDomain,
+          type: editType,
+          lang: editLang,
+          tags: editTags,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(t('fragments', 'updateSuccess'));
+          close();
+        },
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
       },
     );
   };
 
-  return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) { setEditMode(false); onClose(); } }}>
-      <SheetContent side="right" className="w-[500px] sm:max-w-lg overflow-y-auto">
-        {isLoading ? (
-          <div className="space-y-4 pt-6">
-            <Skeleton className="h-6 w-3/4" />
-            <Skeleton className="h-4 w-1/4" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        ) : fragment ? (
-          <>
-            <SheetHeader>
-              <div className="flex items-center gap-2">
-                <SheetTitle className="flex-1">
-                  {fragment.title || t('common', 'noTitle')}
-                </SheetTitle>
-                <QualityBadge quality={fragment.quality} />
-              </div>
-              <SheetDescription>
-                {fragment.type} &middot; {fragment.domain} &middot; {fragment.lang}
-              </SheetDescription>
-            </SheetHeader>
+  const saveIfDirty = (then: () => void) => {
+    if (!fragmentId) return;
+    if (!dirty) {
+      then();
+      return;
+    }
+    updateMutation.mutate(
+      {
+        id: fragmentId,
+        input: {
+          body: editBody,
+          domain: editDomain,
+          type: editType,
+          lang: editLang,
+          tags: editTags,
+        },
+      },
+      {
+        onSuccess: () => {
+          setDirty(false);
+          then();
+        },
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : t('fragments', 'updateError')),
+      },
+    );
+  };
 
-            <div className="mt-6 space-y-6">
-              {/* Body */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium">{t('common', 'content')}</h4>
-                  {!editMode && (
-                    <Button variant="ghost" size="sm" onClick={startEdit}>
-                      <Pencil className="h-3 w-3 mr-1" />
-                      {t('planGeneration', 'edit')}
-                    </Button>
-                  )}
+  const close = () => {
+    setDirty(false);
+    setInitializedFor(null);
+    setConfirmingDelete(false);
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!fragmentId) return;
+    deleteMutation.mutate(fragmentId, {
+      onSuccess: () => {
+        toast.success(t('fragments', 'deleteSuccess'));
+        close();
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Erreur'),
+    });
+  };
+
+  const handleReview = () =>
+    saveIfDirty(() => {
+      if (!fragmentId) return;
+      reviewMutation.mutate(fragmentId, {
+        onSuccess: () => {
+          toast.success(t('fragments', 'reviewSuccess'));
+          close();
+        },
+        onError: () => toast.error(t('fragments', 'reviewError')),
+      });
+    });
+
+  const handleApprove = () =>
+    saveIfDirty(() => {
+      if (!fragmentId) return;
+      approveMutation.mutate(fragmentId, {
+        onSuccess: () => {
+          toast.success(t('fragments', 'approveSuccess'));
+          close();
+        },
+        onError: () => toast.error(t('fragments', 'approveError')),
+      });
+    });
+
+  const hasAction = fragment && (fragment.quality === 'draft' || fragment.quality === 'reviewed');
+  const showFooter = dirty || !!hasAction || (!!fragment && canDelete(currentUser));
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setDirty(false);
+          setInitializedFor(null);
+          onClose();
+        }
+      }}
+    >
+      <SheetContent side="right" className="w-[500px] sm:max-w-lg flex flex-col p-0 gap-0">
+        {/* Sticky header — same pattern as admin drawer */}
+        <div className="sticky top-0 bg-background border-b px-5 py-3 flex items-center justify-between z-10 shrink-0">
+          <SheetClose asChild>
+            <button className="text-sm hover:underline text-muted-foreground">
+              ← {t('common', 'close')}
+            </button>
+          </SheetClose>
+          {fragment && <QualityBadge quality={fragment.quality} />}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : fragment ? (
+            <>
+              <SheetHeader>
+                <div className="flex items-center gap-2">
+                  <SheetTitle className="text-base truncate">
+                    {fragment.title || t('common', 'noTitle')}
+                  </SheetTitle>
                 </div>
-                {editMode ? (
-                  <div className="space-y-3">
-                    <Textarea
-                      className="font-mono text-sm min-h-48"
-                      value={editBody}
-                      onChange={(e) => setEditBody(e.target.value)}
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'domain')}</label>
-                        <Input value={editDomain} onChange={(e) => setEditDomain(e.target.value)} className="text-sm" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">{t('common', 'tags')} (virgule)</label>
-                        <Input value={editTags} onChange={(e) => setEditTags(e.target.value)} className="text-sm" placeholder="tag1, tag2" />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-                        <Save className="h-3 w-3 mr-1" />
-                        {updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
-                        <X className="h-3 w-3 mr-1" />
-                        {t('common', 'cancel')}
-                      </Button>
-                    </div>
+                <SheetDescription asChild>
+                  <div className="flex items-center gap-1 flex-wrap mt-1">
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                    >
+                      {fragment.type}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+                    >
+                      {fragment.domain}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {fragment.lang}
+                    </Badge>
+                    {(fragment.payload_schema || /^\|.+\|/.test(fragment.body ?? fragment.body_excerpt ?? '')) && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      >
+                        📊 {getSchemaLabel(fragment.payload_schema)}
+                      </Badge>
+                    )}
                   </div>
-                ) : (
-                  <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 max-h-64 overflow-y-auto">
-                    {fragment.body || fragment.body_excerpt || '\u2014'}
-                  </pre>
-                )}
-              </div>
+                </SheetDescription>
+              </SheetHeader>
+
+              {fragment.harvest_near_dup && (() => {
+                const score = fragment.harvest_near_dup.score ?? 0;
+                const level = score >= 0.95 ? 'exact' : score >= 0.80 ? 'high' : 'moderate';
+                const labelText = level === 'exact' ? 'Doublon quasi-exact' : level === 'high' ? 'Forte similarité' : 'Proche de';
+                const bannerCn = level === 'exact'
+                  ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
+                  : level === 'high'
+                  ? 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200'
+                  : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200';
+                return (
+                  <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${bannerCn}`}>
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>{labelText}</strong> lors du harvest —{' '}
+                      {fragment.harvest_near_dup!.score != null && (
+                        <strong>{Math.round(fragment.harvest_near_dup!.score * 100)}%</strong>
+                      )}
+                      {fragment.harvest_near_dup!.method && (
+                        <span className="opacity-70"> ({fragment.harvest_near_dup!.method})</span>
+                      )}{' '}
+                      avec{' '}
+                      <Link
+                        to={`/fragments?fragment=${fragment.harvest_near_dup!.fragment_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs underline underline-offset-2 hover:opacity-70"
+                      >
+                        {fragment.harvest_near_dup!.fragment_id.slice(0, 8)}…
+                      </Link>
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <FragmentMetaEditor
+                edits={{
+                  type: editType,
+                  domain: editDomain,
+                  lang: editLang,
+                  tags: editTags,
+                  body: editBody,
+                }}
+                types={types}
+                domains={domains}
+                availableTags={availableTags}
+                onChange={(m: MetaEdits) => {
+                  setEditType(m.type);
+                  setEditDomain(m.domain);
+                  setEditLang(m.lang);
+                  setEditTags(m.tags);
+                  setEditBody(m.body);
+                  setDirty(true);
+                }}
+              />
+
+              {fragment.payload && fragment.payload_schema && STRUCTURED_SCHEMAS.has(fragment.payload_schema) && (() => {
+                let parsed: Record<string, unknown> = {};
+                try { parsed = JSON.parse(fragment.payload); } catch { /* ignore */ }
+                if (!hasPayloadContent(fragment.payload_schema, parsed)) return null;
+                return (
+                  <>
+                    <Separator />
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {getSchemaLabel(fragment.payload_schema)}
+                      </p>
+                      <PayloadEditor
+                        schemaId={fragment.payload_schema}
+                        value={parsed}
+                        onChange={() => {}}
+                        disabled={true}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
 
               <Separator />
 
-              {/* Metadata */}
               <div>
                 <h4 className="text-sm font-medium mb-2">{t('common', 'metadata')}</h4>
                 <table className="text-sm w-full">
                   <tbody>
                     {(
                       [
-                        [t('common', 'domain'), fragment.domain],
-                        [t('common', 'type'), fragment.type],
-                        [t('common', 'language'), fragment.lang],
                         [t('common', 'author'), fragment.author],
                         [
                           t('common', 'createdAt'),
@@ -183,16 +353,21 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                         ],
                         [t('common', 'uses'), String(fragment.uses)],
                         [t('common', 'file'), fragment.file_path],
-                        ...(fragment.valid_from
-                          ? [[t('common', 'validFrom'), fragment.valid_from] as const]
-                          : []),
-                        ...(fragment.valid_until
-                          ? [[t('common', 'validUntil'), fragment.valid_until] as const]
+                        ...(fragment.origin_source
+                          ? [
+                              [
+                                'Source',
+                                fragment.origin_source +
+                                  (fragment.origin_page != null ? ` · p. ${fragment.origin_page}` : ''),
+                              ] as const,
+                            ]
                           : []),
                       ] as const
                     ).map(([label, value]) => (
                       <tr key={label} className="border-b last:border-0">
-                        <td className="py-1.5 pr-4 text-muted-foreground font-medium">{label}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground font-medium whitespace-nowrap">
+                          {label}
+                        </td>
                         <td className="py-1.5 break-all">{value}</td>
                       </tr>
                     ))}
@@ -200,22 +375,26 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                 </table>
               </div>
 
-              {/* Tags */}
-              {(() => { const tags = parseTags(fragment.tags); return tags.length > 0 ? (
+              {parentCollections && parentCollections.length > 0 && (
                 <>
                   <Separator />
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">{t('common', 'tags')}</h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">{tag}</Badge>
-                      ))}
-                    </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-medium text-muted-foreground">Tableau d'origine</h4>
+                    {parentCollections.map((col) => (
+                      <div key={col.id} className="flex items-center gap-2 text-sm">
+                        <span className="text-base">📊</span>
+                        <span className="font-medium">{col.title}</span>
+                        {col.source_document && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            · {col.source_document}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </>
-              ) : null; })()}
+              )}
 
-              {/* History */}
               {history && history.length > 0 && (
                 <>
                   <Separator />
@@ -235,28 +414,78 @@ export function FragmentDetail({ fragmentId, open, onClose }: FragmentDetailProp
                   </div>
                 </>
               )}
-            </div>
+            </>
+          ) : (
+            <div className="pt-6 text-sm text-muted-foreground">{t('common', 'notFound')}</div>
+          )}
+        </div>
 
-            {/* Actions */}
-            {(fragment.quality === 'draft' || fragment.quality === 'reviewed') && (
-              <SheetFooter className="mt-6">
-                {fragment.quality === 'draft' && (
-                  <Button onClick={handleReview} disabled={reviewMutation.isPending}>
-                    {reviewMutation.isPending
-                      ? t('common', 'inProgress')
-                      : t('fragments', 'markReviewed')}
-                  </Button>
-                )}
-                {fragment.quality === 'reviewed' && (
-                  <Button onClick={handleApprove} disabled={approveMutation.isPending}>
-                    {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
-                  </Button>
-                )}
-              </SheetFooter>
+        {showFooter && (
+          <div className="border-t p-4 flex flex-col gap-2">
+            {dirty && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {updateMutation.isPending ? t('common', 'inProgress') : t('common', 'save')}
+              </Button>
             )}
-          </>
-        ) : (
-          <div className="pt-6 text-sm text-muted-foreground">{t('common', 'notFound')}</div>
+            {fragment?.quality === 'draft' && (
+              <Button className="w-full" onClick={handleReview} disabled={reviewMutation.isPending}>
+                {reviewMutation.isPending
+                  ? t('common', 'inProgress')
+                  : t('fragments', 'markReviewed')}
+              </Button>
+            )}
+            {fragment?.quality === 'reviewed' && (
+              <Button
+                className="w-full"
+                onClick={handleApprove}
+                disabled={approveMutation.isPending}
+              >
+                {approveMutation.isPending ? t('common', 'inProgress') : t('common', 'approve')}
+              </Button>
+            )}
+            {fragment && canDelete(currentUser) && (
+              <div className="flex gap-2 pt-1 border-t mt-1">
+                {confirmingDelete ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      {t('common', 'cancel')}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleDelete}
+                      disabled={deleteMutation.isPending}
+                    >
+                      {t('fragments', 'confirmDelete')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    {t('fragments', 'delete')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </SheetContent>
     </Sheet>

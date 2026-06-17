@@ -15,8 +15,10 @@ example-vault/.git/
 example-vault/.DS_Store
 packages/web/tsconfig.tsbuildinfo
 .superpowers/
+docs/superpowers/research/
 # Ignore all Claude Code configuration (local tooling, not project code)
 .claude/
+!.claude/mission/PLAN.md
 *.~lock.*
 e2e/demo/output/
 
@@ -29,3 +31,13 @@ e2e/demo/output/
 *.db-journal
 # Personal notes and learning references (local only)
 .claude/notes/
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# Local test/scratch files
+docs/test-*.txt
+docs/test-retrieval/
+test_output.txt
+/tmp/
+opencode.json

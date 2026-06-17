@@ -14,7 +14,7 @@ describe('CollectionService', () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'fragmint-col-'));
     db = createDb(':memory:');
-    service = new CollectionService(db, { collections_path: dir });
+    service = new CollectionService(db, { store_path: dir });
   });
 
   afterEach(() => {
@@ -36,7 +36,7 @@ describe('CollectionService', () => {
     expect(col.slug).toBe('my-team');
     expect(col.name).toBe('My Team');
     expect(col.type).toBe('team');
-    expect(col.git_path).toBe(join(dir, 'my-team'));
+    expect(col.git_path).toBe(dir);
     expect(col.milvus_partition).toBe('col_my_team');
   });
 

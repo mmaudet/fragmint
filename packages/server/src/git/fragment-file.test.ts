@@ -56,6 +56,7 @@ describe('readFragment / writeFragment', () => {
       generation: 0,
       uses: 0,
       last_used: null,
+      origin: 'manual' as const,
       access: { read: ['*'], write: ['contributor'], approve: ['expert'] },
     };
     const body = '# Introduction\n\nSome content here.';
@@ -89,6 +90,7 @@ describe('readFragment / writeFragment', () => {
       generation: 0,
       uses: 0,
       last_used: null,
+      origin: 'manual' as const,
       access: { read: ['*'], write: ['contributor'], approve: ['expert'] },
     };
 

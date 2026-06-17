@@ -10,9 +10,11 @@ describe('renderMarkdownToDocx', () => {
     expect(buf.length).toBeGreaterThan(100);
   }, 15000);
 
-  it('throws with a helpful message on invalid reference-doc path', async () => {
-    await expect(
-      renderMarkdownToDocx('# x', '/nonexistent/path.docx'),
-    ).rejects.toThrow(/reference|pandoc/i);
+  it('silently ignores a non-existent reference-doc path and produces a valid DOCX', async () => {
+    // renderMarkdownToDocx checks existsSync and falls back gracefully — no throw expected
+    const buf = await renderMarkdownToDocx('# x', '/nonexistent/path.docx');
+    expect(buf[0]).toBe(0x50);
+    expect(buf[1]).toBe(0x4b);
+    expect(buf.length).toBeGreaterThan(100);
   }, 15000);
 });

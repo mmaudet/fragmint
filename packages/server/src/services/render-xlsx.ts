@@ -16,7 +16,7 @@ export async function renderXlsx(
   data: Record<string, any>,
 ): Promise<RenderResult> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(readFileSync(templatePath));
+  await workbook.xlsx.load(readFileSync(templatePath) as any);
 
   const sheet = workbook.getWorksheet(1);
   if (!sheet) throw new Error('XLSX template has no worksheets');

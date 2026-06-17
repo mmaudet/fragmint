@@ -6,7 +6,16 @@ import { TokenService } from '../services/token-service.js';
 import { AuditService } from '../services/audit-service.js';
 import { FragmentService } from '../services/fragment-service.js';
 import { SearchService } from '../search/search-service.js';
+import { TemplateService } from '../services/template-service.js';
+import { z } from 'zod';
 import { createUserSchema, createTokenSchema } from '../schema/api.js';
+import { setRetrievalMode, getCurrentMode, getCurrentWeightsPreset, getSectionTopK, setSectionTopK, type RetrievalMode } from '../retrieval/factory.js';
+
+const patchUserSchema = z.object({
+  role: z.enum(['reader', 'contributor', 'expert', 'admin']).optional(),
+  display_name: z.string().min(1).optional(),
+  active: z.number().int().min(0).max(1).optional(),
+});
 
 export function adminRoutes(
   app: FastifyInstance,
@@ -16,6 +25,7 @@ export function adminRoutes(
   fragmentService: FragmentService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
   searchService?: SearchService,
+  templateService?: TemplateService,
 ) {
   // Users
   app.get('/v1/users', { preHandler: [authenticate, requireRole('admin')] }, async () => {
@@ -35,8 +45,34 @@ export function adminRoutes(
         parsed.data.password,
         parsed.data.display_name,
         parsed.data.role,
+        parsed.data.active,
       );
       return reply.status(201).send({ data: user, meta: null, error: null });
+    },
+  );
+
+  app.patch(
+    '/v1/users/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = patchUserSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const patch = parsed.data;
+      const user = await userService.update(id, patch);
+      if (!user) return reply.status(404).send({ data: null, meta: null, error: 'Not found' });
+      return { data: user, meta: null, error: null };
+    },
+  );
+
+  app.delete(
+    '/v1/users/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const result = await userService.delete(id);
+      return { data: result, meta: null, error: null };
     },
   );
 
@@ -100,9 +136,85 @@ export function adminRoutes(
       }
     }
     return {
-      data: { status: 'ok', mode, milvus, embedding, last_run: new Date().toISOString() },
+      data: {
+        status: 'ok',
+        mode,
+        milvus,
+        embedding,
+        retrieval_mode: getCurrentMode(),
+        last_run: new Date().toISOString(),
+      },
       meta: null,
       error: null,
     };
   });
+
+  app.get(
+    '/v1/admin/retrieval/mode',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (_req, reply) => {
+      return reply.send({
+        data: { mode: getCurrentMode(), weights_preset: getCurrentWeightsPreset() },
+        meta: null,
+        error: null,
+      });
+    },
+  );
+
+  app.post(
+    '/v1/admin/retrieval/mode',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const retrievalModeSchema = z.object({
+        mode: z.enum(['vector-only', 'agentic-only', 'hybrid']),
+        weights_preset: z.enum(['balanced', 'vector-heavy', 'llm-heavy']).optional(),
+      });
+      const parsed = retrievalModeSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      const retriever = setRetrievalMode(parsed.data.mode as RetrievalMode, parsed.data.weights_preset);
+      return reply.send({
+        data: {
+          mode: parsed.data.mode,
+          weights_preset: getCurrentWeightsPreset(),
+          retriever_type: retriever.constructor.name,
+        },
+        meta: null,
+        error: null,
+      });
+    },
+  );
+
+  app.get(
+    '/v1/admin/retrieval/top-k',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (_req, reply) => {
+      return reply.send({ data: { top_k: getSectionTopK() }, meta: null, error: null });
+    },
+  );
+
+  app.post(
+    '/v1/admin/retrieval/top-k',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const parsed = z.object({ top_k: z.number().int().min(1).max(20) }).safeParse(request.body);
+      if (!parsed.success)
+        return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
+      setSectionTopK(parsed.data.top_k);
+      return reply.send({ data: { top_k: getSectionTopK() }, meta: null, error: null });
+    },
+  );
+
+  // Templates sync
+  app.post(
+    '/v1/admin/templates/sync',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (_req, reply) => {
+      if (!templateService) {
+        return reply.status(503).send({ data: null, meta: null, error: 'Template service not available' });
+      }
+      const synced = await templateService.syncFromVault();
+      return reply.send({ data: { synced }, meta: null, error: null });
+    },
+  );
 }

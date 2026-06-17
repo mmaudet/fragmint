@@ -4,10 +4,17 @@ import { FragmentCard } from '@/components/fragment-card';
 import { SearchInput } from '@/components/search-input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE_OPTIONS = [24, 48, 96];
 
 interface BulkAction {
   label: React.ReactNode;
@@ -23,6 +30,8 @@ interface ValidationTabContentProps {
   isSearching: boolean;
   page: number;
   onPageChange: (p: number) => void;
+  pageSize: number;
+  onPageSizeChange: (s: number) => void;
   search: string;
   onSearchChange: (v: string) => void;
   searchPlaceholder: string;
@@ -35,28 +44,92 @@ interface ValidationTabContentProps {
   onSelectAll?: () => Promise<void>;
   isAllSelected?: boolean;
   bulkAction: BulkAction | null;
+  secondaryBulkAction?: BulkAction | null;
 }
 
-function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
-  const pageCount = Math.ceil(total / PAGE_SIZE);
-  if (pageCount <= 1) return null;
+function Pagination({
+  page,
+  total,
+  pageSize,
+  onChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  const { t } = useI18n();
+  const pageCount = Math.ceil(total / pageSize);
+  if (total <= PAGE_SIZE_OPTIONS[0]) return null;
   return (
-    <div className="flex items-center justify-center gap-3 pt-4">
-      <Button variant="outline" size="sm" disabled={page === 0} onClick={() => onChange(page - 1)}>
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <span className="text-sm text-muted-foreground">Page {page + 1} / {pageCount}</span>
-      <Button variant="outline" size="sm" disabled={page >= pageCount - 1} onClick={() => onChange(page + 1)}>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+    <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>{t('common', 'show')}</span>
+        <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+          <SelectTrigger className="h-8 w-20 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map((s) => (
+              <SelectItem key={s} value={String(s)} className="text-xs">
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span>{t('common', 'perPage')}</span>
+      </div>
+      {pageCount > 1 && (
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => onChange(page - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} / {pageCount}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount - 1}
+            onClick={() => onChange(page + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
 export function ValidationTabContent({
-  fragments, total, isLoading, isSearching, page, onPageChange,
-  search, onSearchChange, searchPlaceholder, description, emptyText,
-  selectedCardId, selectedIds, onCardClick, onToggle, onSelectAll, isAllSelected, bulkAction,
+  fragments,
+  total,
+  isLoading,
+  isSearching,
+  page,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
+  search,
+  onSearchChange,
+  searchPlaceholder,
+  description,
+  emptyText,
+  selectedCardId,
+  selectedIds,
+  onCardClick,
+  onToggle,
+  onSelectAll,
+  isAllSelected,
+  bulkAction,
+  secondaryBulkAction,
 }: ValidationTabContentProps) {
   const { t } = useI18n();
   const [selectingAll, setSelectingAll] = useState(false);
@@ -64,7 +137,11 @@ export function ValidationTabContent({
   const handleSelectAll = async () => {
     if (!onSelectAll) return;
     setSelectingAll(true);
-    try { await onSelectAll(); } finally { setSelectingAll(false); }
+    try {
+      await onSelectAll();
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   return (
@@ -80,7 +157,11 @@ export function ValidationTabContent({
             onClick={handleSelectAll}
             disabled={selectingAll || bulkAction?.isPending}
           >
-            {selectingAll ? '…' : isAllSelected ? t('validation', 'deselectAll') : t('validation', 'selectAll')}
+            {selectingAll
+              ? '…'
+              : isAllSelected
+                ? t('validation', 'deselectAll')
+                : t('validation', 'selectAll')}
           </Button>
         )}
         {bulkAction && bulkAction.count > 0 && (
@@ -88,11 +169,23 @@ export function ValidationTabContent({
             {bulkAction.label} ({bulkAction.count})
           </Button>
         )}
+        {secondaryBulkAction && secondaryBulkAction.count > 0 && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={secondaryBulkAction.onClick}
+            disabled={secondaryBulkAction.isPending}
+          >
+            {secondaryBulkAction.label} ({secondaryBulkAction.count})
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-lg" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full rounded-lg" />
+          ))}
         </div>
       ) : fragments.length > 0 ? (
         <>
@@ -108,7 +201,15 @@ export function ValidationTabContent({
               />
             ))}
           </div>
-          {!isSearching && <Pagination page={page} total={total ?? 0} onChange={onPageChange} />}
+          {!isSearching && (
+            <Pagination
+              page={page}
+              total={total ?? 0}
+              pageSize={pageSize}
+              onChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          )}
         </>
       ) : (
         <p className="text-sm text-muted-foreground py-8 text-center">{emptyText}</p>

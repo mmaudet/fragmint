@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+// form-data ships its own types; installed as a runtime dep
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore – package is in dependencies but may not be locally installed in all environments
 import FormData from 'form-data';
 import { createTestServer, getAuthToken } from '../test-helpers.js';
 

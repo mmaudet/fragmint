@@ -5,7 +5,7 @@ describe('buildPlanMessages', () => {
   it('builds a system + user message pair from a spec prompt', () => {
     const msgs = buildPlanMessages({
       spec_prompt: 'A doc about cloud security',
-      filters: { lang: 'fr', domain: 'cloud', tags: ['twake'] },
+      filters: { lang: 'fr', domain: ['cloud'], tags: ['twake'] },
     });
     expect(msgs).toHaveLength(2);
     expect(msgs[0].role).toBe('system');
@@ -24,16 +24,14 @@ describe('buildPlanMessages', () => {
     expect(msgs[1].content).toContain('Tags: none');
   });
 
-  it('includes a revision block when a current plan and instructions are provided', () => {
+  it('includes a revision block when a current plan is provided', () => {
     const msgs = buildPlanMessages({
       spec_prompt: 's',
       filters: {},
       current_plan: '## Old\n\nOld desc',
-      extra_instructions: 'Add a section on pricing',
     });
-    expect(msgs[1].content).toContain('Current plan to revise:');
+    expect(msgs[1].content).toContain('Current plan to revise');
     expect(msgs[1].content).toContain('## Old');
-    expect(msgs[1].content).toContain('Revision instructions: Add a section on pricing');
   });
 });
 

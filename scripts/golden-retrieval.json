@@ -1,0 +1,36 @@
+{
+  "version": "1",
+  "description": "Golden queries for Fragmint retrieval smoke test",
+  "cases": [
+    {
+      "id": "gr-001",
+      "query": "partage de fichiers sécurisé entreprise",
+      "min_recall": 0.5,
+      "notes": "Should surface LinShare fragments"
+    },
+    {
+      "id": "gr-002",
+      "query": "messagerie open source collaboration équipe",
+      "min_recall": 0.5,
+      "notes": "Should surface Twake Workplace fragments"
+    },
+    {
+      "id": "gr-003",
+      "query": "signature électronique documents légaux",
+      "min_recall": 0.5,
+      "notes": "Should surface LinSign fragments"
+    },
+    {
+      "id": "gr-004",
+      "query": "gestion identités annuaire LDAP Active Directory",
+      "min_recall": 0.5,
+      "notes": "Should surface LinID fragments"
+    },
+    {
+      "id": "gr-005",
+      "query": "souveraineté numérique données hébergement France",
+      "min_recall": 0.5,
+      "notes": "Cross-domain query about Linagora's sovereignty positioning"
+    }
+  ]
+}

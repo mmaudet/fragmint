@@ -46,14 +46,13 @@ const vaultPath = resolve(vaultArg);
 const dryRun = args.includes('--dry-run');
 const llmEndpoint =
   argValue('--llm-endpoint') ?? process.env.FRAGMINT_LLM_ENDPOINT ?? 'http://localhost:11434/v1';
-const llmModel =
-  argValue('--llm-model') ?? process.env.FRAGMINT_LLM_MODEL ?? 'mistral-nemo:12b';
+const llmModel = argValue('--llm-model') ?? process.env.FRAGMINT_LLM_MODEL ?? 'mistral-nemo:12b';
 const llmApiKey = process.env.FRAGMINT_LLM_API_KEY;
 
 // Fixed type renames (not LLM-dependent — deterministic slug changes)
 const TYPE_RENAMES: Record<string, string> = {
   'cas-usage': 'use-case',
-  'témoignage': 'testimonial',
+  témoignage: 'testimonial',
   'reference-technique': 'technical-reference',
 };
 
@@ -69,10 +68,7 @@ function findMdFiles(dir: string): string[] {
   return results;
 }
 
-async function translateValues(
-  values: string[],
-  llm: LlmClient,
-): Promise<Record<string, string>> {
+async function translateValues(values: string[], llm: LlmClient): Promise<Record<string, string>> {
   if (values.length === 0) return {};
 
   const prompt = `You are a normalization assistant for a document management system.
@@ -155,17 +151,26 @@ async function main() {
     `Unique domains: ${[...allDomains].join(', ')}\nUnique tags: ${[...allTags].join(', ')}`,
   );
 
-  // 3. One LLM call to translate all values
+  // 3. Batch LLM calls to translate all values (batches of 50 to avoid timeout)
   console.log('\nCalling LLM to translate values...');
   const llm = new LlmClient({
     endpoint: llmEndpoint,
     model: llmModel,
     temperature: 0.1,
-    timeout: 60000,
+    timeout: 180000,
     apiKey: llmApiKey,
   });
 
-  const mapping = await translateValues(allValues, llm);
+  const BATCH_SIZE = 50;
+  const mapping: Record<string, string> = {};
+  for (let i = 0; i < allValues.length; i += BATCH_SIZE) {
+    const batch = allValues.slice(i, i + BATCH_SIZE);
+    console.log(
+      `  Translating batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allValues.length / BATCH_SIZE)} (${batch.length} values)...`,
+    );
+    const batchMapping = await translateValues(batch, llm);
+    Object.assign(mapping, batchMapping);
+  }
 
   console.log('\nTranslation mapping:');
   for (const [orig, translated] of Object.entries(mapping)) {
@@ -215,7 +220,12 @@ async function main() {
   // 6. Update DB
   const db = createDb(dbPath);
   const dbFragments = await db
-    .select({ id: fragmentsTable.id, type: fragmentsTable.type, domain: fragmentsTable.domain, tags: fragmentsTable.tags })
+    .select({
+      id: fragmentsTable.id,
+      type: fragmentsTable.type,
+      domain: fragmentsTable.domain,
+      tags: fragmentsTable.tags,
+    })
     .from(fragmentsTable);
 
   let dbUpdated = 0;
@@ -240,14 +250,20 @@ async function main() {
   // 7. Seed fragment_types table
   const now = new Date().toISOString();
   for (const slug of FRAGMENT_TYPES) {
-    await db.insert(fragmentTypesTable).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+    await db
+      .insert(fragmentTypesTable)
+      .values({ slug, label: slug, created_at: now })
+      .onConflictDoNothing();
   }
   console.log(`fragment_types: seeded ${FRAGMENT_TYPES.length} type(s)`);
 
   // 7b. Seed fragment_domains from translated domains
   const translatedDomains = new Set([...allDomains].map((d) => mapping[d] ?? d));
   for (const slug of translatedDomains) {
-    await db.insert(fragmentDomainsTable).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+    await db
+      .insert(fragmentDomainsTable)
+      .values({ slug, label: slug, created_at: now })
+      .onConflictDoNothing();
   }
   console.log(`fragment_domains: seeded ${translatedDomains.size} domain(s)`);
 

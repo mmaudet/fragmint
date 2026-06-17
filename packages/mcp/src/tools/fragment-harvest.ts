@@ -3,11 +3,12 @@ import type { FragmintApiClient } from '../client.js';
 import type { ToolDefinition, ToolHandler } from '../types.js';
 import { toolSuccess, toolError } from '../types.js';
 import { fragmentUrl } from '../url-helpers.js';
+import { cache } from '../cache/cache-manager.js';
 
 export const harvestDefinition: ToolDefinition = {
   name: 'fragment_harvest',
   description:
-    'Harvest fragments from a DOCX file. Uploads the file, runs the LLM pipeline, and returns candidate fragments for human review.',
+    'Harvest fragments from a DOCX file. Uploads the file, runs the LLM pipeline, and returns candidate fragments for human review.\n\nAlso use this tool when the user provides a reference document to enrich the fragment library before composing a plan: harvest the reference doc first, then the newly created fragments will automatically appear as candidates when searching sections (plan_section_search).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -71,6 +72,12 @@ export function harvestHandler(client: FragmintApiClient): ToolHandler {
         return toolError(`Harvest failed: ${job.error}`);
       }
 
+      const slug = (collection_slug as string | undefined) ?? 'common';
+      // Invalidate search, inventory, and index caches — harvest adds new fragments
+      cache.invalidate(`search:${slug}:`);
+      cache.invalidate(`inventory:${slug}:`);
+      cache.invalidate(`index:${slug}:`);
+
       return toolSuccess({
         job_id: jobId,
         stats: job.stats,
@@ -78,7 +85,7 @@ export function harvestHandler(client: FragmintApiClient): ToolHandler {
         candidates: job.candidates,
       });
     } catch (err) {
-      return toolError(`Harvest failed: ${(err as Error).message}`);
+      return toolError(`Harvest failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 }

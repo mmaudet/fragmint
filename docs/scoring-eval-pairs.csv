@@ -1,0 +1,11 @@
+id_a,id_b,ground_truth,note
+frag-7d12b4ab-5a72-4b22-9e51-9ff107d33577,frag-ffa45ce1-7ed7-429c-823f-bfcc64c6097c,duplicate,Two introduction-twake-calendar fragments (same sub-product)
+frag-e33d0bf3-7fc9-4379-9688-f35790cd4903,frag-b790f2fe-1d80-4e8b-a14e-71d6f1813a7d,near-dup,Two argument-linshare (sovereignty vs features)
+frag-8ff190eb-a4e0-416a-946e-10098e2e9be5,frag-f168af50-dfa1-4be0-bb00-572eed61e2f1,near-dup,Two methodology-linshare (architecture vs encryption)
+frag-5738516b-160d-44d4-8286-8cc913051ed8,frag-2037eb4f-2163-4b63-8298-1aa1cc1d0d68,near-dup,Two clause-other SLA (RGPD obligations vs response delays)
+frag-b63bffbd-f234-4ecb-8d5d-c72252f355aa,frag-35da34de-314c-4333-903d-caecab66f2d0,near-dup,Two clause-other SLA (GTI table vs maintenance windows)
+frag-e33d0bf3-7fc9-4379-9688-f35790cd4903,frag-7d12b4ab-5a72-4b22-9e51-9ff107d33577,unrelated,argument-linshare vs introduction-twake-calendar
+frag-5b690ba2-f9aa-4eb3-9be1-38e858d3f08f,frag-ffa45ce1-7ed7-429c-823f-bfcc64c6097c,unrelated,reference-linshare vs introduction-twake-calendar
+frag-8ff190eb-a4e0-416a-946e-10098e2e9be5,frag-09029998-170a-4288-9355-ce13d5040cab,unrelated,methodology-linshare vs argument-other
+frag-635336c4-f2ed-4dd7-889c-7c5e50e4276b,frag-b790f2fe-1d80-4e8b-a14e-71d6f1813a7d,unrelated,other-other vs argument-linshare
+frag-5738516b-160d-44d4-8286-8cc913051ed8,frag-f5b5c196-097c-4e24-b7fb-834b4af9c230,unrelated,clause-other (RGPD) vs use-case-linshare

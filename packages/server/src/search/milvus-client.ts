@@ -55,6 +55,12 @@ function buildFilterExpr(filters: MilvusFilters): string {
     }
   }
 
+  if (filters.tags?.length) {
+    filters.tags.forEach((tag) => {
+      parts.push(`json_contains(tags, "${tag}")`);
+    });
+  }
+
   // Always exclude deprecated
   parts.push(`quality != "deprecated"`);
 
@@ -75,7 +81,21 @@ export class FragmintMilvusClient {
   async ensureCollection(): Promise<void> {
     const exists = await this.sdk.hasCollection({ collection_name: this.collectionName });
 
-    if (!exists.value) {
+    if (exists.value) {
+      const desc = await this.sdk.describeCollection({ collection_name: this.collectionName });
+      const vectorField = desc.schema?.fields?.find((f: any) => f.name === 'vector');
+      const storedDim = vectorField?.type_params?.find((p: any) => p.key === 'dim')?.value;
+      if (storedDim && parseInt(String(storedDim)) !== this.dimensions) {
+        console.warn(
+          `[milvus] dimension mismatch (stored=${storedDim}, configured=${this.dimensions}) — dropping and recreating collection`,
+        );
+        await this.sdk.dropCollection({ collection_name: this.collectionName });
+      } else {
+      }
+    }
+
+    const stillExists = await this.sdk.hasCollection({ collection_name: this.collectionName });
+    if (!stillExists.value) {
       await this.sdk.createCollection({
         collection_name: this.collectionName,
         fields: [
@@ -127,7 +147,7 @@ export class FragmintMilvusClient {
     await this.sdk.upsert({
       collection_name: this.collectionName,
       ...(partitionName ? { partition_name: partitionName } : {}),
-      data: items,
+      data: items as unknown as import('@zilliz/milvus2-sdk-node').RowData[],
     });
   }
 

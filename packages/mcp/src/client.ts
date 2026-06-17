@@ -18,6 +18,46 @@ export class FragmintApiClient {
     return this.request<T>('PUT', path, body);
   }
 
+  async patch<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, body);
+  }
+
+  async getText(path: string): Promise<string> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    return res.text();
+  }
+
+  async postText(path: string, body?: unknown): Promise<string> {
+    return (await this.postRaw(path, body)).text();
+  }
+
+  async postBinary(path: string, body?: unknown): Promise<string> {
+    const buffer = await (await this.postRaw(path, body)).arrayBuffer();
+    return Buffer.from(buffer).toString('base64');
+  }
+
+  private async postRaw(path: string, body?: unknown): Promise<Response> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    return res;
+  }
+
   async postMultipart<T>(path: string, form: FormData): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
@@ -25,26 +65,44 @@ export class FragmintApiClient {
       body: form,
     });
 
-    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
+    let json: { data: T; meta: unknown; error: string | null };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new Error(`HTTP ${res.status}: response was not valid JSON`);
+    }
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }
     return json.data;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, timeoutMs = 600_000): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${this.token}`,
     };
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
-    const json = (await res.json()) as { data: T; meta: unknown; error: string | null };
+    let json: { data: T; meta: unknown; error: string | null };
+    try {
+      json = (await res.json()) as typeof json;
+    } catch {
+      throw new Error(`HTTP ${res.status}: response was not valid JSON`);
+    }
     if (!res.ok || json.error) {
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }

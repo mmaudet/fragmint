@@ -60,6 +60,29 @@ describe('parsePlanSections', () => {
     expect(parsePlanSections('')).toEqual([]);
     expect(parsePlanSections('   \n\n  ')).toEqual([]);
   });
+
+  it('extracts **Type:** slug and strips it from description', () => {
+    const md = `## Introduction\n**Type:** introduction\nContexte de la réponse.`;
+    const [s] = parsePlanSections(md);
+    expect(s.inferred_type).toBe('introduction');
+    expect(s.description).toBe('Contexte de la réponse.');
+    expect(s.description).not.toContain('**Type:**');
+  });
+
+  it('extracts types across multiple sections independently', () => {
+    const md = `## Intro\n**Type:** introduction\nSection 1.\n\n## Pricing\n**Type:** pricing\nSection 2.`;
+    const [s1, s2] = parsePlanSections(md);
+    expect(s1.inferred_type).toBe('introduction');
+    expect(s2.inferred_type).toBe('pricing');
+    expect(s1.description).toBe('Section 1.');
+    expect(s2.description).toBe('Section 2.');
+  });
+
+  it('leaves inferred_type undefined when no **Type:** line is present', () => {
+    const md = `## Pricing\nAll prices in euros.`;
+    const [s] = parsePlanSections(md);
+    expect(s.inferred_type).toBeUndefined();
+  });
 });
 
 describe('sectionStableId', () => {

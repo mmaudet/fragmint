@@ -1,11 +1,19 @@
 // packages/server/src/services/fragment-service.ts
-import { eq, and, or, desc, like, isNull, lte, gte, count, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, like, isNull, lte, gte, count, inArray, ne } from 'drizzle-orm';
 import { join, relative } from 'node:path';
-import { readdirSync } from 'node:fs';
+import { readdirSync, unlinkSync } from 'node:fs';
 import type { FragmintDb } from '../db/connection.js';
-import { fragments, collections } from '../db/schema.js';
+import {
+  fragments,
+  collections,
+  fragmentDomains,
+  fragmentTags,
+  fragmentTagLinks,
+  harvestCandidates,
+} from '../db/schema.js';
 import { GitRepository } from '../git/git-repository.js';
 import { readFragment, writeFragment, generateId, deriveTitle } from '../git/fragment-file.js';
+import type { FragmentMetadata } from '../search/search-service.js';
 import { buildCommitMessage } from '../git/commit-message.js';
 import {
   QUALITY_TRANSITIONS,
@@ -14,16 +22,21 @@ import {
 } from '../schema/fragment.js';
 import { AuditService } from './audit-service.js';
 import { hasRole } from '../auth/index.js';
+import { generateReadableId } from './readable-id.js';
 import { SearchService, type SearchFilters } from '../search/index.js';
+import type { LlmClient } from './llm-client.js';
+import { detectAndPropose } from './supersedure-detector.js';
 
 export class FragmentService {
-  private git: GitRepository;
+  protected git: GitRepository;
+  llmClient?: LlmClient;
+  indexService?: { invalidateCache(): void };
 
   constructor(
-    private db: FragmintDb,
-    private storePath: string,
-    private audit: AuditService,
-    private searchService: SearchService,
+    protected db: FragmintDb,
+    protected storePath: string,
+    protected audit: AuditService,
+    protected searchService: SearchService,
   ) {
     this.git = new GitRepository(storePath);
   }
@@ -33,26 +46,16 @@ export class FragmentService {
   }
 
   /**
-   * Resolve the correct store path for a fragment based on its collection_slug.
-   * Falls back to the default storePath for 'common' or null slugs.
+   * Compute the fragments directory for a collection.
+   * Domain is NOT used as a subdirectory — it's already baked into the filename.
+   * common (or null) → <root>/fragments/
+   * named collection  → <root>/fragments/<slug>/
    */
-  private async resolveStorePath(collectionSlug: string | null): Promise<string> {
+  protected fragmentsDir(collectionSlug: string | null | undefined): string {
     if (!collectionSlug || collectionSlug === 'common') {
-      return this.storePath;
+      return join(this.storePath, 'fragments');
     }
-    const colRows = await this.db
-      .select()
-      .from(collections)
-      .where(eq(collections.slug, collectionSlug))
-      .limit(1);
-    if (colRows.length > 0) {
-      return colRows[0].git_path;
-    }
-    return this.storePath;
-  }
-
-  private resolveGit(storePath: string): GitRepository {
-    return storePath === this.storePath ? this.git : new GitRepository(storePath);
+    return join(this.storePath, 'fragments', collectionSlug);
   }
 
   async create(
@@ -64,9 +67,23 @@ export class FragmentService {
     collectionSlug?: string,
   ) {
     const id = generateId();
+    // Generate with retry — protects against the read-then-write race under concurrent requests
+    let readableId: string | undefined;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = await generateReadableId(this.db, input.domain, input.type);
+      const collision = await this.db
+        .select({ id: fragments.id })
+        .from(fragments)
+        .where(eq(fragments.readable_id, candidate))
+        .limit(1);
+      if (collision.length === 0) { readableId = candidate; break; }
+    }
+    if (!readableId) readableId = await generateReadableId(this.db, input.domain, input.type);
     const now = new Date().toISOString();
     const effectivePath = storePathOverride ?? this.storePath;
-    const fragmentsDir = join(effectivePath, 'fragments', input.domain);
+    const fragmentsDir = storePathOverride
+      ? join(storePathOverride, 'fragments')
+      : this.fragmentsDir(collectionSlug);
 
     // Ensure domain directory exists
     const { mkdirSync } = await import('node:fs');
@@ -93,6 +110,8 @@ export class FragmentService {
       last_used: null,
       access: input.access,
       origin: input.origin,
+      origin_source: input.origin_source ?? null,
+      origin_page: input.origin_page ?? null,
     };
 
     const filePath = writeFragment(fragmentsDir, frontmatter, input.body);
@@ -108,9 +127,7 @@ export class FragmentService {
       qualityTransition: 'draft',
     });
 
-    // Use a scoped GitRepository if storePath is overridden
-    const git = storePathOverride ? new GitRepository(effectivePath) : this.git;
-    const commitHash = await git.commit(relPath, commitMsg);
+    const commitHash = await this.git.commit(relPath, commitMsg);
 
     // Index in SQLite
     const title = deriveTitle(input.body);
@@ -122,18 +139,35 @@ export class FragmentService {
       quality: 'draft',
       author,
       title,
-      body_excerpt: input.body.slice(0, 200),
+      body_excerpt: input.body.slice(0, 400),
+      body: input.body,
       created_at: now,
       updated_at: now,
       file_path: relPath,
       git_hash: commitHash,
       collection_slug: collectionSlug ?? 'common',
       origin: input.origin,
+      origin_source: input.origin_source ?? null,
+      origin_page: input.origin_page ?? null,
       parent_id: input.parent_id ?? null,
       translation_of: input.translation_of ?? null,
+      tags: input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null,
       valid_from: input.valid_from ?? null,
       valid_until: input.valid_until ?? null,
+      harvest_confidence: (input as any).harvest_confidence ?? null,
+      source_position: (input as any).source_position ?? null,
+      payload: input.payload ?? null,
+      payload_schema: input.payload_schema ?? null,
+      readable_id: readableId,
     });
+
+    // Sync fragment_tag_links
+    if (input.tags && input.tags.length > 0) {
+      await this.db
+        .insert(fragmentTagLinks)
+        .values(input.tags.map((slug) => ({ fragment_id: id, tag_slug: slug })))
+        .onConflictDoNothing();
+    }
 
     await this.audit.log({
       user_id: author,
@@ -156,7 +190,7 @@ export class FragmentService {
       updated_at: now,
     });
 
-    return { id, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
+    return { id, readable_id: readableId, file_path: relPath, commit_hash: commitHash, quality: 'draft' };
   }
 
   async getById(id: string) {
@@ -164,11 +198,56 @@ export class FragmentService {
     if (rows.length === 0) return null;
 
     const row = rows[0];
-    const storePath = await this.resolveStorePath(row.collection_slug);
-    const filePath = join(storePath, row.file_path);
-    const { frontmatter, body } = readFragment(filePath);
+    const filePath = join(this.storePath, row.file_path);
 
-    return { ...row, frontmatter, body };
+    // If the fragment came from harvest, surface near-dup detection info for the validation UI
+    let harvest_near_dup: {
+      fragment_id: string;
+      score: number | null;
+      method: string | null;
+    } | null = null;
+    if (row.origin === 'harvested') {
+      const dupRows = await this.db
+        .select({
+          duplicate_of: harvestCandidates.duplicate_of,
+          duplicate_score: harvestCandidates.duplicate_score,
+          duplicate_method: harvestCandidates.duplicate_method,
+        })
+        .from(harvestCandidates)
+        .where(
+          and(
+            eq(harvestCandidates.fragment_id, id),
+            // only when a near-dup was actually detected
+          ),
+        )
+        .limit(1);
+      const dup = dupRows[0];
+      if (dup?.duplicate_of) {
+        harvest_near_dup = {
+          fragment_id: dup.duplicate_of,
+          score: dup.duplicate_score,
+          method: dup.duplicate_method,
+        };
+      }
+    }
+
+    try {
+      const { frontmatter, body } = readFragment(filePath);
+      return { ...row, frontmatter, body, harvest_near_dup };
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') return null; // fichier manquant → 404 propre
+      throw e;
+    }
+  }
+
+  async getByReadableId(readableId: string) {
+    const rows = await this.db
+      .select()
+      .from(fragments)
+      .where(eq(fragments.readable_id, readableId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    return this.getById(rows[0].id);
   }
 
   async list(filters?: {
@@ -224,7 +303,39 @@ export class FragmentService {
       this.db.select({ total: count() }).from(fragments).where(where),
     ]);
 
-    return { rows, total };
+    // Batch-enrich harvest_near_dup for harvested fragments (single extra query per page)
+    const harvestedIds = rows.filter((r) => r.origin === 'harvested').map((r) => r.id);
+    const nearDupMap = new Map<
+      string,
+      { fragment_id: string; score: number | null; method: string | null }
+    >();
+    if (harvestedIds.length > 0) {
+      const dupRows = await this.db
+        .select({
+          frag_id: harvestCandidates.fragment_id,
+          duplicate_of: harvestCandidates.duplicate_of,
+          duplicate_score: harvestCandidates.duplicate_score,
+          duplicate_method: harvestCandidates.duplicate_method,
+        })
+        .from(harvestCandidates)
+        .where(inArray(harvestCandidates.fragment_id, harvestedIds));
+      for (const d of dupRows) {
+        if (d.frag_id && d.duplicate_of) {
+          nearDupMap.set(d.frag_id, {
+            fragment_id: d.duplicate_of,
+            score: d.duplicate_score,
+            method: d.duplicate_method,
+          });
+        }
+      }
+    }
+
+    const enrichedRows = rows.map((r) => ({
+      ...r,
+      harvest_near_dup: nearDupMap.get(r.id) ?? null,
+    }));
+
+    return { rows: enrichedRows, total };
   }
 
   async search(query: string, filters?: SearchFilters, limit = 20, partitionNames?: string[]) {
@@ -242,7 +353,13 @@ export class FragmentService {
     if (!existing) throw new Error('Fragment not found');
 
     // Check write permission
-    const isContentEdit = !!(input.body !== undefined || input.tags !== undefined || input.domain !== undefined);
+    const isContentEdit = !!(
+      input.body !== undefined ||
+      input.tags !== undefined ||
+      input.domain !== undefined ||
+      input.type !== undefined ||
+      input.lang !== undefined
+    );
     if (
       isContentEdit &&
       (existing.quality === 'approved' || existing.quality === 'reviewed') &&
@@ -270,16 +387,16 @@ export class FragmentService {
       }
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const updatedFrontmatter = { ...frontmatter };
     const newBody = input.body ?? body;
 
     if (input.tags) updatedFrontmatter.tags = input.tags;
+    if (input.type) updatedFrontmatter.type = input.type;
     if (input.domain) updatedFrontmatter.domain = input.domain;
+    if (input.lang) updatedFrontmatter.lang = input.lang;
     if (input.quality) {
       updatedFrontmatter.quality = input.quality;
       if (input.quality === 'reviewed') updatedFrontmatter.reviewed_by = userId;
@@ -287,11 +404,12 @@ export class FragmentService {
     if (input.access) updatedFrontmatter.access = input.access;
     updatedFrontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(
-      join(storePath, 'fragments', updatedFrontmatter.domain),
+    const newAbsPath = writeFragment(
+      this.fragmentsDir(existing.collection_slug),
       updatedFrontmatter,
       newBody,
     );
+    const newRelPath = relative(this.storePath, newAbsPath);
 
     const commitMsg = buildCommitMessage({
       action: 'update',
@@ -303,20 +421,79 @@ export class FragmentService {
       qualityTransition: input.quality ? `${existing.quality} → ${input.quality}` : undefined,
     });
 
-    const commitHash = await git.commit(existing.file_path, commitMsg);
+    let commitHash: string;
+    if (newRelPath !== existing.file_path) {
+      try {
+        unlinkSync(join(this.storePath, existing.file_path));
+      } catch {
+        /* already gone */
+      }
+      commitHash = await this.git.commitMove(commitMsg);
+    } else {
+      commitHash = await this.git.commit(existing.file_path, commitMsg);
+    }
 
     await this.db
       .update(fragments)
       .set({
+        type: updatedFrontmatter.type,
         domain: updatedFrontmatter.domain,
+        lang: updatedFrontmatter.lang,
         quality: updatedFrontmatter.quality,
         tags: JSON.stringify(updatedFrontmatter.tags ?? []),
         updated_at: updatedFrontmatter.updated_at,
         title: deriveTitle(newBody),
-        body_excerpt: newBody.slice(0, 200),
+        body_excerpt: newBody.slice(0, 400),
+        body: newBody,
         git_hash: commitHash,
+        file_path: newRelPath,
       })
       .where(eq(fragments.id, id));
+
+    // Sync fragment_tag_links: delete stale, insert current
+    await this.db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.fragment_id, id));
+    const newTags = updatedFrontmatter.tags ?? [];
+    if (newTags.length > 0) {
+      await this.db
+        .insert(fragmentTagLinks)
+        .values(newTags.map((slug) => ({ fragment_id: id, tag_slug: slug })))
+        .onConflictDoNothing();
+    }
+
+    // Propagate human-direct trust to referential for any manually edited fields
+    const now = new Date().toISOString();
+    if (input.domain) {
+      await this.db
+        .insert(fragmentDomains)
+        .values({
+          slug: input.domain,
+          label: input.domain,
+          created_at: now,
+          proposedBy: userId,
+          trustSource: 'human-direct',
+        })
+        .onConflictDoUpdate({
+          target: fragmentDomains.slug,
+          set: { trustSource: 'human-direct' },
+        });
+    }
+    if (input.tags && input.tags.length > 0) {
+      for (const tag of input.tags) {
+        await this.db
+          .insert(fragmentTags)
+          .values({
+            slug: tag,
+            label: tag,
+            created_at: now,
+            proposedBy: userId,
+            trustSource: 'human-direct',
+          })
+          .onConflictDoUpdate({
+            target: fragmentTags.slug,
+            set: { trustSource: 'human-direct' },
+          });
+      }
+    }
 
     await this.audit.log({
       user_id: userId,
@@ -339,6 +516,11 @@ export class FragmentService {
       updated_at: updatedFrontmatter.updated_at,
     });
 
+    if (input.quality === 'reviewed' && this.llmClient) {
+      detectAndPropose(id, this.db, this.llmClient).catch(() => {});
+    }
+    this.indexService?.invalidateCache();
+
     return { id, commit_hash: commitHash };
   }
 
@@ -351,16 +533,14 @@ export class FragmentService {
       );
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     frontmatter.quality = 'approved';
     frontmatter.approved_by = userId;
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(this.fragmentsDir(existing.collection_slug), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'approve',
@@ -372,7 +552,7 @@ export class FragmentService {
       qualityTransition: 'reviewed → approved',
     });
 
-    const commitHash = await git.commit(existing.file_path, commitMsg);
+    const commitHash = await this.git.commit(existing.file_path, commitMsg);
 
     await this.db
       .update(fragments)
@@ -403,6 +583,7 @@ export class FragmentService {
       created_at: frontmatter.created_at,
       updated_at: frontmatter.updated_at,
     });
+    this.indexService?.invalidateCache();
 
     return { id, commit_hash: commitHash, quality: 'approved' };
   }
@@ -417,16 +598,14 @@ export class FragmentService {
       );
     }
 
-    const storePath = await this.resolveStorePath(existing.collection_slug);
-    const git = this.resolveGit(storePath);
-    const filePath = join(storePath, existing.file_path);
+    const filePath = join(this.storePath, existing.file_path);
     const { frontmatter, body } = readFragment(filePath);
 
     const oldQuality = frontmatter.quality;
     frontmatter.quality = 'deprecated';
     frontmatter.updated_at = new Date().toISOString();
 
-    writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
+    writeFragment(this.fragmentsDir(existing.collection_slug), frontmatter, body);
 
     const commitMsg = buildCommitMessage({
       action: 'deprecate',
@@ -438,7 +617,7 @@ export class FragmentService {
       qualityTransition: `${oldQuality} → deprecated`,
     });
 
-    const commitHash = await git.commit(existing.file_path, commitMsg);
+    const commitHash = await this.git.commit(existing.file_path, commitMsg);
 
     await this.db
       .update(fragments)
@@ -458,8 +637,52 @@ export class FragmentService {
     });
 
     await this.searchService.removeFromIndex(id);
+    this.indexService?.invalidateCache();
 
     return { id, commit_hash: commitHash, quality: 'deprecated' };
+  }
+
+  async delete(id: string, userId: string, ip?: string) {
+    const [row] = await this.db
+      .select({
+        file_path: fragments.file_path,
+        collection_slug: fragments.collection_slug,
+        type: fragments.type,
+        domain: fragments.domain,
+      })
+      .from(fragments)
+      .where(eq(fragments.id, id))
+      .limit(1);
+
+    if (!row) throw new Error(`Fragment not found (id=${id})`);
+
+    const commitMsg = buildCommitMessage({
+      action: 'delete',
+      type: row.type,
+      domain: row.domain,
+      description: `deleted by ${userId}`,
+      author: userId,
+      fragmentId: id,
+    });
+
+    try {
+      await this.git.rmFiles([row.file_path], commitMsg);
+    } catch (e) {
+      console.warn(`[delete] git rm failed for ${row.file_path}, forcing DB delete:`, e);
+    }
+    await this.db.delete(fragmentTagLinks).where(eq(fragmentTagLinks.fragment_id, id));
+    await this.db.delete(fragments).where(eq(fragments.id, id));
+    await this.searchService.removeFromIndex(id);
+    this.indexService?.invalidateCache();
+    await this.audit.log({
+      user_id: userId,
+      role: 'admin',
+      action: 'delete',
+      fragment_id: id,
+      ip_source: ip,
+    });
+
+    return { id, deleted: true };
   }
 
   async history(id: string) {
@@ -469,91 +692,22 @@ export class FragmentService {
       .where(eq(fragments.id, id))
       .limit(1);
     if (rows.length === 0) throw new Error('Fragment not found');
-    const storePath = await this.resolveStorePath(rows[0].collection_slug);
-    const git = this.resolveGit(storePath);
-    return git.log(rows[0].file_path);
+    return this.git.log(rows[0].file_path);
   }
 
-  async bulkReview(
-    ids: string[],
-    userId: string,
-    ip: string | undefined,
-    onProgress?: (done: number) => void,
-  ): Promise<{ done: number; errors: number }> {
-    const now = new Date().toISOString();
-    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
-    const groups = new Map<string, Group>();
-    let errors = 0;
-
-    for (const id of ids) {
-      try {
-        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
-        if (!frag || frag.quality !== 'draft') continue;
-        const storePath = await this.resolveStorePath(frag.collection_slug);
-        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
-        frontmatter.quality = 'reviewed';
-        frontmatter.reviewed_by = userId;
-        frontmatter.updated_at = now;
-        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
-        const g = groups.get(storePath)!;
-        g.filePaths.push(frag.file_path);
-        g.ids.push(id);
-      } catch (e) { console.error(`[bulkReview] fragment ${id} failed:`, e); errors++; }
-    }
-
-    let done = 0;
-    for (const [, { git, filePaths, ids: gIds }] of groups) {
-      try {
-        const hash = await git.commitFiles(filePaths, `chore: bulk review ${gIds.length} fragments by ${userId}`);
-        await this.db.update(fragments).set({ quality: 'reviewed', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
-        await this.audit.log({ user_id: userId, role: 'contributor', action: 'bulk_review', fragment_id: gIds.join(','), ip_source: ip });
-        done += gIds.length;
-        onProgress?.(done);
-      } catch (e) { console.error(`[bulkReview] git commit failed:`, e); errors += gIds.length; }
-    }
-    return { done, errors };
-  }
-
-  async bulkApprove(
-    ids: string[],
-    userId: string,
-    ip: string | undefined,
-    onProgress?: (done: number) => void,
-  ): Promise<{ done: number; errors: number }> {
-    const now = new Date().toISOString();
-    type Group = { git: GitRepository; filePaths: string[]; ids: string[] };
-    const groups = new Map<string, Group>();
-    let errors = 0;
-
-    for (const id of ids) {
-      try {
-        const [frag] = await this.db.select().from(fragments).where(eq(fragments.id, id)).limit(1);
-        if (!frag || frag.quality !== 'reviewed') continue;
-        const storePath = await this.resolveStorePath(frag.collection_slug);
-        const { frontmatter, body } = readFragment(join(storePath, frag.file_path));
-        frontmatter.quality = 'approved';
-        frontmatter.approved_by = userId;
-        frontmatter.updated_at = now;
-        writeFragment(join(storePath, 'fragments', frontmatter.domain), frontmatter, body);
-        if (!groups.has(storePath)) groups.set(storePath, { git: this.resolveGit(storePath), filePaths: [], ids: [] });
-        const g = groups.get(storePath)!;
-        g.filePaths.push(frag.file_path);
-        g.ids.push(id);
-      } catch (e) { console.error(`[bulkApprove] fragment ${id} failed:`, e); errors++; }
-    }
-
-    let done = 0;
-    for (const [, { git, filePaths, ids: gIds }] of groups) {
-      try {
-        const hash = await git.commitFiles(filePaths, `chore: bulk approve ${gIds.length} fragments by ${userId}`);
-        await this.db.update(fragments).set({ quality: 'approved', updated_at: now, git_hash: hash }).where(inArray(fragments.id, gIds));
-        await this.audit.log({ user_id: userId, role: 'expert', action: 'bulk_approve', fragment_id: gIds.join(','), ip_source: ip });
-        done += gIds.length;
-        onProgress?.(done);
-      } catch (e) { console.error(`[bulkApprove] git commit failed:`, e); errors += gIds.length; }
-    }
-    return { done, errors };
+  async filterOwnedIds(ids: string[], authorLogin: string): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: fragments.id })
+      .from(fragments)
+      .where(
+        and(
+          inArray(fragments.id, ids),
+          eq(fragments.author, authorLogin),
+          ne(fragments.quality, 'approved'),
+        ),
+      );
+    return rows.map((r) => r.id);
   }
 
   async facets(collectionSlug?: string) {
@@ -575,7 +729,9 @@ export class FragmentService {
         try {
           const parsed = JSON.parse(row.tags) as string[];
           for (const t of parsed) tagSet.add(t);
-        } catch { /* skip malformed */ }
+        } catch {
+          /* skip malformed */
+        }
       }
     }
     return { domains, tags: [...tagSet].sort() };
@@ -677,86 +833,124 @@ export class FragmentService {
   }
 
   async reindex() {
-    const fragmentsDir = join(this.storePath, 'fragments');
-    const files = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
+    // Single vault: all collections live under fragments/<slug>/ in the root git.
+    const customCollections = await this.db.select({ slug: collections.slug }).from(collections);
+    const collectionSlugs = new Set(
+      customCollections.map((c) => c.slug).filter((s) => s !== 'common'),
+    );
+    const vaults: Array<{ storePath: string; collectionSlug: string; fragmentsSubdir: string }> = [
+      { storePath: this.storePath, collectionSlug: 'common', fragmentsSubdir: 'fragments' },
+      ...[...collectionSlugs].map((slug) => ({
+        storePath: this.storePath,
+        collectionSlug: slug,
+        fragmentsSubdir: `fragments/${slug}`,
+      })),
+    ];
+
     let indexed = 0;
+    let totalFiles = 0;
+    const batchItems: Array<{ id: string; body: string; metadata: FragmentMetadata }> = [];
 
-    for (const absPath of files) {
-      try {
-        const { frontmatter, body } = readFragment(absPath);
-        const relPath = relative(this.storePath, absPath);
-        const title = deriveTitle(body);
+    for (const { storePath, collectionSlug, fragmentsSubdir } of vaults) {
+      const fragmentsDir = join(storePath, fragmentsSubdir);
+      const files = this.walkDir(fragmentsDir).filter((f) => f.endsWith('.md'));
 
-        await this.db
-          .insert(fragments)
-          .values({
-            id: frontmatter.id,
-            type: frontmatter.type,
-            domain: frontmatter.domain,
-            lang: frontmatter.lang,
-            quality: frontmatter.quality,
-            author: frontmatter.author,
-            title,
-            body_excerpt: body.slice(0, 200),
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-            file_path: relPath,
-            collection_slug: 'common',
-            origin: frontmatter.origin ?? 'manual',
-            parent_id: frontmatter.parent_id ?? null,
-            translation_of: frontmatter.translation_of ?? null,
-            valid_from: frontmatter.valid_from ?? null,
-            valid_until: frontmatter.valid_until ?? null,
-          })
-          .onConflictDoUpdate({
-            target: fragments.id,
-            set: {
+      for (const absPath of files) {
+        totalFiles++;
+        try {
+          const { frontmatter, body } = readFragment(absPath);
+          const relPath = relative(storePath, absPath);
+          const title = deriveTitle(body);
+
+          // Generate readable_id for new fragments (existing ones keep theirs — readable_id is
+          // intentionally excluded from onConflictDoUpdate.set so it's never overwritten)
+          const reindexReadableId = await generateReadableId(
+            this.db,
+            frontmatter.domain,
+            frontmatter.type,
+          );
+
+          await this.db
+            .insert(fragments)
+            .values({
+              id: frontmatter.id,
+              type: frontmatter.type,
+              domain: frontmatter.domain,
+              lang: frontmatter.lang,
               quality: frontmatter.quality,
-              updated_at: frontmatter.updated_at,
+              author: frontmatter.author,
               title,
-              body_excerpt: body.slice(0, 200),
+              body_excerpt: body.slice(0, 400),
+              body,
+              created_at: frontmatter.created_at,
+              updated_at: frontmatter.updated_at,
               file_path: relPath,
-              collection_slug: 'common',
+              collection_slug: collectionSlug,
+              origin: frontmatter.origin ?? 'manual',
+              parent_id: frontmatter.parent_id ?? null,
+              translation_of: frontmatter.translation_of ?? null,
               valid_from: frontmatter.valid_from ?? null,
               valid_until: frontmatter.valid_until ?? null,
+              readable_id: reindexReadableId,
+            })
+            .onConflictDoUpdate({
+              target: fragments.id,
+              set: {
+                quality: frontmatter.quality,
+                updated_at: frontmatter.updated_at,
+                title,
+                body_excerpt: body.slice(0, 400),
+                body,
+                tags: JSON.stringify(frontmatter.tags ?? []),
+                file_path: relPath,
+                collection_slug: collectionSlug,
+                valid_from: frontmatter.valid_from ?? null,
+                valid_until: frontmatter.valid_until ?? null,
+                // readable_id intentionally omitted: existing fragments keep their stable ID
+              },
+            });
+
+          // Sync fragment_tag_links for reindexed fragment
+          const reindexTags: string[] = frontmatter.tags ?? [];
+          await this.db
+            .delete(fragmentTagLinks)
+            .where(eq(fragmentTagLinks.fragment_id, frontmatter.id));
+          if (reindexTags.length > 0) {
+            await this.db
+              .insert(fragmentTagLinks)
+              .values(reindexTags.map((slug) => ({ fragment_id: frontmatter.id, tag_slug: slug })))
+              .onConflictDoNothing();
+          }
+
+          batchItems.push({
+            id: frontmatter.id,
+            body,
+            metadata: {
+              type: frontmatter.type,
+              domain: frontmatter.domain,
+              lang: frontmatter.lang,
+              quality: frontmatter.quality,
+              author: frontmatter.author,
+              tags: frontmatter.tags,
+              access_read: frontmatter.access?.read ?? ['*'],
+              created_at: frontmatter.created_at,
+              updated_at: frontmatter.updated_at,
             },
           });
-        indexed++;
-      } catch (err) {
-        console.error(`Failed to index ${absPath}:`, err);
+          indexed++;
+        } catch (err) {
+          console.error(`Failed to index ${absPath}:`, err);
+        }
       }
     }
 
     // Batch index into vector store
-    const batchItems = [];
-    for (const absPath of files) {
-      try {
-        const { frontmatter, body } = readFragment(absPath);
-        batchItems.push({
-          id: frontmatter.id,
-          body,
-          metadata: {
-            type: frontmatter.type,
-            domain: frontmatter.domain,
-            lang: frontmatter.lang,
-            quality: frontmatter.quality,
-            author: frontmatter.author,
-            tags: frontmatter.tags,
-            access_read: frontmatter.access.read,
-            created_at: frontmatter.created_at,
-            updated_at: frontmatter.updated_at,
-          },
-        });
-      } catch {
-        /* already logged above */
-      }
-    }
     if (batchItems.length > 0) {
       const vectorResult = await this.searchService.indexBatch(batchItems);
       console.log(`Vector-indexed ${vectorResult.indexed} fragments`);
     }
 
-    return { indexed, total: files.length };
+    return { indexed, total: totalFiles };
   }
 
   private walkDir(dir: string): string[] {

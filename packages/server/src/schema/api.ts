@@ -30,6 +30,8 @@ export const createUserSchema = z.object({
   password: z.string().min(6),
   display_name: z.string().min(1),
   role: z.enum(['reader', 'contributor', 'expert', 'admin']),
+  /** 1 = active (default), 0 = created as inactive (pending activation by admin) */
+  active: z.number().int().min(0).max(1).optional().default(1),
 });
 
 export const createTokenSchema = z.object({

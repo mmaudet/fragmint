@@ -1,3 +1,5 @@
+import type { UploadHints } from '@/types/trust-source';
+
 export interface ApiResponse<T> {
   data: T | null;
   meta: { count?: number } | null;
@@ -24,6 +26,16 @@ export interface Fragment {
   frontmatter?: Record<string, any>;
   valid_from?: string | null;
   valid_until?: string | null;
+  origin?: string;
+  origin_source?: string | null;
+  origin_page?: number | null;
+  payload?: string | null;
+  payload_schema?: string | null;
+  harvest_near_dup?: {
+    fragment_id: string;
+    score: number | null;
+    method: string | null;
+  } | null;
 }
 
 export interface Template {
@@ -70,6 +82,16 @@ export interface User {
   display_name: string;
 }
 
+export interface AdminUser {
+  id: string;
+  login: string;
+  display_name: string;
+  role: string;
+  active: number;
+  created_at: string;
+  last_login: string | null;
+}
+
 export interface LoginResponse {
   token: string;
   user: User;
@@ -94,9 +116,37 @@ export interface HarvestJob {
   id: string;
   status: 'processing' | 'done' | 'error';
   files: string[];
+  collection_slug: string | null;
   stats: { total: number; duplicates: number; low_confidence: number; valid: number } | null;
   error: string | null;
   created_at: string;
+}
+
+export interface CoherenceFlag {
+  type: 'subject_coherence' | 'entity_coverage' | 'duplicate_check' | 'prototype_distance';
+  level: 'ok' | 'warning' | 'error' | 'info';
+  message: string;
+}
+
+export interface JudgeVerdict {
+  verdict: 'pass' | 'partial' | 'fail';
+  reason: string;
+}
+
+export interface SuggestedMetadata {
+  type?: string;
+  domain?: string;
+  tags?: string[];
+  reason: string;
+}
+
+export interface JudgeResult {
+  reusability: JudgeVerdict;
+  semantic_coherence: JudgeVerdict;
+  classification_accuracy: JudgeVerdict;
+  overall_recommendation: 'accept' | 'review' | 'reject';
+  overall_reason: string;
+  suggested_metadata?: SuggestedMetadata;
 }
 
 export interface HarvestCandidate {
@@ -111,13 +161,22 @@ export interface HarvestCandidate {
   confidence: number;
   origin_source: string;
   origin_page: number | null;
+  source_section: string | null;
   duplicate_of: string | null;
   duplicate_score: number | null;
+  duplicate_method?: string | null;
   status: 'pending' | 'accepted' | 'rejected' | 'merged';
+  fragment_id: string | null;
+  trust_sources_json: string | null;
+  quality_signals: CoherenceFlag[];
+  judge_result: JudgeResult | null;
+  payload?: string | null;
+  payload_schema?: string | null;
 }
 
 export interface HarvestJobWithCandidates extends HarvestJob {
   candidates: HarvestCandidate[];
+  upload_hints?: UploadHints;
 }
 
 export interface ValidateResult {
@@ -135,9 +194,10 @@ export interface CollectionWithRole {
   read_only: boolean;
   description: string | null;
   tags?: string[];
+  fragment_count: number;
 }
 
-export type PlanStatus = 'draft' | 'plan_validated' | 'fragments_validated' | 'completed';
+export type PlanStatus = 'draft' | 'plan_generated' | 'plan_validated' | 'fragments_validated' | 'completed';
 
 export interface PlanFilters {
   domain?: string[];
@@ -148,10 +208,24 @@ export interface PlanFilters {
 
 export interface FragmentCandidate {
   fragment_id: string;
-  score: number;
+  score: number | null;
   title: string | null;
   body_excerpt: string | null;
   quality: string;
+  type?: string;
+  payload_schema?: string | null;
+  score_breakdown?: {
+    method: 'vector' | 'agentic' | 'hybrid_rrf' | 'sqlite_like';
+    vector_score?: number;
+    vector_rank?: number;
+    llm_score?: number;
+    llm_rank?: number;
+    rrf_score?: number;
+    rrf_k?: number;
+    final_score?: number;
+  };
+  justification?: string;
+  confidence_level?: 'high' | 'medium' | 'low' | 'unknown';
 }
 
 export interface SectionFragmentSelection {
@@ -162,6 +236,22 @@ export interface SectionFragmentSelection {
   proposed_fragment_id?: string;
 }
 
+export interface FragmentCollection {
+  id: string;
+  title: string;
+  payload_schema: string | null;
+  member_ids: string[];
+  source_document: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroundednessFlag {
+  text: string;
+  risk: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
 export interface PlanSection {
   id: string;
   title: string;
@@ -169,9 +259,30 @@ export interface PlanSection {
   candidates: FragmentCandidate[];
   selected: SectionFragmentSelection[];
   generated_markdown?: string;
+  groundedness_flags?: GroundednessFlag[];
   filters_override?: PlanFilters;
   inferred_type?: string;
   writer_instructions?: string;
+  section_confidence?: 'good' | 'partial' | 'poor' | 'empty';
+}
+
+export interface PlanTemplateSection {
+  title: string;
+  description: string;
+  inferred_type?: string;
+  domain_hint?: string;
+}
+
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  status: 'active' | 'draft' | 'deprecated';
+  tags: string[];
+  sections: PlanTemplateSection[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PlanState {
@@ -183,6 +294,9 @@ export interface PlanState {
   draft_markdown?: string;
   draft_dirty?: boolean;
   export_style_template_id?: string;
+  from_template_id?: string;
+  from_template_version?: string;
+  from_template_name?: string;
 }
 
 export interface Plan {

@@ -77,4 +77,16 @@ describe('renderMarp (HTML)', () => {
       'Unsupported Marp output type: pdf',
     );
   });
+
+  // pptx output requires Chromium (headless browser) which is not available in CI.
+  // Manually test with: FRAGMINT_TEST_PPTX=1 pnpm test render-marp
+  it.skip('renders to pptx (requires Chromium — run manually)', async () => {
+    const md = '---\nmarp: true\n---\n# Slide 1\n---\n# Slide 2';
+    const path = writeTempMd(md);
+    const result = await renderMarp(path, {}, 'pptx');
+    expect(result.format).toBe('pptx');
+    expect(result.buffer.length).toBeGreaterThan(1000);
+    expect(result.buffer[0]).toBe(0x50); // 'P' — ZIP magic bytes
+    expect(result.buffer[1]).toBe(0x4b); // 'K'
+  });
 });

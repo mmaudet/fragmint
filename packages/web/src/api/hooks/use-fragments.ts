@@ -24,7 +24,7 @@ export function useFragments(collectionSlug: string, filters: FragmentFilters = 
   return {
     ...query,
     data: query.data?.data,
-    total: (query.data?.meta?.total as number | undefined),
+    total: query.data?.meta?.total as number | undefined,
   };
 }
 
@@ -92,9 +92,23 @@ export function useApproveFragment(collectionSlug: string) {
 
 export interface UpdateFragmentInput {
   body?: string;
+  type?: string;
   domain?: string;
+  lang?: string;
   tags?: string[];
   quality?: string;
+}
+
+export function useDeleteFragment(collectionSlug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<void>('DELETE', collectionApiUrl(collectionSlug, `/fragments/${id}`)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fragments'] });
+      qc.invalidateQueries({ queryKey: ['fragment'] });
+    },
+  });
 }
 
 export function useUpdateFragment(collectionSlug: string) {

@@ -1,5 +1,5 @@
 // packages/server/src/index.ts
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
@@ -20,10 +20,17 @@ import {
   fragments,
   fragmentTypes,
   fragmentDomains,
+  fragmentTags,
+  fragmentFunctions,
   toMilvusPartition,
 } from './db/schema.js';
 import { FRAGMENT_TYPES } from './schema/fragment.js';
-import { HARVESTER_DOMAINS } from './services/harvester-taxonomy.js';
+import {
+  HARVESTER_DOMAINS,
+  HARVESTER_FUNCTIONS,
+  HARVESTER_DOMAINS_GRANULAR,
+  INITIAL_TAGS,
+} from './services/harvester-taxonomy.js';
 import { buildAuthMiddleware } from './auth/middleware.js';
 import {
   UserService,
@@ -34,6 +41,8 @@ import {
   ComposerService,
   PlanService,
 } from './services/index.js';
+import { FragmentBulkService } from './services/fragment-bulk-service.js';
+import { PlanAssembler } from './services/plan-assembler.js';
 import { CollectionService } from './services/collection-service.js';
 import { EmbeddingClient, FragmintMilvusClient, SearchService } from './search/index.js';
 import { authRoutes } from './routes/auth-routes.js';
@@ -45,11 +54,25 @@ import { planRoutes } from './routes/plan-routes.js';
 import { collectionRoutes } from './routes/collection-routes.js';
 import { jobRoutes } from './routes/job-routes.js';
 import { taxonomyRoutes } from './routes/taxonomy-routes.js';
+import { adminMetadataRoutes } from './routes/admin-metadata-routes.js';
+import { adminMetadataMutationRoutes } from './routes/admin-metadata-mutation-routes.js';
+import { adminMetadataLookupRoutes } from './routes/admin-metadata-lookup-routes.js';
+import { adminSupersedureRoutes } from './routes/admin-supersedure-routes.js';
+import { adminReferentialRoutes } from './routes/admin-referential-routes.js';
+import { adminFragmentRoutes } from './routes/admin-fragment-routes.js';
+import { fragmentCollectionRoutes } from './routes/fragment-collection-routes.js';
+import { FragmentCollectionService } from './services/fragment-collection-service.js';
+import { PlanTemplateService } from './services/plan-template-service.js';
+import { planTemplateRoutes } from './routes/plan-template-routes.js';
 import { JobService } from './services/job-service.js';
 import { GitRepository } from './git/git-repository.js';
 import { buildCollectionMiddleware } from './auth/middleware.js';
 import { LlmClient } from './services/llm-client.js';
 import { HarvesterService } from './services/harvester-service.js';
+import { IndexService } from './services/index-service.js';
+import { indexRoutes } from './routes/index-routes.js';
+import { referencesRoutes } from './routes/references-routes.js';
+import { createRetriever } from './retrieval/factory.js';
 
 export interface FragmintServer {
   app: ReturnType<typeof Fastify>;
@@ -120,19 +143,49 @@ export async function createServer(options?: {
   await ensureCollections(db, config);
   await migrateFragmentCollectionSlug(db);
 
-  // Seed fragment_types and fragment_domains if empty
+  // Seed fragment_types — idempotent, runs every startup to pick up new types
   const now = new Date().toISOString();
-  const typeCount = await db.select({ c: count() }).from(fragmentTypes);
-  if (typeCount[0].c === 0) {
-    for (const slug of FRAGMENT_TYPES) {
-      await db.insert(fragmentTypes).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
-    }
+  for (const slug of FRAGMENT_TYPES) {
+    await db
+      .insert(fragmentTypes)
+      .values({ slug, label: slug, created_at: now })
+      .onConflictDoNothing();
   }
   const domainCount = await db.select({ c: count() }).from(fragmentDomains);
   if (domainCount[0].c === 0) {
-    for (const slug of HARVESTER_DOMAINS) {
-      await db.insert(fragmentDomains).values({ slug, label: slug, created_at: now }).onConflictDoNothing();
+    for (const { slug, label, description } of HARVESTER_DOMAINS) {
+      await db
+        .insert(fragmentDomains)
+        .values({ slug, label: label ?? slug, description, created_at: now })
+        .onConflictDoNothing();
     }
+  }
+
+  // Seed fragment_functions if empty
+  const fnCount = await db.select({ c: count() }).from(fragmentFunctions);
+  if (fnCount[0].c === 0) {
+    for (const { slug, label, description } of HARVESTER_FUNCTIONS) {
+      await db
+        .insert(fragmentFunctions)
+        .values({ slug, label, description, createdAt: now })
+        .onConflictDoNothing();
+    }
+  }
+
+  // Seed granular domain slugs — update label on conflict so display names stay current
+  for (const { slug, label, description } of HARVESTER_DOMAINS_GRANULAR) {
+    await db
+      .insert(fragmentDomains)
+      .values({ slug, label, description, created_at: now })
+      .onConflictDoUpdate({ target: fragmentDomains.slug, set: { label, description } });
+  }
+
+  // Seed initial validated tags
+  for (const { slug, label, category } of INITIAL_TAGS) {
+    await db
+      .insert(fragmentTags)
+      .values({ slug, label, category, created_at: now })
+      .onConflictDoNothing();
   }
 
   // Git init if needed
@@ -204,7 +257,7 @@ export async function createServer(options?: {
   const auditService = new AuditService(db);
   const userService = new UserService(db);
   const tokenService = new TokenService(db);
-  const fragmentService = new FragmentService(db, storePath, auditService, searchService);
+  const fragmentService = new FragmentBulkService(db, storePath, auditService, searchService);
   const templateService = new TemplateService(db, storePath, auditService);
   const composerService = new ComposerService(
     fragmentService,
@@ -217,9 +270,11 @@ export async function createServer(options?: {
   const authenticate = buildAuthMiddleware(db);
   const jobService = new JobService(db);
 
+  const fragmentCollectionService = new FragmentCollectionService(db);
+
   // Collection service and middleware
   const collectionService = new CollectionService(db, {
-    collections_path: config.collections_path,
+    store_path: config.store_path,
   });
   const requireCollRole = buildCollectionMiddleware(db);
 
@@ -231,27 +286,52 @@ export async function createServer(options?: {
     timeout: config.llm_timeout,
     apiKey: config.llm_api_key,
   });
+  fragmentService.llmClient = llmClient;
+
   const harvesterService = new HarvesterService(
     db,
     llmClient,
     searchService,
     fragmentService,
     storePath,
+    { dupeShinglesThreshold: config.dupe_shingles_threshold },
+    fragmentCollectionService,
   );
 
-  const planService = new PlanService(db, {
+  // Index service (agentique pipeline)
+  const indexService = new IndexService(db);
+  fragmentService.indexService = indexService;
+
+  const retriever = createRetriever(config.retrieval_mode, {
+    searchService,
+    llm: llmClient,
+    indexService,
+    fragmentService,
+    rrfK: config.rrf_k,
+    rrfWeightsPreset: config.rrf_weights,
+    hybridLlmFloor: config.hybrid_llm_floor,
+  }, config.section_top_k);
+
+  const planService = new PlanAssembler(db, {
     fragmentMaxChars: config.plan_fragment_max_chars,
     docxReferencePath: config.plan_docx_reference_path,
     llm: llmClient,
     search: searchService,
+    retriever,
     fragments: fragmentService,
+    sectionTopK: config.section_top_k,
+    llmConcurrency: config.llm_concurrency,
   });
 
   // Expose for tests (mirrors the plain-assignment pattern used by integration tests).
-  (app as unknown as { planService: PlanService }).planService = planService;
+  (app as unknown as { planService: PlanAssembler }).planService = planService;
+
+  const planTemplateService = new PlanTemplateService(db);
 
   // Routes
   authRoutes(app, userService, authenticate);
+  indexRoutes(app, indexService, authenticate);
+  referencesRoutes(app, db, authenticate);
   fragmentRoutes(app, fragmentService, authenticate, { jobService, db });
   jobRoutes(app, jobService, authenticate);
   adminRoutes(
@@ -262,14 +342,24 @@ export async function createServer(options?: {
     fragmentService,
     authenticate,
     searchService,
+    templateService,
   );
   templateRoutes(app, templateService, composerService, authenticate, {
     defaultReferenceDocPath: config.plan_docx_reference_path,
+    defaultReferenceDocName: config.plan_docx_reference_name,
   });
-  harvestRoutes(app, harvesterService, authenticate);
-  planRoutes(app, planService, templateService, config.store_path, authenticate);
+  harvestRoutes(app, harvesterService, authenticate, { db });
+  planTemplateRoutes(app, planTemplateService, authenticate);
+  planRoutes(app, planService, templateService, config.store_path, authenticate, { harvesterService, planTemplateService });
 
   taxonomyRoutes(app, db, authenticate);
+  adminMetadataRoutes(app, db, authenticate);
+  adminMetadataMutationRoutes(app, db, authenticate);
+  adminMetadataLookupRoutes(app, db, authenticate);
+  adminSupersedureRoutes(app, db, authenticate, llmClient);
+  adminReferentialRoutes(app, db, authenticate, jobService);
+  adminFragmentRoutes(app, db, authenticate, fragmentService, jobService);
+  fragmentCollectionRoutes(app, fragmentCollectionService, authenticate);
 
   // Collection CRUD routes
   collectionRoutes(app, collectionService, authenticate, requireCollRole);
@@ -285,14 +375,19 @@ export async function createServer(options?: {
   templateRoutes(app, templateService, composerService, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    defaultReferenceDocPath: config.plan_docx_reference_path,
+    defaultReferenceDocName: config.plan_docx_reference_name,
   });
   harvestRoutes(app, harvesterService, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    db,
   });
   planRoutes(app, planService, templateService, config.store_path, authenticate, {
     prefix: collPrefix,
     collectionMiddleware: requireCollRole('reader'),
+    harvesterService,
+    planTemplateService,
   });
 
   // Serve frontend static files
@@ -317,8 +412,11 @@ export async function createServer(options?: {
   });
 
   // Error handler
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode ?? 500;
+    if (statusCode >= 500) {
+      console.error(`[error] ${request.method} ${request.url} → ${statusCode}:`, error);
+    }
     reply.status(statusCode).send({
       data: null,
       meta: null,

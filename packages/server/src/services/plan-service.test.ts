@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createDb } from '../db/connection.js';
-import { PlanService } from './plan-service.js';
+import { PlanAssembler } from './plan-assembler.js';
+import { computeConfidenceLevel, computeSectionConfidence } from './plan-service.js';
 import type { LlmClient } from './llm-client.js';
 import type { SearchService } from '../search/search-service.js';
 import type { FragmentService } from './fragment-service.js';
 
 function makeService() {
   const db = createDb(':memory:');
-  return new PlanService(db, {
+  return new PlanAssembler(db, {
     fragmentMaxChars: 4000,
     docxReferencePath: undefined,
   });
@@ -15,7 +16,9 @@ function makeService() {
 
 describe('PlanService CRUD', () => {
   let svc: ReturnType<typeof makeService>;
-  beforeEach(() => { svc = makeService(); });
+  beforeEach(() => {
+    svc = makeService();
+  });
 
   it('creates a plan with default state and status="draft"', async () => {
     const p = await svc.create({
@@ -98,13 +101,15 @@ function fakeFragments(createdId = 'frag_new'): FragmentService {
   } as unknown as FragmentService;
 }
 
-function makeServiceFull(opts: {
-  llm?: LlmClient;
-  search?: SearchService;
-  fragments?: FragmentService;
-} = {}) {
+function makeServiceFull(
+  opts: {
+    llm?: LlmClient;
+    search?: SearchService;
+    fragments?: FragmentService;
+  } = {},
+) {
   const db = createDb(':memory:');
-  return new PlanService(db, {
+  return new PlanAssembler(db, {
     fragmentMaxChars: 4000,
     docxReferencePath: undefined,
     llm: opts.llm,
@@ -118,7 +123,7 @@ describe('PlanService.generatePlan', () => {
     const llm = fakeLlm(['## Intro\n\nWelcomes.\n\n## Pricing\n\nCosts.']);
     const svc = makeServiceFull({ llm });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: 'cloud doc' });
-    const out = await svc.generatePlan(p.id, {});
+    const out = await svc.generatePlan(p.id);
     expect(out!.state.plan_markdown).toContain('## Intro');
     expect(llm.chatMessages).toHaveBeenCalledTimes(1);
   });
@@ -133,7 +138,7 @@ describe('PlanService.validatePlan', () => {
     ]);
     const svc = makeServiceFull({ llm, search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB' });
+    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB', status: 'plan_generated' });
 
     const out = await svc.validatePlan(p.id);
     expect(out!.status).toBe('plan_validated');
@@ -144,10 +149,12 @@ describe('PlanService.validatePlan', () => {
 
   it('preserves existing per-section selections when re-validating with same section titles', async () => {
     const llm = fakeLlm([]);
-    const search = fakeSearch([{ id: 'fX', score: 0.9, title: 'X', body_excerpt: 'x', quality: 'draft' }]);
+    const search = fakeSearch([
+      { id: 'fX', score: 0.9, title: 'X', body_excerpt: 'x', quality: 'draft' },
+    ]);
     const svc = makeServiceFull({ llm, search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## Keep\n\nDesc' });
+    await svc.update(p.id, { plan_markdown: '## Keep\n\nDesc', status: 'plan_generated' });
     const v1 = await svc.validatePlan(p.id);
     await svc.update(p.id, {
       sections: v1!.state.sections.map((s) => ({
@@ -165,10 +172,12 @@ describe('PlanService.validatePlan', () => {
 
 describe('PlanService.searchSection', () => {
   it('refreshes candidates for a single section', async () => {
-    const search = fakeSearch([{ id: 'fNEW', score: 1, title: 'new', body_excerpt: 'nb', quality: 'approved' }]);
+    const search = fakeSearch([
+      { id: 'fNEW', score: 1, title: 'new', body_excerpt: 'nb', quality: 'approved' },
+    ]);
     const svc = makeServiceFull({ search, llm: fakeLlm([]) });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## S\n\nD' });
+    await svc.update(p.id, { plan_markdown: '## S\n\nD', status: 'plan_generated' });
     const v = await svc.validatePlan(p.id);
     const sid = v!.state.sections[0].id;
     const out = await svc.searchSection(p.id, sid, {});
@@ -178,11 +187,13 @@ describe('PlanService.searchSection', () => {
 
 describe('PlanService.validateFragments', () => {
   it('creates library drafts for selections with propose_to_library=true', async () => {
-    const search = fakeSearch([{ id: 'fSrc', score: 1, title: 't', body_excerpt: 'b', quality: 'draft' }]);
+    const search = fakeSearch([
+      { id: 'fSrc', score: 1, title: 't', body_excerpt: 'b', quality: 'draft' },
+    ]);
     const fragments = fakeFragments('frag_proposed');
     const svc = makeServiceFull({ llm: fakeLlm([]), search, fragments });
     const p = await svc.create({ owner: 'alice', collection_slug: 'common', spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## S\n\nD' });
+    await svc.update(p.id, { plan_markdown: '## S\n\nD', status: 'plan_generated' });
     const v = await svc.validatePlan(p.id);
     const sid = v!.state.sections[0].id;
     await svc.update(p.id, {
@@ -235,7 +246,8 @@ describe('PlanService.validateFragments', () => {
 
 describe('PlanService.generateSection', () => {
   it('calls the LLM with title/description/fragments and stores generated_markdown', async () => {
-    const llm = fakeLlm(['Generated body of the section.']);
+    // Second response is for the async groundedness check (fire-and-forget, '[]' = no flags)
+    const llm = fakeLlm(['Generated body of the section.', '[]']);
     const svc = makeServiceFull({ llm, search: fakeSearch([]) });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
     await svc.update(p.id, {
@@ -255,26 +267,45 @@ describe('PlanService.generateSection', () => {
     });
     const out = await svc.generateSection(p.id, 'sec_aaa');
     expect(out!.state.sections[0].generated_markdown).toContain('Generated body');
-    expect(llm.chatMessages).toHaveBeenCalledTimes(1);
+    expect(llm.chatMessages).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('PlanService.assemble', () => {
   it('concatenates section bodies into draft_markdown', async () => {
     const svc = makeServiceFull({ llm: fakeLlm([]), search: fakeSearch([]) });
-    const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '', title: 'Doc' });
+    const p = await svc.create({
+      owner: 'a',
+      collection_slug: null,
+      spec_prompt: '',
+      title: 'Doc',
+    });
     await svc.update(p.id, {
       sections: [
-        { id: 's1', title: 'A', description: 'D', candidates: [], selected: [], generated_markdown: 'Body A.' },
-        { id: 's2', title: 'B', description: 'D', candidates: [], selected: [], generated_markdown: 'Body B.' },
+        {
+          id: 's1',
+          title: 'A',
+          description: 'D',
+          candidates: [],
+          selected: [],
+          generated_markdown: 'Body A.',
+        },
+        {
+          id: 's2',
+          title: 'B',
+          description: 'D',
+          candidates: [],
+          selected: [],
+          generated_markdown: 'Body B.',
+        },
       ],
       status: 'fragments_validated',
     });
     const out = await svc.assemble(p.id);
-    expect(out!.state.draft_markdown).toContain('# Doc');
-    expect(out!.state.draft_markdown).toContain('## A');
+    expect(out!.state.draft_markdown).toContain('title: "Doc"');
+    expect(out!.state.draft_markdown).toContain('# A');
     expect(out!.state.draft_markdown).toContain('Body A.');
-    expect(out!.state.draft_markdown).toContain('## B');
+    expect(out!.state.draft_markdown).toContain('# B');
   });
 });
 
@@ -334,7 +365,12 @@ describe('PlanService.generateSection — full body fetch', () => {
           candidates: [],
           selected: [
             // edited=false → service should call getById and use the full body
-            { fragment_id: 'fOrig', body: 'truncated excerpt', edited: false, propose_to_library: false },
+            {
+              fragment_id: 'fOrig',
+              body: 'truncated excerpt',
+              edited: false,
+              propose_to_library: false,
+            },
           ],
         },
       ],
@@ -363,7 +399,12 @@ describe('PlanService.generateSection — full body fetch', () => {
           description: 'D',
           candidates: [],
           selected: [
-            { fragment_id: 'fOrig', body: 'my edited body', edited: true, propose_to_library: false },
+            {
+              fragment_id: 'fOrig',
+              body: 'my edited body',
+              edited: true,
+              propose_to_library: false,
+            },
           ],
         },
       ],
@@ -389,7 +430,7 @@ describe('PlanService.validatePlan — error tolerance', () => {
     } as unknown as SearchService;
     const svc = makeServiceFull({ llm: fakeLlm([]), search });
     const p = await svc.create({ owner: 'a', collection_slug: null, spec_prompt: '' });
-    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB' });
+    await svc.update(p.id, { plan_markdown: '## A\n\nDescA\n\n## B\n\nDescB', status: 'plan_generated' });
 
     const out = await svc.validatePlan(p.id);
     expect(out!.status).toBe('plan_validated');
@@ -423,7 +464,12 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
           description: 'D',
           candidates: [],
           selected: [
-            { fragment_id: 'fOrig', body: 'edited body of the fragment', edited: true, propose_to_library: true },
+            {
+              fragment_id: 'fOrig',
+              body: 'edited body of the fragment',
+              edited: true,
+              propose_to_library: true,
+            },
           ],
         },
       ],
@@ -478,9 +524,7 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
           title: 'S',
           description: 'D',
           candidates: [],
-          selected: [
-            { fragment_id: 'fOrig', body: 'b', edited: true, propose_to_library: true },
-          ],
+          selected: [{ fragment_id: 'fOrig', body: 'b', edited: true, propose_to_library: true }],
         },
       ],
       status: 'plan_validated',
@@ -492,5 +536,75 @@ describe('PlanService.validateFragments — FragmentService.create call shape', 
     expect(input.lang).toBe('fr'); // fallback
     expect(input.tags).toEqual([]); // null tags → []
     expect(collectionSlug).toBe('common'); // null collection → 'common'
+  });
+});
+
+describe('computeConfidenceLevel', () => {
+  it('returns high for llm_score >= 9', () => {
+    expect(computeConfidenceLevel(9)).toBe('high');
+    expect(computeConfidenceLevel(10)).toBe('high');
+  });
+
+  it('returns medium for llm_score 7-8', () => {
+    expect(computeConfidenceLevel(7)).toBe('medium');
+    expect(computeConfidenceLevel(8)).toBe('medium');
+  });
+
+  it('returns low for llm_score <= 6', () => {
+    expect(computeConfidenceLevel(6)).toBe('low');
+    expect(computeConfidenceLevel(3)).toBe('low');
+    expect(computeConfidenceLevel(0)).toBe('low');
+  });
+
+  it('returns unknown when llm_score is undefined', () => {
+    expect(computeConfidenceLevel(undefined)).toBe('unknown');
+  });
+});
+
+describe('computeSectionConfidence', () => {
+  function makeCandidate(llmScore: number | undefined) {
+    return {
+      fragment_id: 'f',
+      score: 0.8,
+      title: null,
+      body_excerpt: null,
+      quality: 'approved',
+      score_breakdown: llmScore !== undefined ? { method: 'hybrid_rrf' as const, llm_score: llmScore } : undefined,
+    };
+  }
+
+  it('returns good when top llm_score >= 9', () => {
+    const candidates = [makeCandidate(9), makeCandidate(5), makeCandidate(3)];
+    expect(computeSectionConfidence(candidates)).toBe('good');
+  });
+
+  it('returns partial when top llm_score is 7-8', () => {
+    const candidates = [makeCandidate(8), makeCandidate(4)];
+    expect(computeSectionConfidence(candidates)).toBe('partial');
+  });
+
+  it('returns poor when top llm_score <= 6', () => {
+    const candidates = [makeCandidate(6), makeCandidate(3)];
+    expect(computeSectionConfidence(candidates)).toBe('poor');
+  });
+
+  it('returns good when no llm_score but top vector score >= 0.80 (vector-only mode)', () => {
+    const candidates = [makeCandidate(undefined), makeCandidate(undefined)];
+    // makeCandidate uses score: 0.8 by default → falls into vector fallback → good
+    expect(computeSectionConfidence(candidates)).toBe('good');
+  });
+
+  it('returns partial when no llm_score and top vector score 0.65-0.79', () => {
+    const candidate = { ...makeCandidate(undefined), score: 0.72 };
+    expect(computeSectionConfidence([candidate])).toBe('partial');
+  });
+
+  it('returns poor when no llm_score and top vector score < 0.65', () => {
+    const candidate = { ...makeCandidate(undefined), score: 0.60 };
+    expect(computeSectionConfidence([candidate])).toBe('poor');
+  });
+
+  it('returns empty for empty candidates', () => {
+    expect(computeSectionConfidence([])).toBe('empty');
   });
 });

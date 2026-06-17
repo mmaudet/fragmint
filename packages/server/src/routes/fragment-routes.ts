@@ -1,7 +1,8 @@
 // packages/server/src/routes/fragment-routes.ts
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { requireRole } from '../auth/middleware.js';
-import { FragmentService } from '../services/fragment-service.js';
+import { FragmentBulkService } from '../services/fragment-bulk-service.js';
 import { JobService } from '../services/job-service.js';
 import { createFragmentSchema, updateFragmentSchema } from '../schema/fragment.js';
 import { searchQuerySchema, inventoryQuerySchema } from '../schema/api.js';
@@ -10,7 +11,7 @@ import { fragmentTypes } from '../db/schema.js';
 
 export function fragmentRoutes(
   app: FastifyInstance,
-  fragmentService: FragmentService,
+  fragmentService: FragmentBulkService,
   authenticate: ReturnType<typeof import('../auth/middleware.js').buildAuthMiddleware>,
   options?: {
     prefix?: string;
@@ -42,49 +43,99 @@ export function fragmentRoutes(
     : [authenticate, requireRole('admin')];
 
   // List fragments
-  app.get(`${prefix}/fragments`, { preHandler: readHandlers }, async (request) => {
-    const query = request.query as Record<string, string>;
-    const collection = request.collection;
-    const { rows, total } = await fragmentService.list({
-      type: query.type,
-      domain: query.domain,
-      lang: query.lang,
-      quality: query.quality,
-      limit: query.limit ? parseInt(query.limit) : undefined,
-      offset: query.offset ? parseInt(query.offset) : undefined,
-      collectionSlug: collection?.slug,
-    });
-    return { data: rows, meta: { count: rows.length, total }, error: null };
-  });
+  app.get(
+    `${prefix}/fragments`,
+    {
+      preHandler: readHandlers,
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            domain: { type: 'string' },
+            lang: { type: 'string' },
+            quality: { type: 'string' },
+            limit: { type: 'string' },
+            offset: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => {
+      const query = request.query as Record<string, string>;
+      const collection = request.collection;
+      const { rows, total } = await fragmentService.list({
+        type: query.type,
+        domain: query.domain,
+        lang: query.lang,
+        quality: query.quality,
+        limit: query.limit ? parseInt(query.limit) : undefined,
+        offset: query.offset ? parseInt(query.offset) : undefined,
+        collectionSlug: collection?.slug,
+      });
+      return { data: rows, meta: { count: rows.length, total }, error: null };
+    },
+  );
 
   // Export fragments as XLSX
-  app.get(`${prefix}/fragments/export`, { preHandler: readHandlers }, async (request, reply) => {
-    const query = request.query as Record<string, string>;
-    const collection = request.collection;
-    const { rows } = await fragmentService.list({
-      type: query.type,
-      domain: query.domain,
-      lang: query.lang,
-      quality: query.quality,
-      collectionSlug: collection?.slug,
-    });
+  app.get(
+    `${prefix}/fragments/export`,
+    {
+      preHandler: readHandlers,
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            domain: { type: 'string' },
+            lang: { type: 'string' },
+            quality: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const query = request.query as Record<string, string>;
+      const collection = request.collection;
+      const { rows } = await fragmentService.list({
+        type: query.type,
+        domain: query.domain,
+        lang: query.lang,
+        quality: query.quality,
+        collectionSlug: collection?.slug,
+      });
 
-    const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
-    const buffer = await exportFragmentsToXlsx(rows);
+      const { exportFragmentsToXlsx } = await import('../services/render-xlsx-export.js');
+      const buffer = await exportFragmentsToXlsx(rows);
 
-    return reply
-      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      .header('Content-Disposition', 'attachment; filename="fragments-export.xlsx"')
-      .send(buffer);
-  });
+      return reply
+        .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        .header('Content-Disposition', 'attachment; filename="fragments-export.xlsx"')
+        .send(buffer);
+    },
+  );
 
-  // Get fragment by ID
+  // Get fragment by UUID or readable_id (e.g. LS-ref-003)
   app.get(`${prefix}/fragments/:id`, { preHandler: readHandlers }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const frag = await fragmentService.getById(id);
+    // Try UUID first, then fall back to readable_id lookup
+    let frag = await fragmentService.getById(id);
+    if (!frag && !id.startsWith('frag-')) {
+      frag = await fragmentService.getByReadableId(id);
+    }
     if (!frag)
       return reply.status(404).send({ data: null, meta: null, error: 'Fragment not found' });
-    return { data: frag, meta: null, error: null };
+    const data = {
+      ...frag,
+      tags: frag.tags
+        ? typeof frag.tags === 'string'
+          ? (JSON.parse(frag.tags) as string[])
+          : frag.tags
+        : [],
+    };
+    return { data, meta: null, error: null };
   });
 
   // Git history
@@ -120,7 +171,9 @@ export function fragmentRoutes(
   app.post(`${prefix}/fragments/search`, { preHandler: readHandlers }, async (request) => {
     const parsed = searchQuerySchema.safeParse(request.body);
     if (!parsed.success) return { data: null, meta: null, error: parsed.error.message };
-    // Auto-apply valid_at=today to exclude expired/future fragments from search
+    // Fast path only: SQLite LIKE or Milvus vector — no LLM.
+    // The hybrid retriever is for plan assembly; using it here would block the UI
+    // for the full LLM_TIMEOUT (300 s in dev) on every search keystroke.
     const filters = {
       ...parsed.data.filters,
       valid_at: new Date().toISOString().slice(0, 10),
@@ -150,7 +203,9 @@ export function fragmentRoutes(
     if (!parsed.success)
       return reply.status(400).send({ data: null, meta: null, error: parsed.error.message });
     if (!(await validateType(parsed.data.type)))
-      return reply.status(400).send({ data: null, meta: null, error: `Invalid type '${parsed.data.type}'` });
+      return reply
+        .status(400)
+        .send({ data: null, meta: null, error: `Invalid type '${parsed.data.type}'` });
     const collection = (request as any).collection;
     const result = await fragmentService.create(
       parsed.data,
@@ -206,6 +261,19 @@ export function fragmentRoutes(
     return { data: result, meta: null, error: null };
   });
 
+  // Delete
+  app.route({
+    method: 'DELETE',
+    url: `${prefix}/fragments/:id`,
+    preHandler: adminHandlers,
+    handler: async (request, reply) => {
+      const params = request.params as Record<string, string>;
+      const id = params.id;
+      const result = await fragmentService.delete(id, request.user.login, request.ip);
+      return reply.send({ data: result, meta: null, error: null });
+    },
+  });
+
   // Lineage
   app.get(`${prefix}/fragments/:id/lineage`, { preHandler: readHandlers }, async (request) => {
     const { id } = request.params as { id: string };
@@ -227,26 +295,104 @@ export function fragmentRoutes(
   );
 
   // Bulk review
-  app.post(`${prefix}/fragments/bulk-review`, { preHandler: writeHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const { ids } = request.body as { ids: string[] };
-    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const job = await jobService.create('bulk_review', ids.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService.bulkReview(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-review`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_review', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkReview(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
+
+  // Bulk delete
+  app.post(
+    `${prefix}/fragments/bulk-delete`,
+    { preHandler: adminHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_delete', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkDelete(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
+
+  // Bulk delete own (contributor/expert — only deletes fragments authored by the requester, non-approved)
+  app.post(
+    `${prefix}/fragments/bulk-delete-own`,
+    { preHandler: writeHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const parseResult = z
+        .object({ ids: z.array(z.string().min(1)).min(1) })
+        .safeParse(request.body);
+      if (!parseResult.success)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const { ids } = parseResult.data;
+      const ownedIds = await fragmentService.filterOwnedIds(ids, request.user.login);
+      if (ownedIds.length === 0)
+        return reply.code(200).send({ data: { done: 0 }, meta: null, error: null });
+      const job = await jobService.create('bulk_delete', ownedIds.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkDelete(
+          ownedIds,
+          request.user.login,
+          request.ip,
+          (done) => jobService.progress(job.id, done),
+          (request.user as any).role ?? 'contributor',
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 
   // Bulk approve
-  app.post(`${prefix}/fragments/bulk-approve`, { preHandler: expertHandlers }, async (request, reply) => {
-    if (!jobService) return reply.status(501).send({ data: null, meta: null, error: 'Job service not available' });
-    const { ids } = request.body as { ids: string[] };
-    if (!Array.isArray(ids) || ids.length === 0) return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
-    const job = await jobService.create('bulk_approve', ids.length, request.user.login);
-    reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
-    fragmentService.bulkApprove(ids, request.user.login, request.ip, (done) => jobService.progress(job.id, done))
-      .then(({ done, errors }) => jobService.complete(job.id, done, errors))
-      .catch(() => jobService.fail(job.id));
-  });
+  app.post(
+    `${prefix}/fragments/bulk-approve`,
+    { preHandler: expertHandlers },
+    async (request, reply) => {
+      if (!jobService)
+        return reply
+          .status(501)
+          .send({ data: null, meta: null, error: 'Job service not available' });
+      const { ids } = request.body as { ids: string[] };
+      if (!Array.isArray(ids) || ids.length === 0)
+        return reply.status(400).send({ data: null, meta: null, error: 'ids required' });
+      const job = await jobService.create('bulk_approve', ids.length, request.user.login);
+      reply.code(202).send({ data: { job_id: job.id }, meta: null, error: null });
+      fragmentService
+        .bulkApprove(ids, request.user.login, request.ip, (done) =>
+          jobService.progress(job.id, done),
+        )
+        .then(({ done, errors }) => jobService.complete(job.id, done, errors))
+        .catch(() => jobService.fail(job.id));
+    },
+  );
 }

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
+import { LINAGORA_DOMAINS } from './seeds/linagora-domains.js';
 
 export type FragmintDb = ReturnType<typeof createDb>;
 
@@ -120,6 +121,36 @@ export function createDb(path: string | ':memory:') {
       category TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fragment_functions (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      description TEXT,
+      validated INTEGER NOT NULL DEFAULT 1,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      proposed_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL CHECK(type IN ('client','product','technology','partner','certification','regulation','metric')),
+      name TEXT NOT NULL,
+      canonical_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      aliases TEXT,
+      validated INTEGER NOT NULL DEFAULT 0,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      proposed_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TEXT NOT NULL,
+      UNIQUE(type, normalized_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type, validated);
+    CREATE TABLE IF NOT EXISTS fragment_entities (
+      fragment_id TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      PRIMARY KEY (fragment_id, entity_id),
+      FOREIGN KEY (fragment_id) REFERENCES fragments(id) ON DELETE CASCADE,
+      FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE
+    );
   `);
 
   // Add collection_slug to api_tokens if not already present
@@ -132,6 +163,13 @@ export function createDb(path: string | ':memory:') {
   // Add collection_slug to fragments if not already present
   try {
     sqlite.exec('ALTER TABLE fragments ADD COLUMN collection_slug TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
+  // Add collection_slug to harvest_jobs if not already present
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN collection_slug TEXT');
   } catch (_) {
     // Column already exists — ignore
   }
@@ -158,6 +196,385 @@ export function createDb(path: string | ':memory:') {
   } catch (_) {
     // Index already exists — ignore
   }
+
+  // Enrich fragment_types with validation columns
+  try {
+    sqlite.exec('ALTER TABLE fragment_types ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragment_types ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {}
+  try {
+    sqlite.exec("ALTER TABLE fragment_types ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
+  } catch (_) {}
+
+  // Enrich fragment_domains
+  try {
+    sqlite.exec('ALTER TABLE fragment_domains ADD COLUMN validated INTEGER NOT NULL DEFAULT 1');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragment_domains ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_domains ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'",
+    );
+  } catch (_) {}
+
+  // Enrich fragment_tags
+  try {
+    sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN proposed_by TEXT NOT NULL DEFAULT 'admin'");
+  } catch (_) {}
+
+  // New columns on fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN function_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN audience TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN maturity TEXT');
+  } catch (_) {}
+
+  // New columns on harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN function_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN audience TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN maturity TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN entities_json TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN new_proposals TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN metadata_status TEXT');
+  } catch (_) {}
+
+  // Trust by Source — referential tables
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_types ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_domains ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_tags ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE fragment_functions ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      "ALTER TABLE entities ADD COLUMN trust_source TEXT NOT NULL DEFAULT 'human-direct'",
+    );
+  } catch (_) {}
+
+  // Trust by Source — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN trust_sources_json TEXT');
+  } catch (_) {}
+
+  // Quality signals — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN quality_signals TEXT');
+  } catch (_) {}
+
+  // LLM-as-judge result — harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN judge_result TEXT');
+  } catch (_) {}
+
+  // Trust by Source — harvest_jobs (upload hints)
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN upload_hints TEXT');
+  } catch (_) {}
+
+  // Migration: single-repo vault — non-common fragments move from fragments/<domain>/
+  // to fragments/<slug>/<domain>/ within the root git repo.
+  // Only runs once: skips fragments whose file_path already contains the slug prefix.
+  try {
+    sqlite.exec(`
+      UPDATE fragments
+      SET file_path = 'fragments/' || collection_slug || '/' || substr(file_path, 11)
+      WHERE collection_slug IS NOT NULL
+        AND collection_slug != 'common'
+        AND file_path LIKE 'fragments/%'
+        AND file_path NOT LIKE 'fragments/' || collection_slug || '/%'
+    `);
+  } catch (_) {}
+
+  // Update collections git_path to root store path (handled by CollectionService.create
+  // going forward; existing rows are updated at startup via index.ts bootstrap if needed).
+
+  // Harvest job lifecycle: validated_at marks when all candidates are processed.
+  // Cleanup query: DELETE FROM harvest_candidates WHERE job_id IN (SELECT id FROM harvest_jobs WHERE validated_at IS NOT NULL);
+  //                DELETE FROM harvest_jobs WHERE validated_at IS NOT NULL;
+  try {
+    sqlite.exec('ALTER TABLE harvest_jobs ADD COLUMN validated_at TEXT');
+  } catch (_) {}
+
+  // Audit log enrichment
+  try {
+    sqlite.exec('ALTER TABLE audit_log ADD COLUMN entity_type TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE audit_log ADD COLUMN entity_id TEXT');
+  } catch (_) {}
+
+  // Supersedure links on fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN superseded_by TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN supersedes TEXT');
+  } catch (_) {}
+
+  // Migration 013 — statut cycle de vie sur les tables référentiels
+  // ALTER TABLE only runs once (fails silently if column exists)
+  // No backfill UPDATE — new items get DEFAULT 'active'; status is set explicitly on approve/reject actions
+  try {
+    sqlite.exec("ALTER TABLE fragment_domains ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE INDEX IF NOT EXISTS idx_fragment_domains_status ON fragment_domains(status)',
+    );
+  } catch (_) {}
+
+  try {
+    sqlite.exec("ALTER TABLE fragment_tags ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_tags_status ON fragment_tags(status)');
+  } catch (_) {}
+
+  try {
+    sqlite.exec("ALTER TABLE fragment_types ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_fragment_types_status ON fragment_types(status)');
+  } catch (_) {}
+
+  try {
+    sqlite.exec("ALTER TABLE fragment_functions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE INDEX IF NOT EXISTS idx_fragment_functions_status ON fragment_functions(status)',
+    );
+  } catch (_) {}
+
+  try {
+    sqlite.exec("ALTER TABLE entities ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  } catch (_) {}
+  try {
+    sqlite.exec('CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)');
+  } catch (_) {}
+
+  // Migration 014 — table historique des renommages
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS referential_renames (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      old_value TEXT NOT NULL,
+      new_value TEXT NOT NULL,
+      affected_fragments INTEGER NOT NULL DEFAULT 0,
+      renamed_by TEXT NOT NULL,
+      renamed_at TEXT NOT NULL,
+      recalculation_job_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_renames_table_old ON referential_renames(table_name, old_value);
+    CREATE INDEX IF NOT EXISTS idx_renames_renamed_at ON referential_renames(renamed_at);
+  `);
+
+  // Supersedure proposals table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS supersedure_proposals (
+      id TEXT PRIMARY KEY,
+      new_fragment_id TEXT NOT NULL,
+      old_fragment_id TEXT NOT NULL,
+      similarity_score REAL NOT NULL,
+      llm_judgment TEXT NOT NULL,
+      llm_confidence REAL NOT NULL,
+      llm_reasoning TEXT,
+      elements_lost_in_new TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      resolved_by TEXT,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sp_new_fragment_idx ON supersedure_proposals(new_fragment_id);
+    CREATE INDEX IF NOT EXISTS sp_status_idx ON supersedure_proposals(status);
+  `);
+
+  // Drop and recreate cascade triggers to keep them current (idempotent)
+  sqlite.exec(`
+    DROP TRIGGER IF EXISTS cascade_delete_fragment;
+    CREATE TRIGGER cascade_delete_fragment
+      BEFORE DELETE ON fragments BEGIN
+        DELETE FROM fragment_entities WHERE fragment_id = OLD.id;
+        DELETE FROM fragment_tag_links WHERE fragment_id = OLD.id;
+        DELETE FROM plan_fragment_usages WHERE fragment_id = OLD.id;
+        DELETE FROM supersedure_proposals WHERE new_fragment_id = OLD.id OR old_fragment_id = OLD.id;
+        UPDATE harvest_candidates SET fragment_id = NULL WHERE fragment_id = OLD.id;
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS cascade_delete_harvest_job
+      BEFORE DELETE ON harvest_jobs BEGIN
+        DELETE FROM harvest_candidates WHERE job_id = OLD.id;
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS cascade_delete_plan
+      BEFORE DELETE ON plans BEGIN
+        DELETE FROM plan_fragment_usages WHERE plan_id = OLD.id;
+      END;
+  `);
+
+  // Migration 015 — fragment_tag_links: replace stale usageCount with live join table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS fragment_tag_links (
+      fragment_id TEXT NOT NULL,
+      tag_slug TEXT NOT NULL,
+      PRIMARY KEY (fragment_id, tag_slug)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ftl_tag_slug ON fragment_tag_links(tag_slug);
+    CREATE INDEX IF NOT EXISTS idx_ftl_fragment_id ON fragment_tag_links(fragment_id);
+  `);
+
+  // Populate fragment_tag_links from existing fragments.tags JSON (one-time, idempotent via INSERT OR IGNORE)
+  try {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO fragment_tag_links (fragment_id, tag_slug)
+      SELECT f.id, jt.value
+      FROM fragments f, json_each(f.tags) jt
+      WHERE f.tags IS NOT NULL AND f.tags != '[]' AND f.tags != 'null'
+    `);
+  } catch (_) {
+    // json_each may not be available in very old SQLite — skip silently
+  }
+
+  // Migration 016 — harvest_candidates: duplicate_method column
+  try {
+    sqlite.exec(
+      "ALTER TABLE harvest_candidates ADD COLUMN duplicate_method TEXT",
+    );
+  } catch (_) {}
+
+  // Migration 017 — readable_id stable sur fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN readable_id TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_fragments_readable_id ON fragments(readable_id)',
+    );
+  } catch (_) {}
+
+  // Migration: add source_section to harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN source_section TEXT');
+  } catch (_) {
+    // Column already exists — ignore
+  }
+
+  // Migration 018 — payload fields on fragments and harvest_candidates
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN payload TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN payload_schema TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN payload TEXT');
+  } catch (_) {}
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN payload_schema TEXT');
+  } catch (_) {}
+
+  // Migration 018b — fragment_collections table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS fragment_collections (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      payload_schema TEXT,
+      member_ids TEXT NOT NULL DEFAULT '[]',
+      source_document TEXT,
+      collection_slug TEXT,
+      created_at TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fc_collection_slug ON fragment_collections(collection_slug);
+    CREATE INDEX IF NOT EXISTS idx_fc_created_by ON fragment_collections(created_by);
+    CREATE TABLE IF NOT EXISTS plan_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL DEFAULT '1.0.0',
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      sections_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_plan_templates_status ON plan_templates(status);
+  `);
+
+  // Migration 019 — doc_position for harvest candidates ordering
+  try {
+    sqlite.exec('ALTER TABLE harvest_candidates ADD COLUMN doc_position INTEGER');
+  } catch (_) {}
+
+  // Migration 020 — source_position: 1-based rank in source document for harvested fragments
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN source_position INTEGER');
+  } catch (_) {}
+
+  // Migration 021 — full body text for search (SQLite fallback when Milvus is disabled)
+  try {
+    sqlite.exec('ALTER TABLE fragments ADD COLUMN body TEXT');
+  } catch (_) {}
+
+  // Migration 022 — drop redundant `validated` boolean — status='active' is the single source of truth
+  const validatedExistsOnTags = sqlite.prepare(
+    "SELECT COUNT(*) as c FROM pragma_table_info('fragment_tags') WHERE name='validated'"
+  ).get() as { c: number };
+  if (validatedExistsOnTags.c > 0) {
+    sqlite.exec('ALTER TABLE fragment_tags DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_domains DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_types DROP COLUMN validated');
+    sqlite.exec('ALTER TABLE fragment_functions DROP COLUMN validated');
+  }
+
+  // Seed 001 — default Linagora product domains (INSERT OR IGNORE — safe on every boot).
+  // Intentional: once seeded, domains are admin-owned. Label/description changes in this
+  // file will NOT update existing rows — edit via the admin UI or a manual migration.
+  const insertDomain = sqlite.prepare(
+    'INSERT OR IGNORE INTO fragment_domains (slug, label, description, created_at) VALUES (?, ?, ?, ?)',
+  );
+  const seedDomainsNow = sqlite.transaction(() => {
+    const now = new Date().toISOString();
+    for (const domain of LINAGORA_DOMAINS) {
+      insertDomain.run(domain.slug, domain.label, domain.description, now);
+    }
+  });
+  seedDomainsNow();
 
   const db = drizzle(sqlite, { schema });
   return db;

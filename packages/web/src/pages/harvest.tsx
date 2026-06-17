@@ -1,36 +1,257 @@
-import { useState, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
-import { useStartHarvest, useHarvestJob, useValidateCandidates } from '@/api/hooks/use-harvest';
+import { CollectionSelector } from '@/components/collection-selector';
+import { useStartHarvest, useHarvestJob, useValidateCandidates, useDeleteHarvestJob } from '@/api/hooks/use-harvest';
+import { useDomains, useTypes, useTags } from '@/api/hooks/use-taxonomy';
 import { CandidateCard } from '@/components/candidate-card';
+import { CandidateDetailSheet } from '@/components/candidate-detail-sheet';
+import type { CandidateEdits } from '@/components/candidate-detail-sheet';
+import { UploadHintsForm } from '@/components/harvest/upload-hints-form';
+import type { UploadHints } from '@/types/trust-source';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { toast } from 'sonner';
-import { Upload, Loader2, CheckCircle, XCircle, AlertTriangle, FileText, Check, X } from 'lucide-react';
+import {
+  Upload,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  FileText,
+  FileSearch,
+  Sparkles,
+  Tags,
+  ShieldCheck,
+  X,
+  Trash2,
+  TableProperties,
+  Info,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HarvestCandidate } from '@/api/types';
 
+const PIPELINE_STEPS = [
+  { key: 'convert', icon: FileSearch, labelKey: 'stepConvert' as const },
+  { key: 'segment', icon: Sparkles, labelKey: 'stepSegment' as const },
+  { key: 'classify', icon: Tags, labelKey: 'stepClassify' as const },
+  { key: 'judge', icon: ShieldCheck, labelKey: 'stepJudge' as const },
+];
+
+function HarvestProcessingView({
+  files,
+  t,
+}: {
+  files: string[];
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const durations = [4000, 20000, 15000, 8000];
+    let step = 0;
+    const advance = () => {
+      step = Math.min(step + 1, PIPELINE_STEPS.length - 1);
+      setActiveStep(step);
+      if (step < PIPELINE_STEPS.length - 1) {
+        setTimeout(advance, durations[step]);
+      }
+    };
+    const timer = setTimeout(advance, durations[0]);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="p-6 space-y-8">
+      <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
+
+      <div className="flex flex-col gap-2 max-w-sm">
+        {PIPELINE_STEPS.map((step, i) => {
+          const Icon = step.icon;
+          const isDone = i < activeStep;
+          const isActive = i === activeStep;
+          return (
+            <div
+              key={step.key}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-500',
+                isDone && 'text-muted-foreground',
+                isActive && 'bg-muted font-medium text-foreground',
+                !isDone && !isActive && 'text-muted-foreground/40',
+              )}
+            >
+              {isDone ? (
+                <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+              ) : isActive ? (
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              ) : (
+                <Icon className="h-4 w-4 shrink-0" />
+              )}
+              <span>{t('harvest', step.labelKey)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <div
+              key={f}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1"
+            >
+              <FileText className="h-3 w-3" />
+              {f}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HarvestPage() {
   const { t } = useI18n();
-  const { activeCollection } = useCollection();
+  const { activeCollection, setActiveCollection } = useCollection();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  // Phase state
-  const [jobId, setJobId] = useState<string | null>(null);
+  const jobId = searchParams.get('job');
   const [files, setFiles] = useState<File[]>([]);
-  const [minConfidence, setMinConfidence] = useState(0.65);
+  const [uploadHints, setUploadHints] = useState<UploadHints>({});
   const [dragOver, setDragOver] = useState(false);
-  const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>({});
-  const [commitResult, setCommitResult] = useState<{ committed: number } | null>(null);
+  const [decisions, _setDecisions] = useState<Record<string, 'accepted' | 'rejected'>>(() => {
+    if (!jobId) return {};
+    try {
+      return JSON.parse(sessionStorage.getItem(`harvest-decisions-${jobId}`) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [modifications, _setModifications] = useState<Record<string, CandidateEdits>>(() => {
+    if (!jobId) return {};
+    try {
+      return JSON.parse(sessionStorage.getItem(`harvest-mods-${jobId}`) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
   const [selectedCandidate, setSelectedCandidate] = useState<HarvestCandidate | null>(null);
+  const candidatePage = Math.max(0, Number(searchParams.get('page') ?? '1') - 1);
+  const setCandidatePage = useCallback(
+    (p: number | ((prev: number) => number)) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const resolved = typeof p === 'function' ? p(Math.max(0, Number(prev.get('page') ?? '1') - 1)) : p;
+          if (resolved <= 0) next.delete('page');
+          else next.set('page', String(resolved + 1));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const [candidatePageSize, setCandidatePageSize] = useState(24);
+  const [showTabularOnly, setShowTabularOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const setJobId = (id: string | null) => {
+    if (id) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('job', id);
+        next.delete('page');
+        return next;
+      }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
+  const setDecisions = (
+    updater:
+      | Record<string, 'accepted' | 'rejected'>
+      | ((
+          prev: Record<string, 'accepted' | 'rejected'>,
+        ) => Record<string, 'accepted' | 'rejected'>),
+  ) => {
+    _setDecisions((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (jobId) sessionStorage.setItem(`harvest-decisions-${jobId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const setModifications = (
+    updater:
+      | Record<string, CandidateEdits>
+      | ((prev: Record<string, CandidateEdits>) => Record<string, CandidateEdits>),
+  ) => {
+    _setModifications((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (jobId) sessionStorage.setItem(`harvest-mods-${jobId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const queryClient = useQueryClient();
   const startHarvest = useStartHarvest(activeCollection);
   const { data: job, isLoading: jobLoading } = useHarvestJob(activeCollection, jobId);
   const validateMutation = useValidateCandidates(activeCollection);
+  const deleteJob = useDeleteHarvestJob(activeCollection);
+
+  const handleAbandon = () => {
+    if (!jobId) return;
+    if (!window.confirm(t('harvest', 'abandonJobConfirm'))) return;
+    deleteJob.mutate(jobId, {
+      onSuccess: () => {
+        sessionStorage.removeItem(`harvest-decisions-${jobId}`);
+        sessionStorage.removeItem(`harvest-mods-${jobId}`);
+        queryClient.removeQueries({ queryKey: ['harvest-job', activeCollection, jobId] });
+        toast.success('Ingestion abandonnée');
+        navigate('/harvest');
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Erreur lors de la suppression';
+        toast.error(msg);
+      },
+    });
+  };
+
+  if (job?.collection_slug && job.collection_slug !== activeCollection) {
+    setActiveCollection(job.collection_slug);
+  }
+
+  const resolvedDecisions = useMemo<Record<string, 'accepted' | 'rejected'>>(() => {
+    let base: Record<string, 'accepted' | 'rejected'> = decisions;
+    if (!Object.keys(decisions).length && job?.candidates) {
+      const fromDb: Record<string, 'accepted' | 'rejected'> = {};
+      for (const c of job.candidates) {
+        if (c.status === 'accepted' || c.status === 'rejected') fromDb[c.id] = c.status;
+      }
+      if (Object.keys(fromDb).length > 0) base = fromDb;
+    }
+    // Tabular candidate with all rows unchecked → implicit rejection
+    const result = { ...base };
+    for (const [id, mods] of Object.entries(modifications)) {
+      if (mods.row_selection && mods.row_selection.length > 0 && mods.row_selection.every((v) => !v)) {
+        result[id] = 'rejected';
+      }
+    }
+    return result;
+  }, [decisions, job, modifications]);
+
+  const { data: domainsData } = useDomains();
+  const { data: typesData } = useTypes();
+  const { data: tagsData } = useTags();
+  const domains = (domainsData ?? []).map((d) => d.slug);
+  const types = (typesData ?? []).map((t) => t.slug);
+  const availableTags = (tagsData ?? []).map((t) => t.slug);
 
   const handleFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles).filter((f) => f.name.endsWith('.docx'));
@@ -49,7 +270,7 @@ export default function HarvestPage() {
   const handleAnalyze = () => {
     if (files.length === 0) return;
     startHarvest.mutate(
-      { files, minConfidence },
+      { files, uploadHints },
       {
         onSuccess: (data) => setJobId(data.job_id),
         onError: (err) => toast.error(err.message),
@@ -81,19 +302,33 @@ export default function HarvestPage() {
 
   const handleCommit = () => {
     if (!jobId) return;
-    const accepted = Object.entries(decisions)
-      .filter(([, v]) => v === 'accepted')
-      .map(([k]) => k);
-    const rejected = Object.entries(decisions)
+    const accepted: string[] = [];
+    const modified: Array<{ id: string } & CandidateEdits> = [];
+    const rowSelections: Record<string, boolean[]> = {};
+    const rejected = Object.entries(resolvedDecisions)
       .filter(([, v]) => v === 'rejected')
       .map(([k]) => k);
 
+    for (const [id, decision] of Object.entries(resolvedDecisions)) {
+      if (decision !== 'accepted') continue;
+      const { row_selection, ...otherEdits } = modifications[id] ?? {};
+      if (row_selection) rowSelections[id] = row_selection;
+      if (Object.keys(otherEdits).length > 0) {
+        modified.push({ id, ...otherEdits });
+      } else {
+        accepted.push(id);
+      }
+    }
+
     validateMutation.mutate(
-      { jobId, accepted, rejected },
+      { jobId, accepted, rejected, modified, merged: [], row_selections: rowSelections },
       {
         onSuccess: (data) => {
-          setCommitResult({ committed: data.committed });
+          sessionStorage.removeItem(`harvest-decisions-${jobId}`);
+          sessionStorage.removeItem(`harvest-mods-${jobId}`);
+          queryClient.invalidateQueries({ queryKey: ['harvest-job', activeCollection, jobId] });
           toast.success(`${data.committed} ${t('harvest', 'committed')}`);
+          navigate(`/harvest/${jobId}/debrief`);
         },
         onError: (err) => toast.error(err.message),
       },
@@ -103,13 +338,22 @@ export default function HarvestPage() {
   // ─── Phase 1: Upload ───
   if (!jobId) {
     return (
-      <div className="p-6 space-y-6 max-w-2xl mx-auto">
-        <div>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-6">
           <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
-          <p className="text-muted-foreground mt-1">{t('harvest', 'uploadTitle')}</p>
+          <CollectionSelector />
         </div>
 
-        {/* Dropzone */}
+        <div className="rounded-md border border-muted bg-muted/30 px-4 py-3 space-y-1.5">
+          <p className="text-sm font-medium">Comment fonctionne l'ingestion ?</p>
+          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+            <li>Déposez un ou plusieurs fichiers <strong>.docx</strong> ci-dessous.</li>
+            <li>Fragmint convertit le document, segmente le texte et classe chaque fragment automatiquement.</li>
+            <li>Vous validez chaque candidat : <strong>Accepter</strong> l'enregistre dans la bibliothèque, <strong>Rejeter</strong> l'écarte.</li>
+            <li>Les tableaux détectés apparaissent avec un bandeau ambre — ouvrez-les pour choisir quelles lignes importer (chaque ligne = un fragment).</li>
+          </ol>
+        </div>
+
         <div
           className={cn(
             'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors',
@@ -138,38 +382,30 @@ export default function HarvestPage() {
           />
         </div>
 
-        {/* Selected files */}
         {files.length > 0 && (
           <div className="space-y-2">
             {files.map((f, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <span>{f.name}</span>
+                <span className="flex-1">{f.name}</span>
                 <Badge variant="outline" className="text-xs">
                   {(f.size / 1024).toFixed(0)} KB
                 </Badge>
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={`Retirer ${f.name}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
           </div>
         )}
 
-        {/* Confidence slider */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            {t('harvest', 'confidence')}: {Math.round(minConfidence * 100)}%
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="0.95"
-            step="0.05"
-            value={minConfidence}
-            onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
-            className="w-full"
-          />
-        </div>
+        <UploadHintsForm hints={uploadHints} onChange={setUploadHints} />
 
-        {/* Analyze button */}
         <Button
           onClick={handleAnalyze}
           disabled={files.length === 0 || startHarvest.isPending}
@@ -193,25 +429,15 @@ export default function HarvestPage() {
 
   // ─── Phase 2: Candidate Review ───
 
-  // Loading / processing
   if (jobLoading || job?.status === 'processing') {
     return (
-      <div className="p-6 space-y-6">
-        <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>{t('harvest', 'analyzing')}</span>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
+      <HarvestProcessingView
+        files={job?.files ?? files.map((f) => f.name)}
+        t={t as ReturnType<typeof useI18n>['t']}
+      />
     );
   }
 
-  // Error
   if (job?.status === 'error') {
     return (
       <div className="p-6 space-y-6">
@@ -235,167 +461,212 @@ export default function HarvestPage() {
     );
   }
 
-  // Done - show candidates
-  const candidates = job?.candidates ?? [];
+  const isTabular = (c: HarvestCandidate) => {
+    if (!c.payload_schema || !c.payload) return false;
+    try { return Array.isArray(JSON.parse(c.payload)); } catch { return false; }
+  };
+  const allCandidates = job?.candidates ?? [];
+  const tabularCount = allCandidates.filter(isTabular).length;
+  const candidates = showTabularOnly ? allCandidates.filter(isTabular) : allCandidates;
   const stats = job?.stats;
-
-  const acceptedCount = Object.values(decisions).filter((v) => v === 'accepted').length;
+  const acceptedCount = Object.values(resolvedDecisions).filter((v) => v === 'accepted').length;
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
-
-      {/* Stats row */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {t('harvest', 'total')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{stats.total}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {t('harvest', 'duplicates')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-amber-600">{stats.duplicates}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {t('harvest', 'lowConfidence')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-red-600">{stats.low_confidence}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {t('harvest', 'valid')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-green-600">{stats.valid}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Commit result */}
-      {commitResult && (
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-200">
-          <CheckCircle className="h-5 w-5" />
-          <span className="font-medium">
-            {commitResult.committed} {t('harvest', 'committed')}
-          </span>
-          <Link to="/validation">
-            <Button variant="outline">
-              {t('harvest', 'goToValidation')}
-            </Button>
-          </Link>
-        </div>
-      )}
-
-      {/* Actions */}
-      {!commitResult && candidates.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={acceptAll}>
-            <CheckCircle className="h-4 w-4 mr-1" />
-            {t('harvest', 'acceptAll')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={rejectAll}>
-            <XCircle className="h-4 w-4 mr-1" />
-            {t('harvest', 'rejectAll')}
-          </Button>
+      <div className="space-y-1">
+        <div className="flex items-center gap-6">
+          <h2 className="text-2xl font-bold">{t('harvest', 'title')}</h2>
+          <CollectionSelector />
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleCommit}
-            disabled={acceptedCount === 0 || validateMutation.isPending}
+            className="ml-auto text-destructive border-destructive/40 hover:bg-destructive/10"
+            onClick={handleAbandon}
+            disabled={deleteJob.isPending}
           >
-            {validateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            {deleteJob.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
-              <CheckCircle className="h-4 w-4 mr-1" />
+              <Trash2 className="h-4 w-4 mr-2" />
             )}
-            {t('harvest', 'commit')} ({acceptedCount})
+            {t('harvest', 'abandonJob')}
           </Button>
         </div>
-      )}
-
-      {/* Candidate grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {candidates.map((c) => (
-          <CandidateCard
-            key={c.id}
-            candidate={c}
-            decision={decisions[c.id]}
-            onAccept={() => setDecision(c.id, 'accepted')}
-            onReject={() => setDecision(c.id, 'rejected')}
-            onClick={() => setSelectedCandidate(c)}
-          />
-        ))}
+        {job?.files && job.files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {job.files.map((f) => (
+              <span
+                key={f}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1"
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                {f}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Detail drawer */}
-      <Sheet open={!!selectedCandidate} onOpenChange={(v) => !v && setSelectedCandidate(null)}>
-        <SheetContent side="right" className="w-[480px] sm:max-w-lg overflow-y-auto">
-          {selectedCandidate && (
-            <>
-              <SheetHeader className="mb-4">
-                <SheetTitle>{selectedCandidate.title}</SheetTitle>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  <Badge variant="outline" className="text-xs">{selectedCandidate.type}</Badge>
-                  <Badge variant="outline" className="text-xs">{selectedCandidate.lang}</Badge>
-                  <Badge variant="outline" className="text-xs">{selectedCandidate.domain}</Badge>
-                  <Badge className={cn('text-xs', selectedCandidate.confidence >= 0.8 ? 'bg-green-100 text-green-800' : selectedCandidate.confidence >= 0.65 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800')}>
-                    {Math.round(selectedCandidate.confidence * 100)}%
-                  </Badge>
-                </div>
-              </SheetHeader>
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[
+            { label: t('harvest', 'total'), value: stats.total, color: '' },
+            { label: t('harvest', 'duplicates'), value: stats.duplicates, color: 'text-amber-600' },
+            { label: t('harvest', 'valid'), value: stats.valid, color: 'text-green-600' },
+          ].map(({ label, value, color }) => (
+            <Card key={label}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-              <pre className="text-sm whitespace-pre-wrap bg-muted/50 rounded-md p-3 overflow-y-auto max-h-[60vh]">
-                {selectedCandidate.body}
-              </pre>
+      {allCandidates.length > 0 && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-2.5 flex items-start gap-2 overflow-hidden">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800 dark:text-blue-200 min-w-0 leading-relaxed">
+            <strong>{t('harvest', 'howToValidate')} :</strong>{' '}
+            {t('harvest', 'howToValidateDesc')}{' '}
+            <span className="inline-flex items-center gap-1 font-medium">
+              <TableProperties className="h-3 w-3" /> {t('harvest', 'tabularBadge')}
+            </span>{' — '}
+            <strong>{t('harvest', 'howToValidateCommit')}</strong>{' '}
+            {t('harvest', 'howToValidateSuffix')}
+          </p>
+        </div>
+      )}
 
-              {selectedCandidate.duplicate_of && (
-                <div className="flex items-center gap-1 text-xs text-amber-600 mt-3">
-                  <AlertTriangle className="h-3 w-3" />
-                  <span>{t('harvest', 'duplicateWarning')} ({Math.round((selectedCandidate.duplicate_score ?? 0) * 100)}%)</span>
-                </div>
-              )}
-
-              <div className="flex gap-2 mt-6">
-                <Button
-                  className="flex-1"
-                  variant={decisions[selectedCandidate.id] === 'accepted' ? 'default' : 'outline'}
-                  onClick={() => { setDecision(selectedCandidate.id, 'accepted'); setSelectedCandidate(null); }}
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  {t('harvest', 'accept')}
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant={decisions[selectedCandidate.id] === 'rejected' ? 'destructive' : 'outline'}
-                  onClick={() => { setDecision(selectedCandidate.id, 'rejected'); setSelectedCandidate(null); }}
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  {t('harvest', 'reject')}
-                </Button>
-              </div>
-            </>
+      {allCandidates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={showTabularOnly ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowTabularOnly((v) => !v)}
+            disabled={tabularCount === 0}
+          >
+            <TableProperties className="h-4 w-4 mr-1" />
+            {t('harvest', 'tabularFilter')}{tabularCount > 0 ? ` (${tabularCount})` : ''}
+          </Button>
+          {showTabularOnly && (
+            <span className="text-xs text-muted-foreground">
+              — {candidates.length} {t('harvest', 'tabularFilter').toLowerCase()}{candidates.length > 1 ? '' : ''} {t('harvest', 'tabularShown')}{candidates.length > 1 ? 's' : ''}
+            </span>
           )}
-        </SheetContent>
-      </Sheet>
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" size="sm" onClick={acceptAll}>
+              <CheckCircle className="h-4 w-4 mr-1" />
+              {t('harvest', 'acceptAll')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={rejectAll}>
+              <XCircle className="h-4 w-4 mr-1" />
+              {t('harvest', 'rejectAll')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCommit}
+              disabled={acceptedCount === 0 || validateMutation.isPending}
+            >
+              {validateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-1" />
+              )}
+              {t('harvest', 'commit')} ({acceptedCount})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {(() => {
+        const pageCount = Math.ceil(candidates.length / candidatePageSize);
+        const paginated = candidates.slice(
+          candidatePage * candidatePageSize,
+          (candidatePage + 1) * candidatePageSize,
+        );
+        return (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {paginated.map((c) => (
+                <CandidateCard
+                  key={c.id}
+                  candidate={c}
+                  decision={resolvedDecisions[c.id]}
+                  rowSelection={modifications[c.id]?.row_selection}
+                  onAccept={() => setDecision(c.id, 'accepted')}
+                  onReject={() => setDecision(c.id, 'rejected')}
+                  onClick={() => setSelectedCandidate(c)}
+                />
+              ))}
+            </div>
+            {candidates.length > 24 && (
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{t('common', 'show')}</span>
+                  <select
+                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    value={candidatePageSize}
+                    onChange={(e) => {
+                      setCandidatePageSize(Number(e.target.value));
+                      setCandidatePage(0);
+                    }}
+                  >
+                    {[24, 48, 96].map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <span>{t('common', 'perPage')}</span>
+                </div>
+                {pageCount > 1 && (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={candidatePage === 0}
+                      onClick={() => setCandidatePage((p) => p - 1)}
+                    >
+                      {t('common', 'previous')}
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {candidatePage + 1} / {pageCount}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={candidatePage >= pageCount - 1}
+                      onClick={() => setCandidatePage((p) => p + 1)}
+                    >
+                      {t('common', 'next')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      <CandidateDetailSheet
+        candidate={selectedCandidate}
+        edits={selectedCandidate ? (modifications[selectedCandidate.id] ?? {}) : {}}
+        decision={selectedCandidate ? resolvedDecisions[selectedCandidate.id] : undefined}
+        domains={domains}
+        types={types}
+        availableTags={availableTags}
+        onEditsChange={(edits) => {
+          if (selectedCandidate)
+            setModifications((prev) => ({ ...prev, [selectedCandidate.id]: edits }));
+        }}
+        onAccept={() => selectedCandidate && setDecision(selectedCandidate.id, 'accepted')}
+        onReject={() => selectedCandidate && setDecision(selectedCandidate.id, 'rejected')}
+        onClose={() => setSelectedCandidate(null)}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // packages/server/src/search/search-service.ts
-import { eq, like, and, or, desc, inArray, ne, isNull, lte, gte } from 'drizzle-orm';
+import { eq, like, and, or, desc, inArray, ne, isNull, lte, gte, sql } from 'drizzle-orm';
 import type { FragmintDb } from '../db/connection.js';
 import { fragments } from '../db/schema.js';
 import type { EmbeddingClient } from './embedding-client.js';
@@ -30,7 +30,7 @@ export interface SearchFilters {
 
 export interface SearchResult {
   id: string;
-  score: number;
+  score: number | null;
   title: string | null;
   body_excerpt: string | null;
   type: string;
@@ -40,6 +40,8 @@ export interface SearchResult {
   author: string;
   uses: number;
   updated_at: string;
+  payload: string | null;
+  payload_schema: string | null;
 }
 
 const QUALITY_ORDER = ['draft', 'reviewed', 'approved'];
@@ -58,6 +60,9 @@ export function reRankResults(results: SearchResult[]): SearchResult[] {
 
   return results
     .map((r) => {
+      // SQLite fallback results have null scores — pass through unchanged
+      if (r.score == null) return r;
+
       let adjustedScore = r.score;
 
       // Quality boost
@@ -82,7 +87,13 @@ export function reRankResults(results: SearchResult[]): SearchResult[] {
 
       return { ...r, score: adjustedScore };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      // null scores sort to the bottom
+      if (a.score == null && b.score == null) return 0;
+      if (a.score == null) return 1;
+      if (b.score == null) return -1;
+      return b.score - a.score;
+    });
 }
 
 /**
@@ -192,6 +203,64 @@ export class SearchService {
     return { indexed };
   }
 
+  /**
+   * Vector-only search via Milvus. Returns null when Milvus is disabled or unavailable.
+   * Used for duplicate detection — must NOT fall back to SQLite (SQLite LIKE scores
+   * are constant ~0.65 and would produce false near-duplicates).
+   */
+  async searchVector(
+    query: string,
+    filters?: SearchFilters,
+    limit = 1,
+  ): Promise<SearchResult[] | null> {
+    if (!this.milvusClient) return null;
+    try {
+      const vector = await this.embeddingClient.embed(
+        this.prefixes.query + truncateForEmbedding(query, this.maxTokens),
+      );
+      const milvusFilters: MilvusFilters = {
+        type: filters?.type,
+        domain: filters?.domain,
+        lang: filters?.lang,
+        quality_min: filters?.quality_min,
+      };
+      const milvusResults = await this.milvusClient.search(vector, milvusFilters, limit);
+      if (milvusResults.length === 0) return [];
+
+      const ids = milvusResults.map((r) => r.id);
+      const rows = await this.db
+        .select()
+        .from(fragments)
+        .where(and(inArray(fragments.id, ids), ne(fragments.quality, 'deprecated')));
+
+      const rowMap = new Map(rows.map((r) => [r.id, r]));
+      return milvusResults
+        .map((mr): SearchResult | null => {
+          const row = rowMap.get(mr.id);
+          if (!row) return null;
+          return {
+            id: row.id,
+            score: mr.score, // raw cosine similarity — no re-ranking for duplicate detection
+            title: row.title,
+            body_excerpt: row.body_excerpt,
+            type: row.type,
+            domain: row.domain,
+            lang: row.lang,
+            quality: row.quality,
+            author: row.author,
+            uses: row.uses,
+            updated_at: row.updated_at,
+            payload: row.payload ?? null,
+            payload_schema: row.payload_schema ?? null,
+          };
+        })
+        .filter((r): r is SearchResult => r !== null);
+    } catch (err) {
+      console.warn('[searchVector] Milvus unavailable:', (err as Error).message?.slice(0, 80));
+      return null;
+    }
+  }
+
   async search(
     query: string,
     filters?: SearchFilters,
@@ -209,6 +278,7 @@ export class SearchService {
           domain: filters?.domain,
           lang: filters?.lang,
           quality_min: filters?.quality_min,
+          tags: filters?.tags,
         };
         const milvusResults = await this.milvusClient.search(
           vector,
@@ -243,7 +313,7 @@ export class SearchService {
 
           const rowMap = new Map(rows.map((r) => [r.id, r]));
           const enriched = milvusResults
-            .map((mr) => {
+            .map((mr): SearchResult | null => {
               const row = rowMap.get(mr.id);
               if (!row) return null;
               return {
@@ -258,6 +328,8 @@ export class SearchService {
                 author: row.author,
                 uses: row.uses,
                 updated_at: row.updated_at,
+                payload: row.payload ?? null,
+                payload_schema: row.payload_schema ?? null,
               };
             })
             .filter((r): r is SearchResult => r !== null);
@@ -270,6 +342,14 @@ export class SearchService {
 
     // SQLite fallback
     return this.sqliteSearch(query, filters, limit);
+  }
+
+  /**
+   * Embed a batch of texts. Returns one number[] per input string.
+   * Delegates to EmbeddingClient.embedBatch — batched in chunks of 32 internally.
+   */
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    return this.embeddingClient.embedBatch(texts);
   }
 
   async removeFromIndex(id: string): Promise<void> {
@@ -295,18 +375,134 @@ export class SearchService {
     };
   }
 
+  async searchByDomain(
+    domain: string,
+    filters?: Pick<SearchFilters, 'quality_min' | 'collectionSlug' | 'lang'>,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    const conditions = [
+      eq(fragments.domain, domain),
+      ne(fragments.quality, 'deprecated'),
+    ];
+    if (filters?.quality_min) {
+      const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
+      if (minIdx >= 0) conditions.push(inArray(fragments.quality, QUALITY_ORDER.slice(minIdx)));
+    }
+    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
+    if (filters?.collectionSlug) {
+      conditions.push(
+        filters.collectionSlug === 'common'
+          ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!
+          : eq(fragments.collection_slug, filters.collectionSlug),
+      );
+    }
+    const rows = await this.db
+      .select()
+      .from(fragments)
+      .where(and(...conditions))
+      .orderBy(desc(fragments.uses))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
+      type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,
+      author: row.author, uses: row.uses, updated_at: row.updated_at,
+      payload: row.payload ?? null, payload_schema: row.payload_schema ?? null,
+    }));
+  }
+
+  async searchByType(
+    type: string,
+    filters?: Pick<SearchFilters, 'quality_min' | 'collectionSlug' | 'lang'>,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    const conditions = [
+      eq(fragments.type, type),
+      ne(fragments.quality, 'deprecated'),
+    ];
+    if (filters?.quality_min) {
+      const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
+      if (minIdx >= 0) conditions.push(inArray(fragments.quality, QUALITY_ORDER.slice(minIdx)));
+    }
+    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
+    if (filters?.collectionSlug) {
+      conditions.push(
+        filters.collectionSlug === 'common'
+          ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!
+          : eq(fragments.collection_slug, filters.collectionSlug),
+      );
+    }
+    const rows = await this.db
+      .select()
+      .from(fragments)
+      .where(and(...conditions))
+      .orderBy(desc(fragments.uses))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
+      type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,
+      author: row.author, uses: row.uses, updated_at: row.updated_at,
+      payload: row.payload ?? null, payload_schema: row.payload_schema ?? null,
+    }));
+  }
+
+  async searchByTags(
+    tags: string[],
+    filters?: Pick<SearchFilters, 'quality_min' | 'collectionSlug' | 'lang'>,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    if (tags.length === 0) return [];
+    const conditions = [
+      or(...tags.map((t) => like(fragments.tags, `%${t}%`)))!,
+      ne(fragments.quality, 'deprecated'),
+    ];
+    if (filters?.quality_min) {
+      const minIdx = QUALITY_ORDER.indexOf(filters.quality_min);
+      if (minIdx >= 0) conditions.push(inArray(fragments.quality, QUALITY_ORDER.slice(minIdx)));
+    }
+    if (filters?.lang) conditions.push(eq(fragments.lang, filters.lang));
+    if (filters?.collectionSlug) {
+      conditions.push(
+        filters.collectionSlug === 'common'
+          ? or(eq(fragments.collection_slug, 'common'), isNull(fragments.collection_slug))!
+          : eq(fragments.collection_slug, filters.collectionSlug),
+      );
+    }
+    const rows = await this.db.select().from(fragments).where(and(...conditions))
+      .orderBy(sql`CASE ${fragments.quality} WHEN 'approved' THEN 2 WHEN 'reviewed' THEN 1 ELSE 0 END DESC`)
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id, score: null as null, title: row.title, body_excerpt: row.body_excerpt,
+      type: row.type, domain: row.domain, lang: row.lang, quality: row.quality,
+      author: row.author, uses: row.uses, updated_at: row.updated_at,
+      payload: row.payload ?? null, payload_schema: row.payload_schema ?? null,
+    }));
+  }
+
   private async sqliteSearch(
     query: string,
     filters?: SearchFilters,
     limit = 20,
   ): Promise<SearchResult[]> {
     const conditions = [];
-    const keywords = [...new Set(
-      query.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()).filter((w) => w.length > 3),
-    )].slice(0, 8);
+    const keywords = [
+      ...new Set(
+        query
+          .split(/\s+/)
+          .map((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase())
+          .filter((w) => w.length > 1),
+      ),
+    ].slice(0, 8);
     if (keywords.length > 0) {
       conditions.push(
-        or(...keywords.map((kw) => or(like(fragments.title, `%${kw}%`), like(fragments.body_excerpt, `%${kw}%`)))),
+        or(
+          ...keywords.map((kw) =>
+            or(
+              like(fragments.title, `%${kw}%`),
+              like(fragments.body, `%${kw}%`),
+              like(fragments.body_excerpt, `%${kw}%`),
+            ),
+          ),
+        ),
       );
     }
 
@@ -334,7 +530,6 @@ export class SearchService {
         conditions.push(like(fragments.tags, `%${tag}%`));
       }
     }
-
     // Filter by collection
     if (filters?.collectionSlug) {
       if (filters.collectionSlug === 'common') {
@@ -367,7 +562,7 @@ export class SearchService {
 
     const results = rows.map((row) => ({
       id: row.id,
-      score: 0.6, // no vector score in SQLite fallback — treat any LIKE match as relevant
+      score: null as null,  // SQLite LIKE has no ranking signal — consumers must handle null
       title: row.title,
       body_excerpt: row.body_excerpt,
       type: row.type,
@@ -377,7 +572,11 @@ export class SearchService {
       author: row.author,
       uses: row.uses,
       updated_at: row.updated_at,
+      payload: row.payload ?? null,
+      payload_schema: row.payload_schema ?? null,
     }));
-    return reRankResults(results);
+    // Do NOT call reRankResults — it multiplies score and null * number = NaN
+    // Order by uses desc is already applied in the SQL query above
+    return results;
   }
 }

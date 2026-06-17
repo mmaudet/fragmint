@@ -45,14 +45,14 @@ describe('TemplateYamlSchema', () => {
 });
 
 describe('FragmentSlotSchema', () => {
-  it('applies defaults (quality_min=draft, fallback=error, count=1, required=true)', () => {
+  it('applies defaults (quality_min=approved, fallback=error, count=1, required=true)', () => {
     const result = FragmentSlotSchema.parse({
       key: 'intro',
       type: 'introduction',
       domain: 'commercial',
       lang: 'fr',
     });
-    expect(result.quality_min).toBe('draft');
+    expect(result.quality_min).toBe('approved');
     expect(result.fallback).toBe('error');
     expect(result.count).toBe(1);
     expect(result.required).toBe(true);

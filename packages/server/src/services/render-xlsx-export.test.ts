@@ -33,7 +33,7 @@ describe('exportFragmentsToXlsx', () => {
 
     // Verify it can be read back as valid XLSX
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Fragments');
     expect(sheet).toBeDefined();
   });
@@ -41,11 +41,11 @@ describe('exportFragmentsToXlsx', () => {
   it('should have correct column headers', async () => {
     const buffer = await exportFragmentsToXlsx(mockFragments);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Fragments')!;
 
     const headerRow = sheet.getRow(1);
-    const headers = [];
+    const headers: unknown[] = [];
     headerRow.eachCell((cell) => headers.push(cell.value));
     expect(headers).toEqual([
       'ID',
@@ -62,7 +62,7 @@ describe('exportFragmentsToXlsx', () => {
   it('should contain correct row data', async () => {
     const buffer = await exportFragmentsToXlsx(mockFragments);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Fragments')!;
 
     // 1 header + 2 data rows
@@ -82,7 +82,7 @@ describe('exportFragmentsToXlsx', () => {
   it('should handle empty array', async () => {
     const buffer = await exportFragmentsToXlsx([]);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Fragments')!;
     expect(sheet.rowCount).toBe(1); // header only
   });
@@ -90,7 +90,7 @@ describe('exportFragmentsToXlsx', () => {
   it('should have bold header row', async () => {
     const buffer = await exportFragmentsToXlsx(mockFragments);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet('Fragments')!;
     const headerRow = sheet.getRow(1);
     expect(headerRow.font?.bold).toBe(true);

@@ -356,7 +356,11 @@ export class ComposerService {
 
     // 7. Save output
     const FORMAT_EXT: Record<string, string> = {
-      docx: 'docx', xlsx: 'xlsx', slides: 'html', reveal: 'html', pptx: 'pptx',
+      docx: 'docx',
+      xlsx: 'xlsx',
+      slides: 'html',
+      reveal: 'html',
+      pptx: 'pptx',
     };
     const outputFilename = request.output?.filename
       ? `${randomUUID()}-${request.output.filename}`
@@ -595,7 +599,7 @@ export class ComposerService {
             id: full.id,
             body: full.body,
             quality: full.quality,
-            score: result.score,
+            score: result.score ?? 0,
             tags: full.frontmatter?.tags ?? [],
           });
         }

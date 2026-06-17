@@ -23,7 +23,7 @@ export function UploadStyleTemplateDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onUploaded: (id: string) => void;
+  onUploaded: (id: string, outputFormat: string) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
@@ -44,8 +44,9 @@ export function UploadStyleTemplateDialog({
   }
 
   function handleConfirm() {
-    if (!uploadedId) return;
-    onUploaded(uploadedId);
+    if (!uploadedId || !file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'docx';
+    onUploaded(uploadedId, ext === 'pptx' ? 'pptx' : 'docx');
     handleClose();
   }
 
@@ -72,7 +73,7 @@ export function UploadStyleTemplateDialog({
             <div className="space-y-3">
               <Input
                 type="file"
-                accept=".docx"
+                accept=".docx,.pptx"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <Input placeholder="Nom" value={name} onChange={(e) => setName(e.target.value)} />
@@ -100,24 +101,31 @@ export function UploadStyleTemplateDialog({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-amber-600 text-sm font-medium">
                     <AlertTriangle className="h-4 w-4" />
-                    {warnings?.length} style{(warnings?.length ?? 0) > 1 ? 's' : ''} incomplet{(warnings?.length ?? 0) > 1 ? 's' : ''} détecté{(warnings?.length ?? 0) > 1 ? 's' : ''}
+                    {warnings?.length} style{(warnings?.length ?? 0) > 1 ? 's' : ''} incomplet
+                    {(warnings?.length ?? 0) > 1 ? 's' : ''} détecté
+                    {(warnings?.length ?? 0) > 1 ? 's' : ''}
                   </div>
                   <ul className="space-y-1.5">
                     {warnings?.map((w, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <Badge variant="outline" className="text-xs shrink-0 mt-0.5">{w.style}</Badge>
+                        <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
+                          {w.style}
+                        </Badge>
                         <span className="text-muted-foreground">{w.issue}</span>
                       </li>
                     ))}
                   </ul>
                   <p className="text-xs text-muted-foreground pt-1">
-                    Le modèle a été importé. Vous pouvez l'utiliser tel quel ou corriger ces styles dans Word puis réimporter.
+                    Le modèle a été importé. Vous pouvez l'utiliser tel quel ou corriger ces styles
+                    dans Word puis réimporter.
                   </p>
                 </div>
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>Fermer</Button>
+              <Button variant="outline" onClick={handleClose}>
+                Fermer
+              </Button>
               <Button onClick={handleConfirm}>Utiliser ce modèle</Button>
             </DialogFooter>
           </>

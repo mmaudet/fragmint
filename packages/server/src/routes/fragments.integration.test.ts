@@ -67,4 +67,32 @@ describe('Fragment routes', () => {
     const body = JSON.parse(res.body);
     expect(body.data.total).toBeGreaterThanOrEqual(0);
   });
+
+  it('GET /v1/fragments/:readableId retourne le fragment par readable_id', async () => {
+    // Créer un fragment — reçoit un readable_id auto
+    const createRes = await server.app.inject({
+      method: 'POST',
+      url: '/v1/fragments',
+      headers: auth(),
+      payload: {
+        type: 'argument',
+        domain: 'linshare',
+        lang: 'fr',
+        body: '# Test readable_id lookup\n\nBody for readable id test.',
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = JSON.parse(createRes.body).data;
+    const readableId = created.readable_id;
+    expect(readableId).toMatch(/^LS-arg-\d{3}$/);
+
+    // Lookup par readable_id
+    const getRes = await server.app.inject({
+      method: 'GET',
+      url: `/v1/fragments/${readableId}`,
+      headers: auth(),
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(JSON.parse(getRes.body).data.id).toBe(created.id);
+  });
 });

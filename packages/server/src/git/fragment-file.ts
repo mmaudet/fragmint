@@ -10,10 +10,26 @@ export function generateId(): string {
 
 export function deriveTitle(body: string): string {
   if (!body.trim()) return 'Untitled';
-  const headingMatch = body.match(/^#\s+(.+)$/m);
+  // For HTML content (pandoc output), strip tags to extract meaningful text
+  const text = body.trimStart().startsWith('<')
+    ? body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    : body;
+  if (!text) return 'Tableau';
+  const headingMatch = text.match(/^#\s+(.+)$/m);
   if (headingMatch) return headingMatch[1].trim();
-  const firstLine = body.trim().split('\n')[0].trim();
-  return firstLine || 'Untitled';
+  const firstLine = text.trim().split('\n')[0].trim();
+  if (!firstLine) return 'Untitled';
+  // If the first "line" is very long (paragraph with no line breaks),
+  // extract only the first sentence to avoid using the whole body as title.
+  if (firstLine.length > 120) {
+    const sentenceEnd = firstLine.search(/[.!?](\s|$)/);
+    if (sentenceEnd >= 20) return firstLine.slice(0, sentenceEnd + 1).trim();
+    // No sentence boundary — word-truncate at 100 chars
+    const cut = firstLine.slice(0, 100);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '…';
+  }
+  return firstLine;
 }
 
 function toKebabCase(str: string): string {

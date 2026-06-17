@@ -13,6 +13,7 @@ services:
       FRAGMINT_MILVUS_ADDRESS: milvus:19530
       FRAGMINT_CORS_ORIGIN: http://localhost:3210
       FRAGMINT_LLM_TIMEOUT: "300000"
+      FRAGMINT_LLM_CONCURRENCY: "8"
       # AI settings come from .env (see .env.example)
       FRAGMINT_LLM_ENDPOINT: ${FRAGMINT_LLM_ENDPOINT}
       FRAGMINT_LLM_API_KEY: ${FRAGMINT_LLM_API_KEY}

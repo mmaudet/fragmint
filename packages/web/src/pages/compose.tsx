@@ -3,6 +3,7 @@ import { useTemplates, useTemplate, useResolveSlots } from '@/api/hooks/use-temp
 import { useCompose } from '@/api/hooks/use-compose';
 import { useI18n } from '@/lib/i18n';
 import { useCollection } from '@/lib/collection-context';
+import { CollectionSelector } from '@/components/collection-selector';
 import { downloadBlob } from '@/api/client';
 import type { Template, ComposeResponse } from '@/api/types';
 import { StructuredDataEditor } from '@/components/structured-data-editor';
@@ -102,12 +103,19 @@ export default function ComposePage() {
         cleanContext[k] = String(schema.default);
       }
     }
-    compose.mutate({ templateId: selectedTemplateId, context: cleanContext, structured_data: structuredData });
+    compose.mutate({
+      templateId: selectedTemplateId,
+      context: cleanContext,
+      structured_data: structuredData,
+    });
   };
 
   return (
     <div className="space-y-6 p-6">
-      <h2 className="text-2xl font-bold">{t('compose', 'title')}</h2>
+      <div className="flex items-center gap-6">
+        <h2 className="text-2xl font-bold">{t('compose', 'title')}</h2>
+        <CollectionSelector />
+      </div>
 
       {/* Section 1 - Template selection */}
       <Card>
@@ -364,7 +372,10 @@ function ComposeReport({ result }: { result: ComposeResponse }) {
                 .trim()
                 .replace(/\s+/g, '_');
               const filename = `${safeName}-${result.template.version}.${ext}`;
-              handleDownload(`${result.document_url}?name=${encodeURIComponent(filename)}`, filename);
+              handleDownload(
+                `${result.document_url}?name=${encodeURIComponent(filename)}`,
+                filename,
+              );
             }}
           >
             <Download className="mr-2 h-4 w-4" />

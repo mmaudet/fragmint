@@ -71,11 +71,11 @@ describe('Plan routes', () => {
     expect(sectionGen.statusCode).toBe(200);
 
     const assembled = await api('POST', `/v1/plans/${id}/assemble`);
-    expect(JSON.parse(assembled.body).data.state.draft_markdown).toContain('# IT plan');
+    expect(JSON.parse(assembled.body).data.state.draft_markdown).toContain('title: "IT plan"');
 
     const exported = await api('POST', `/v1/plans/${id}/export`, { format: 'md' });
     expect(exported.statusCode).toBe(200);
-    expect(exported.body).toContain('# IT plan');
+    expect(exported.body).toContain('title: "IT plan"');
   });
 
   it('returns 404 on unknown plan id', async () => {
@@ -110,7 +110,11 @@ describe('Plan routes', () => {
       }),
     });
     // 201 created OR 500/400 if user already exists from another test run — best-effort.
-    if (bobCreate.statusCode !== 201 && bobCreate.statusCode !== 500 && bobCreate.statusCode !== 400) {
+    if (
+      bobCreate.statusCode !== 201 &&
+      bobCreate.statusCode !== 500 &&
+      bobCreate.statusCode !== 400
+    ) {
       throw new Error(`Unexpected status creating bob: ${bobCreate.statusCode} ${bobCreate.body}`);
     }
 
@@ -126,8 +130,14 @@ describe('Plan routes', () => {
         role: 'contributor',
       }),
     });
-    if (carolCreate.statusCode !== 201 && carolCreate.statusCode !== 500 && carolCreate.statusCode !== 400) {
-      throw new Error(`Unexpected status creating carol: ${carolCreate.statusCode} ${carolCreate.body}`);
+    if (
+      carolCreate.statusCode !== 201 &&
+      carolCreate.statusCode !== 500 &&
+      carolCreate.statusCode !== 400
+    ) {
+      throw new Error(
+        `Unexpected status creating carol: ${carolCreate.statusCode} ${carolCreate.body}`,
+      );
     }
 
     // Log bob in.
@@ -178,5 +188,34 @@ describe('Plan routes', () => {
       });
       expect(res.statusCode, `expected 403 for ${ep.path}, got ${res.statusCode}`).toBe(403);
     }
+  });
+
+  it('planService uses the configured retriever when retrieval mode is set', async () => {
+    // Switch to hybrid mode
+    const modeRes = await server.app.inject({
+      method: 'POST',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ mode: 'hybrid' }),
+    });
+    expect(modeRes.statusCode).toBe(200);
+    expect(JSON.parse(modeRes.body).data.mode).toBe('hybrid');
+
+    // Verify GET mode also returns hybrid
+    const getRes = await server.app.inject({
+      method: 'GET',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(JSON.parse(getRes.body).data.mode).toBe('hybrid');
+
+    // Reset to vector-only
+    await server.app.inject({
+      method: 'POST',
+      url: '/v1/admin/retrieval/mode',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ mode: 'vector-only' }),
+    });
   });
 });

@@ -241,6 +241,8 @@ describe('reRankResults', () => {
       author: 'test',
       uses: 0,
       updated_at: '2025-01-01',
+      payload: null,
+      payload_schema: null,
       ...overrides,
     };
   }
@@ -254,7 +256,7 @@ describe('reRankResults', () => {
     expect(ranked[0].id).toBe('approved');
     expect(ranked[1].id).toBe('draft');
     // approved keeps score * 1.0, draft gets score * 0.80
-    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+    expect(ranked[0].score!).toBeGreaterThan(ranked[1].score!);
   });
 
   it('boosts recently updated fragments', () => {
@@ -269,7 +271,7 @@ describe('reRankResults', () => {
     const ranked = reRankResults(results);
     expect(ranked[0].id).toBe('fresh');
     // fresh gets +0.05, old gets no freshness boost
-    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+    expect(ranked[0].score!).toBeGreaterThan(ranked[1].score!);
   });
 
   it('boosts high-usage fragments', () => {
@@ -279,7 +281,7 @@ describe('reRankResults', () => {
     ];
     const ranked = reRankResults(results);
     expect(ranked[0].id).toBe('high-use');
-    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+    expect(ranked[0].score!).toBeGreaterThan(ranked[1].score!);
   });
 
   it('preserves order when all fragments have same quality/age/usage', () => {

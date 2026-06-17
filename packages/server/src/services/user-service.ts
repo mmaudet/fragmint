@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword } from '../auth/hash.js';
 export class UserService {
   constructor(private db: FragmintDb) {}
 
-  async create(login: string, password: string, displayName: string, role: string) {
+  async create(login: string, password: string, displayName: string, role: string, active = 1) {
     const id = uuidv4();
     const password_hash = await hashPassword(password);
     const now = new Date().toISOString();
@@ -19,10 +19,11 @@ export class UserService {
       display_name: displayName,
       role,
       password_hash,
+      active,
       created_at: now,
     });
 
-    return { id, login, display_name: displayName, role, created_at: now };
+    return { id, login, display_name: displayName, role, active, created_at: now };
   }
 
   async authenticate(login: string, password: string) {
@@ -59,6 +60,29 @@ export class UserService {
       })
       .from(users);
     return rows;
+  }
+
+  async update(id: string, patch: { role?: string; display_name?: string; active?: number }) {
+    await this.db.update(users).set(patch).where(eq(users.id, id));
+    const rows = await this.db
+      .select({
+        id: users.id,
+        login: users.login,
+        display_name: users.display_name,
+        role: users.role,
+        active: users.active,
+        created_at: users.created_at,
+        last_login: users.last_login,
+      })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async delete(id: string) {
+    await this.db.delete(users).where(eq(users.id, id));
+    return { deleted: true };
   }
 
   async exists(login: string): Promise<boolean> {

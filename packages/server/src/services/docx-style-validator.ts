@@ -34,7 +34,10 @@ function extractStylesXml(docxBuffer: Buffer): string {
     const xml = execSync(`unzip -p "${tmpDocx}" word/styles.xml`, { timeout: 10_000 });
     return xml.toString('utf-8');
   } finally {
-    if (existsSync(tmpDocx)) try { unlinkSync(tmpDocx); } catch (_) {}
+    if (existsSync(tmpDocx))
+      try {
+        unlinkSync(tmpDocx);
+      } catch (_) {}
   }
 }
 
@@ -43,7 +46,12 @@ export function validateDocxStyles(docxBuffer: Buffer): StyleWarning[] {
   try {
     xml = extractStylesXml(docxBuffer);
   } catch {
-    return [{ style: 'Fichier', issue: 'Impossible de lire les styles (fichier .docx invalide ou corrompu)' }];
+    return [
+      {
+        style: 'Fichier',
+        issue: 'Impossible de lire les styles (fichier .docx invalide ou corrompu)',
+      },
+    ];
   }
 
   const warnings: StyleWarning[] = [];
@@ -68,13 +76,20 @@ export function validateDocxStyles(docxBuffer: Buffer): StyleWarning[] {
 
   // Check Table Grid exists
   if (!styleMap.has('TableGrid') && !styleMap.has('Table Grid')) {
-    warnings.push({ style: 'Table Grid', issue: 'Style de tableau non défini — les tableaux seront non stylés' });
+    warnings.push({
+      style: 'Table Grid',
+      issue: 'Style de tableau non défini — les tableaux seront non stylés',
+    });
   }
 
   return warnings;
 }
 
-interface StyleInfo { font?: string; color?: string; size?: string }
+interface StyleInfo {
+  font?: string;
+  color?: string;
+  size?: string;
+}
 
 function parseStyles(xml: string): Map<string, StyleInfo> {
   const map = new Map<string, StyleInfo>();

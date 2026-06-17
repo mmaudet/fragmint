@@ -1,7 +1,7 @@
 // packages/server/src/config.ts
 import { readFileSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import yaml from 'js-yaml';
 
 export interface FragmintConfig {
@@ -45,9 +45,21 @@ export interface FragmintConfig {
   // Plans
   plan_fragment_max_chars: number;
   plan_docx_reference_path?: string;
+  plan_docx_reference_name?: string;
+  section_top_k: number;
 
   // Uploads
   upload_max_bytes: number;
+
+  // Retrieval
+  retrieval_mode: 'vector-only' | 'agentic-only' | 'hybrid';
+  llm_concurrency: number;
+
+  // Retrieval scoring
+  rrf_k: number;
+  rrf_weights: 'balanced' | 'vector-heavy' | 'llm-heavy' | 'literature';
+  hybrid_llm_floor: number;         // FRAGMINT_HYBRID_LLM_FLOOR (default 3) — drop fragments with llm_score < floor after RRF
+  dupe_shingles_threshold: number;  // FRAGMINT_DUPE_SHINGLES_THRESHOLD (default 0.70)
 }
 
 export function loadConfig(configPath?: string, dev = false): FragmintConfig {
@@ -68,7 +80,7 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
     );
   }
   if (!collectionsPath) {
-    collectionsPath = './data/collections';
+    collectionsPath = join(process.env.FRAGMINT_STORE_PATH ?? './example-vault', 'collections');
   }
 
   return {
@@ -89,7 +101,9 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       fileConfig.embedding_model ??
       'nomic-embed-text-v2-moe',
     embedding_dimensions:
-      toNumber(process.env.FRAGMINT_EMBEDDING_DIMENSIONS) ?? fileConfig.embedding_dimensions ?? 768,
+      toNumber(process.env.FRAGMINT_EMBEDDING_DIMENSIONS) ??
+      fileConfig.embedding_dimensions ??
+      1024,
     embedding_batch_size:
       toNumber(process.env.FRAGMINT_EMBEDDING_BATCH_SIZE) ?? fileConfig.embedding_batch_size ?? 32,
     embedding_max_tokens:
@@ -132,10 +146,23 @@ export function loadConfig(configPath?: string, dev = false): FragmintConfig {
       4000,
     plan_docx_reference_path:
       process.env.FRAGMINT_PLAN_DOCX_REFERENCE ?? fileConfig.plan_docx_reference_path,
+    plan_docx_reference_name:
+      process.env.FRAGMINT_PLAN_DOCX_REFERENCE_NAME ?? fileConfig.plan_docx_reference_name,
+    section_top_k:
+      toNumber(process.env.FRAGMINT_SECTION_TOP_K) ?? fileConfig.section_top_k ?? 5,
     upload_max_bytes:
       toNumber(process.env.FRAGMINT_UPLOAD_MAX_BYTES) ??
       fileConfig.upload_max_bytes ??
       50 * 1024 * 1024,
+    retrieval_mode:
+      toRetrievalMode(process.env.FRAGMINT_RETRIEVAL_MODE) ??
+      fileConfig.retrieval_mode ??
+      'hybrid',
+    rrf_k: Number(process.env.FRAGMINT_RRF_K ?? fileConfig.rrf_k ?? 60),
+    rrf_weights: toRrfWeights(process.env.FRAGMINT_RRF_WEIGHTS) ?? fileConfig.rrf_weights ?? 'literature',
+    hybrid_llm_floor: toFloat(process.env.FRAGMINT_HYBRID_LLM_FLOOR) ?? fileConfig.hybrid_llm_floor ?? 3,
+    dupe_shingles_threshold: toFloat(process.env.FRAGMINT_DUPE_SHINGLES_THRESHOLD) ?? fileConfig.dupe_shingles_threshold ?? 0.70,
+    llm_concurrency: toNumber(process.env.FRAGMINT_LLM_CONCURRENCY) ?? fileConfig.llm_concurrency ?? 3,
   };
 }
 
@@ -149,4 +176,20 @@ function toFloat(val?: string): number | undefined {
   if (!val) return undefined;
   const n = parseFloat(val);
   return isNaN(n) ? undefined : n;
+}
+
+const VALID_RETRIEVAL_MODES = ['vector-only', 'agentic-only', 'hybrid'] as const;
+
+function toRetrievalMode(val?: string): FragmintConfig['retrieval_mode'] | undefined {
+  if (!val) return undefined;
+  const valid = VALID_RETRIEVAL_MODES as readonly string[];
+  return valid.includes(val) ? (val as FragmintConfig['retrieval_mode']) : undefined;
+}
+
+const VALID_RRF_WEIGHTS = ['balanced', 'vector-heavy', 'llm-heavy', 'literature'] as const;
+
+function toRrfWeights(val?: string): FragmintConfig['rrf_weights'] | undefined {
+  if (!val) return undefined;
+  const valid = VALID_RRF_WEIGHTS as readonly string[];
+  return valid.includes(val) ? (val as FragmintConfig['rrf_weights']) : undefined;
 }

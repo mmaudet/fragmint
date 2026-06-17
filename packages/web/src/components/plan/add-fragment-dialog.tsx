@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { useAddFragmentToSection } from '@/api/hooks/use-plans';
 import { useSearchFragments } from '@/api/hooks/use-fragments';
 import { useCollection } from '@/lib/collection-context';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -32,6 +27,7 @@ export function AddFragmentDialog({
   const [mode, setMode] = useState<Mode>('library');
   const [query, setQuery] = useState('');
   const [body, setBody] = useState('');
+  const [proposeToLibrary, setProposeToLibrary] = useState(false);
   const add = useAddFragmentToSection(planId);
   const search = useSearchFragments(activeCollection, query);
 
@@ -39,6 +35,7 @@ export function AddFragmentDialog({
     onOpenChange(false);
     setQuery('');
     setBody('');
+    setProposeToLibrary(false);
   }
 
   async function pickFromLibrary(fragmentId: string) {
@@ -57,7 +54,7 @@ export function AddFragmentDialog({
       return;
     }
     try {
-      await add.mutateAsync({ sectionId, manual: { body: body.trim() } });
+      await add.mutateAsync({ sectionId, manual: { body: body.trim(), propose_to_library: proposeToLibrary } });
       toast.success(t('planGeneration', 'fragmentAdded'));
       close();
     } catch (e: any) {
@@ -121,7 +118,7 @@ export function AddFragmentDialog({
                         {f.title ?? f.id}
                       </span>
                       <span className="text-xs text-muted-foreground shrink-0">
-                        {f.type} · {f.quality}
+                        {f.type}
                       </span>
                     </div>
                     {f.body_excerpt && (
@@ -143,6 +140,14 @@ export function AddFragmentDialog({
               onChange={(e) => setBody(e.target.value)}
               autoFocus
             />
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={proposeToLibrary}
+                onChange={(e) => setProposeToLibrary(e.target.checked)}
+              />
+              {t('planGeneration', 'proposeToLibrary')}
+            </label>
             <div className="flex justify-end">
               <Button onClick={submitManual} disabled={add.isPending}>
                 {t('planGeneration', 'addAndSelect')}

@@ -14,6 +14,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       '/v1': process.env.API_HOST ?? 'http://localhost:3210',
     },

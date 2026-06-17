@@ -12,15 +12,25 @@ export default function HomePage() {
   const nav = useNavigate();
   const { activeCollection } = useCollection();
   const { data: inventory } = useInventory(activeCollection);
-  const { data: plans } = usePlans(activeCollection);
+  const { data: plans } = usePlans();
 
   const approved = inventory?.by_quality?.approved ?? 0;
   const pending = (inventory?.by_quality?.reviewed ?? 0) + (inventory?.by_quality?.draft ?? 0);
   const planCount = plans?.length ?? 0;
 
   const stats = [
-    { value: inventory?.total ?? 0, label: t('home', 'statFragments'), icon: Library, color: 'text-primary' },
-    { value: approved, label: t('home', 'statApproved'), icon: CheckCircle, color: 'text-green-600' },
+    {
+      value: inventory?.total ?? 0,
+      label: t('home', 'statFragments'),
+      icon: Library,
+      color: 'text-primary',
+    },
+    {
+      value: approved,
+      label: t('home', 'statApproved'),
+      icon: CheckCircle,
+      color: 'text-green-600',
+    },
     { value: pending, label: t('home', 'statPending'), icon: Upload, color: 'text-amber-500' },
     { value: planCount, label: t('home', 'statPlans'), icon: PenLine, color: 'text-blue-500' },
   ];
@@ -68,9 +78,7 @@ export default function HomePage() {
         <div className="max-w-3xl">
           <h1 className="text-2xl font-bold mb-1">⬡ Fragmint</h1>
           <p className="text-lg font-medium text-foreground mb-3">{t('home', 'tagline')}</p>
-          <p className="text-muted-foreground leading-relaxed max-w-2xl">
-            {t('home', 'subtitle')}
-          </p>
+          <p className="text-muted-foreground leading-relaxed max-w-2xl">{t('home', 'subtitle')}</p>
         </div>
       </div>
 
@@ -96,13 +104,17 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {steps.map((step, i) => (
               <div key={i} className="relative flex flex-col">
-                <Card className={`flex-1 border-2 ${step.accent} bg-background hover:shadow-md transition-shadow`}>
+                <Card
+                  className={`flex-1 border-2 ${step.accent} bg-background hover:shadow-md transition-shadow`}
+                >
                   <CardContent className="pt-6 pb-5 flex flex-col gap-4 h-full">
                     <div className="flex items-start justify-between">
                       <div className={`p-2.5 rounded-lg ${step.iconBg}`}>
                         <step.icon className={`h-5 w-5 ${step.iconColor}`} />
                       </div>
-                      <span className="text-3xl font-black text-muted-foreground/20 leading-none">{step.num}</span>
+                      <span className="text-3xl font-black text-muted-foreground/20 leading-none">
+                        {step.num}
+                      </span>
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-base mb-2">{step.title}</h3>
@@ -136,7 +148,9 @@ export default function HomePage() {
           </div>
           <div>
             <h2 className="font-semibold mb-1">{t('home', 'collectionsTitle')}</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">{t('home', 'collectionsDesc')}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t('home', 'collectionsDesc')}
+            </p>
           </div>
         </div>
       </div>

@@ -56,9 +56,9 @@ export function collectionRoutes(
         return reply.status(400).send({ data: null, meta: null, error: 'No fields to update' });
       }
 
-      // Re-fetch after update
+      await collectionService.update(slug, updates);
       const updated = await collectionService.getBySlug(slug);
-      return { data: { ...collection, ...updates }, meta: null, error: null };
+      return { data: updated, meta: null, error: null };
     },
   );
 
